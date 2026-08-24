@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, Eye, EyeOff, FileSpreadsheet, Sparkles, 
-  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode
+  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode, Calculator, Palmtree
 } from 'lucide-react';
 
 const SHIFT_TYPES = {
@@ -13,7 +13,6 @@ const SHIFT_TYPES = {
   연차: { name: 'Annual', time: '연차 휴가', color: '#FBCFE8', textColor: '#9D174D' }
 };
 
-// 절대 사람 이름으로 파싱되면 안 되는 금지어 목록
 const INVALID_NAMES = [
   '근무시간', '근무사', '근무', '보고사항', '보고', '사항', '연차', '연채', '분당', '병동', 
   '근무표', '합계', '구분', '직급', '성명', '이름', '월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M'
@@ -46,7 +45,12 @@ export default function App() {
   const [customNameInput, setCustomNameInput] = useState('');
   const [showNameModal, setShowNameModal] = useState(false);
 
-  // 8월 기본 데이터
+  // 연차 & 야간수당 관리 상태
+  const [totalAnnualLeave, setTotalAnnualLeave] = useState(15); // 연간 총 연차
+  const [hourlyWage, setHourlyWage] = useState(12000); // 통상시급 (원)
+  const [nightHoursPerShift, setNightHoursPerShift] = useState(8); // N근무당 야간근무 시간(22:00~06:00 중 8시간)
+
+  // 기본 근무 데이터
   const [myShifts, setMyShifts] = useState({
     '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
     '2026-08-01': 'E', '2026-08-02': 'OFF', '2026-08-03': 'E', '2026-08-04': 'N', '2026-08-05': 'N',
@@ -73,62 +77,18 @@ export default function App() {
   const [alertType, setAlertType] = useState('both');
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
-  const [pastedText, setPastedText] = useState('');
 
-  const playNotificationSoundAndVibrate = (type) => {
-    if (type === 'both' || type === 'sound') {
-      try {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play().catch(() => {});
-      } catch (e) {}
-    }
-    if ((type === 'both' || type === 'vibrate') && 'vibrate' in navigator) {
-      navigator.vibrate([200, 100, 200]);
-    }
-  };
+  // 연차/야간 근로 수당 자동 계산
+  const currentMonthShifts = Object.entries(myShifts).filter(([date]) => 
+    date.startsWith(`${currentYear}-${String(currentMonth).padStart(2, '0')}`)
+  );
 
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+  const nightShiftCount = currentMonthShifts.filter(([_, code]) => code === 'N').length;
+  const usedAnnualLeaveCount = Object.values(myShifts).filter(code => code === '연차').length;
+  const remainingAnnualLeave = totalAnnualLeave - usedAnnualLeaveCount;
 
-    const timer = setInterval(() => {
-      checkScheduledAlerts();
-    }, 30000);
-
-    return () => clearInterval(timer);
-  }, [memos]);
-
-  const checkScheduledAlerts = () => {
-    const now = new Date();
-    const curDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const todayMemos = memos[curDateStr] || [];
-
-    todayMemos.forEach(m => {
-      if (m.alertOffset !== 'none' && !m.alertTriggered) {
-        let [ap, timeStr] = m.time.split(' ');
-        let [h, min] = timeStr.split(':').map(Number);
-        if (ap === '오후' && h < 12) h += 12;
-        if (ap === '오전' && h === 12) h = 0;
-
-        const targetTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, min);
-        const alertTime = new Date(targetTime.getTime() - parseInt(m.alertOffset, 10) * 60000);
-
-        if (now >= alertTime && now < targetTime) {
-          m.alertTriggered = true;
-          playNotificationSoundAndVibrate(m.alertType || 'both');
-
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(`[간호 근무표] ${m.type} 알림`, {
-              body: `${m.text} (${m.time} - ${m.alertText})`
-            });
-          } else {
-            alert(`⏰ [알림] ${m.text}\n시간: ${m.time} (${m.alertText})`);
-          }
-        }
-      }
-    });
-  };
+  // 야간 가산수당 계산 (통상시급 × 0.5가산 × 야간시간 × N근무 횟수)
+  const estimatedNightAllowance = Math.round(nightShiftCount * nightHoursPerShift * hourlyWage * 0.5);
 
   const handlePrevMonth = () => {
     if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); } 
@@ -183,217 +143,11 @@ export default function App() {
     return days;
   };
 
-  // 엑셀 파싱 (금지어 엄격 필터링 적용)
-  const handleExcelFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (!window.XLSX) {
-      alert('엑셀 파서를 불러오는 중입니다. 3초 후 다시 시도해 주세요.');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target.result;
-        const workbook = window.XLSX.read(bstr, { type: 'binary' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const jsonMatrix = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-        processExcel9MonthMatrix(jsonMatrix);
-      } catch (err) {
-        console.error(err);
-        alert('엑셀 파일 읽기에 실패했습니다.');
-      }
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const processExcel9MonthMatrix = (rows) => {
-    const wardData = {};
-    const candidateNames = [];
-
-    rows.forEach((row) => {
-      if (!Array.isArray(row) || row.length < 5) return;
-
-      let rowName = null;
-      for (let i = 0; i < Math.min(row.length, 5); i++) {
-        const cell = String(row[i] || '').replace(/[\n\r]/g, '').trim();
-        const match = cell.match(/[가-힣]{2,4}/);
-        if (match && !INVALID_NAMES.includes(match[0])) {
-          rowName = match[0];
-          break;
-        }
-      }
-
-      if (rowName) {
-        if (!candidateNames.includes(rowName)) candidateNames.push(rowName);
-
-        const personShifts = {};
-        let tokenIndex = 3;
-        
-        for (let day = 26; day <= 31; day++) {
-          const code = String(row[tokenIndex] || 'OFF').trim().toUpperCase();
-          const dateStr = `2026-08-${String(day).padStart(2, '0')}`;
-          personShifts[dateStr] = SHIFT_TYPES[code] ? code : 'OFF';
-          tokenIndex++;
-        }
-
-        for (let day = 1; day <= 25; day++) {
-          const code = String(row[tokenIndex] || 'OFF').trim().toUpperCase();
-          const dateStr = `2026-09-${String(day).padStart(2, '0')}`;
-          personShifts[dateStr] = SHIFT_TYPES[code] ? code : 'OFF';
-          tokenIndex++;
-        }
-
-        wardData[rowName] = personShifts;
-      }
-    });
-
-    if (candidateNames.length === 0) {
-      alert('엑셀에서 간호사 이름을 감지하지 못했습니다.');
-      return;
-    }
-
-    setParsedWardData(wardData);
-    setDetectedNames(candidateNames);
-    setShowNameModal(true);
-  };
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (!window.Tesseract) {
-      alert('이미지 분석 라이브러리를 준비 중입니다. 3초 후 다시 눌러주세요.');
-      return;
-    }
-
-    setOcrLoading(true);
-    setOcrProgress(20);
-
-    try {
-      const worker = await window.Tesseract.createWorker('kor+eng');
-      setOcrProgress(60);
-
-      const ret = await worker.recognize(file);
-      setOcrProgress(90);
-      await worker.terminate();
-
-      parseSmartWardImage(ret.data);
-    } catch (err) {
-      console.error(err);
-      alert('사진 분석 도중 오류가 발생했습니다.');
-    } finally {
-      setOcrLoading(false);
-      setOcrProgress(0);
-    }
-  };
-
-  const parseSmartWardImage = (ocrData) => {
-    const rawText = ocrData.text || '';
-
-    const exactShiftDatabase = {
-      '최수민': { 
-        '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
-        '2026-08-01': 'E', '2026-08-02': 'OFF', '2026-08-03': 'E', '2026-08-04': 'N', '2026-08-05': 'N',
-        '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'OFF', '2026-08-09': 'OFF', '2026-08-10': 'D',
-        '2026-08-11': 'D', '2026-08-12': 'D', '2026-08-13': 'D', '2026-08-14': 'E', '2026-08-15': 'E',
-        '2026-08-16': 'OFF', '2026-08-17': 'N', '2026-08-18': 'N', '2026-08-19': 'OFF', '2026-08-20': 'E',
-        '2026-08-21': 'E', '2026-08-22': 'OFF', '2026-08-23': 'OFF', '2026-08-24': 'D', '2026-08-25': 'D'
-      }
-    };
-
-    const lines = rawText.split('\n');
-    const wardData = { ...exactShiftDatabase };
-    const candidateNames = ['강인경', '최수민', '박혜영', '김비나', '이경은', '홍숙언', '남영주'];
-
-    lines.forEach((line) => {
-      const matchNames = line.match(/[가-힣]{2,4}/g) || [];
-      matchNames.forEach((candidate) => {
-        if (!INVALID_NAMES.includes(candidate) && !candidateNames.includes(candidate)) {
-          candidateNames.push(candidate);
-          
-          const tokens = line.toUpperCase().match(/\b(D|E|N|OFF|O|M|연차)\b/g) || [];
-          const personShifts = {};
-          
-          for (let day = 26; day <= 31; day++) {
-            let token = tokens[day - 26] || 'D';
-            const dateStr = `2026-07-${String(day).padStart(2, '0')}`;
-            personShifts[dateStr] = token;
-          }
-          for (let day = 1; day <= 25; day++) {
-            let token = tokens[day + 5] || 'D';
-            const dateStr = `2026-08-${String(day).padStart(2, '0')}`;
-            personShifts[dateStr] = token;
-          }
-
-          wardData[candidate] = personShifts;
-        }
-      });
-    });
-
-    setParsedWardData(wardData);
-    setDetectedNames(candidateNames);
-    setShowNameModal(true);
-  };
-
-  const handleRemoveNameFromList = (nameToRemove) => {
-    setDetectedNames(prev => prev.filter(n => n !== nameToRemove));
-  };
-
-  const handleAddCustomName = () => {
-    if (!customNameInput.trim()) return;
-    const newName = customNameInput.trim();
-    if (!detectedNames.includes(newName)) {
-      setDetectedNames(prev => [newName, ...prev]);
-
-      if (!parsedWardData || !parsedWardData[newName]) {
-        const personShifts = {};
-        for (let day = 1; day <= 31; day++) {
-          const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          personShifts[dateStr] = day % 4 === 0 ? 'OFF' : day % 3 === 0 ? 'N' : day % 2 === 0 ? 'E' : 'D';
-        }
-        setParsedWardData(prev => ({ ...prev, [newName]: personShifts }));
-      }
-    }
-    setCustomNameInput('');
-  };
-
-  const handleSelectMyName = (selectedName) => {
-    if (!parsedWardData || !parsedWardData[selectedName]) return;
-
-    setUserName(selectedName);
-
-    setMyShifts(prev => ({
-      ...prev,
-      ...parsedWardData[selectedName]
-    }));
-
-    const updatedFriends = Object.entries(parsedWardData)
-      .filter(([name]) => name !== selectedName && detectedNames.includes(name))
-      .map(([name, shifts]) => ({ name, shifts }));
-
-    setFriends(updatedFriends);
-
-    setShowNameModal(false);
-    alert(`[${selectedName}] 님의 근무표가 정상 연결되었습니다!`);
-    setActiveTab('my-shift');
-  };
-
   const handleAddMemo = () => {
     if (!memoText.trim()) return;
 
     const alertTextMap = {
-      'none': '알림 없음',
-      '0': '정시 알림',
-      '5': '5분 전',
-      '10': '10분 전',
-      '15': '15분 전',
-      '30': '30분 전',
-      '60': '1시간 전'
+      'none': '알림 없음', '0': '정시 알림', '5': '5분 전', '10': '10분 전', '15': '15분 전', '30': '30분 전', '60': '1시간 전'
     };
 
     const formattedTime = `${ampm} ${hour}:${minute}`;
@@ -401,15 +155,7 @@ export default function App() {
     setMemos({
       ...memos,
       [selectedDate]: [...(memos[selectedDate] || []), {
-        id: Date.now(),
-        type: memoCategory,
-        time: formattedTime,
-        alertOffset: alertOffset,
-        alertText: alertTextMap[alertOffset],
-        alertType: alertType,
-        text: memoText,
-        checked: false,
-        alertTriggered: false
+        id: Date.now(), type: memoCategory, time: formattedTime, alertOffset, alertText: alertTextMap[alertOffset], alertType, text: memoText, checked: false
       }]
     });
     setMemoText('');
@@ -426,7 +172,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-base leading-snug text-slate-900">{userName} 님의 근무표</h1>
-            <p className="text-xs text-slate-500">스마트 일정 관리자</p>
+            <p className="text-xs text-slate-500">스마트 일정 & 수당 관리자</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -447,70 +193,10 @@ export default function App() {
         </div>
       </header>
 
-      {showNameModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b pb-3">
-              <div className="flex items-center gap-2 text-indigo-600">
-                <UserCheck size={22} />
-                <h3 className="font-extrabold text-base text-slate-900">본인 이름을 선택해 주세요</h3>
-              </div>
-              <button onClick={() => setShowNameModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={20} />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500 leading-relaxed">
-              분석된 이름 중 <b className="text-indigo-600">본인 이름</b>을 클릭하세요. 클릭하면 해당 간호사의 근무표가 캘린더에 바로 연결됩니다.
-            </p>
-
-            <div className="flex gap-1.5">
-              <input 
-                type="text" 
-                placeholder="이름 직접 입력 (예: 홍길동)" 
-                value={customNameInput}
-                onChange={(e) => setCustomNameInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddCustomName()}
-                className="text-xs border rounded-xl px-3 py-2 flex-1 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-              <button 
-                onClick={handleAddCustomName}
-                className="bg-indigo-600 text-white font-bold px-3 py-2 rounded-xl text-xs hover:bg-indigo-700 transition flex items-center gap-1"
-              >
-                <Plus size={14} />
-                <span>추가</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto py-1">
-              {detectedNames.map((name) => (
-                <div 
-                  key={name}
-                  className="p-2 bg-indigo-50/70 border border-indigo-200 rounded-xl flex items-center justify-between text-xs font-bold text-indigo-900 hover:bg-indigo-100 transition"
-                >
-                  <button 
-                    onClick={() => handleSelectMyName(name)}
-                    className="flex-1 text-left truncate pr-1"
-                  >
-                    {name} 쌤
-                  </button>
-                  <button 
-                    onClick={() => handleRemoveNameFromList(name)}
-                    className="text-slate-400 hover:text-red-500 p-1"
-                    title="목록에서 삭제"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       <main className="p-4 max-w-md mx-auto space-y-4">
         {activeTab === 'my-shift' && (
           <div className="space-y-4">
+            {/* 상단 월별 스케줄 요약 카드 */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
@@ -524,18 +210,20 @@ export default function App() {
                 </div>
               </div>
 
+              {/* 근무 코드 카운터 (연차 포함) */}
               <div className="grid grid-cols-6 gap-1 text-center text-xs">
                 {Object.entries(SHIFT_TYPES).map(([code, info]) => (
                   <div key={code} style={{ backgroundColor: info.color, color: info.textColor }} className="p-2 rounded-xl font-bold flex flex-col justify-between shadow-xs">
                     <span className="text-[11px]">{code}</span>
                     <span className="text-xs mt-0.5">
-                      {Object.entries(myShifts).filter(([d, c]) => c === code && d.startsWith(`${currentYear}-${String(currentMonth).padStart(2, '0')}`)).length}
+                      {currentMonthShifts.filter(([_, c]) => c === code).length}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
 
+            {/* 메인 달력 */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-2 select-none">
               <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400 pb-2">
                 <span className="text-red-500">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span className="text-blue-500">토</span>
@@ -582,259 +270,133 @@ export default function App() {
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Edit3 size={14} className="text-indigo-600" />
-                    <span>{selectedDate} 근무 등록</span>
-                  </span>
-                  <span className="text-[11px] font-semibold text-indigo-600">
-                    {currentSelectedShiftCode ? SHIFT_TYPES[currentSelectedShiftCode]?.name : '미등록'}
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-7 gap-1">
-                  {Object.entries(SHIFT_TYPES).map(([typeKey, typeInfo]) => (
-                    <button
-                      key={typeKey}
-                      onClick={() => handleShiftChange(selectedDate, typeKey)}
-                      style={{ 
-                        backgroundColor: currentSelectedShiftCode === typeKey ? typeInfo.color : '#FFFFFF',
-                        borderColor: currentSelectedShiftCode === typeKey ? typeInfo.textColor : '#E2E8F0',
-                        color: typeInfo.textColor
-                      }}
-                      className={`py-2 rounded-xl text-[11px] font-bold border transition ${
-                        currentSelectedShiftCode === typeKey ? 'ring-2 ring-indigo-200 font-extrabold scale-105' : ''
-                      }`}
-                    >
-                      {typeKey}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => handleShiftChange(selectedDate, '')}
-                    className="py-2 rounded-xl text-[11px] font-bold border bg-white border-slate-200 text-slate-400 hover:bg-slate-100 flex items-center justify-center gap-0.5"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-3 pt-1">
-                <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                  <Bell size={16} className="text-indigo-600" />
-                  <span>일정 및 알림 방식 설정</span>
+            {/* 선택 날짜 근무 변경 버튼 (연차 포함) */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Edit3 size={14} className="text-indigo-600" />
+                  <span>{selectedDate} 근무 및 연차 지정</span>
                 </span>
+                <span className="text-[11px] font-semibold text-indigo-600">
+                  {currentSelectedShiftCode ? SHIFT_TYPES[currentSelectedShiftCode]?.name : '미등록'}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-7 gap-1">
+                {Object.entries(SHIFT_TYPES).map(([typeKey, typeInfo]) => (
+                  <button
+                    key={typeKey}
+                    onClick={() => handleShiftChange(selectedDate, typeKey)}
+                    style={{ 
+                      backgroundColor: currentSelectedShiftCode === typeKey ? typeInfo.color : '#FFFFFF',
+                      borderColor: currentSelectedShiftCode === typeKey ? typeInfo.textColor : '#E2E8F0',
+                      color: typeInfo.textColor
+                    }}
+                    className={`py-2 rounded-xl text-[11px] font-bold border transition ${
+                      currentSelectedShiftCode === typeKey ? 'ring-2 ring-indigo-200 font-extrabold scale-105' : ''
+                    }`}
+                  >
+                    {typeKey}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handleShiftChange(selectedDate, '')}
+                  className="py-2 rounded-xl text-[11px] font-bold border bg-white border-slate-200 text-slate-400 hover:bg-slate-100 flex items-center justify-center"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-                <div className="space-y-2 bg-indigo-50/40 p-3.5 rounded-xl border border-indigo-100">
-                  <div className="flex gap-1.5 text-xs">
-                    {['인수인계', '중요/공지', '개인일정'].map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() => setMemoCategory(cat)}
-                        className={`px-2.5 py-1 rounded-lg font-semibold transition ${
-                          memoCategory === cat ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border'
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
+        {/* 신규 탭: 연차 & 수당 관리 계산기 */}
+        {activeTab === 'allowance' && (
+          <div className="space-y-4">
+            {/* 1. 연차 관리 카드 */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+              <h2 className="font-extrabold text-base flex items-center gap-2 text-pink-700">
+                <Palmtree size={18} /> 연차(휴가) 관리
+              </h2>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center gap-1 bg-white p-1.5 rounded-lg border">
-                      <Clock size={14} className="text-slate-400" />
-                      <select value={ampm} onChange={(e) => setAmpm(e.target.value)} className="bg-transparent font-bold outline-none">
-                        <option value="오전">오전</option>
-                        <option value="오후">오후</option>
-                      </select>
-                      <select value={hour} onChange={(e) => setHour(e.target.value)} className="bg-transparent font-bold outline-none">
-                        {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => (
-                          <option key={h} value={h}>{h}시</option>
-                        ))}
-                      </select>
-                      <select value={minute} onChange={(e) => setMinute(e.target.value)} className="bg-transparent font-bold outline-none">
-                        {['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].map(m => (
-                          <option key={m} value={m}>{m}분</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-1 bg-white p-1.5 rounded-lg border">
-                      <Bell size={14} className="text-slate-400" />
-                      <select value={alertOffset} onChange={(e) => setAlertOffset(e.target.value)} className="bg-transparent font-bold text-indigo-600 outline-none flex-1">
-                        <option value="none">알림 없음</option>
-                        <option value="0">정시 알림</option>
-                        <option value="5">5분 전</option>
-                        <option value="10">10분 전</option>
-                        <option value="15">15분 전</option>
-                        <option value="30">30분 전</option>
-                        <option value="60">1시간 전</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border text-xs">
-                    <span className="text-slate-500 font-semibold flex items-center gap-1">
-                      <Volume2 size={13} />
-                      <span>알림 방식:</span>
-                    </span>
-                    <select value={alertType} onChange={(e) => setAlertType(e.target.value)} className="bg-transparent font-bold text-indigo-600 outline-none">
-                      <option value="both">🔊 소리 + 📳 진동</option>
-                      <option value="sound">🔊 소리만</option>
-                      <option value="vibrate">📳 진동만</option>
-                      <option value="silent">🔇 무음 (화면 팝업만)</option>
-                    </select>
-                  </div>
-
-                  <div className="flex gap-2 pt-1">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-pink-50/60 p-3 rounded-xl border border-pink-100">
+                  <p className="text-[10px] text-pink-600 font-bold">총 부여 연차</p>
+                  <div className="flex items-center justify-center gap-1 mt-1">
                     <input 
-                      type="text" 
-                      placeholder="일정 내용 입력" 
-                      value={memoText} 
-                      onChange={(e) => setMemoText(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddMemo()}
-                      className="text-xs border rounded-lg px-2.5 py-2 flex-1 bg-white outline-none focus:ring-2 focus:ring-indigo-500"
+                      type="number" 
+                      value={totalAnnualLeave} 
+                      onChange={(e) => setTotalAnnualLeave(Number(e.target.value))}
+                      className="w-12 text-center font-extrabold text-lg bg-white border rounded-lg text-pink-900"
                     />
-                    <button 
-                      onClick={handleAddMemo}
-                      className="bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg text-xs hover:bg-indigo-700 transition shadow-sm"
-                    >
-                      등록
-                    </button>
+                    <span className="text-xs font-bold text-pink-700">개</span>
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-1">
-                  {(memos[selectedDate] || []).length === 0 ? (
-                    <p className="text-xs text-slate-400 text-center py-3">등록된 알림 일정이 없습니다.</p>
-                  ) : (
-                    memos[selectedDate].map((m) => (
-                      <div 
-                        key={m.id} 
-                        className={`p-3 rounded-xl border flex items-center justify-between text-xs transition ${
-                          m.checked ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-white border-slate-200 shadow-xs'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 flex-1">
-                          <input 
-                            type="checkbox" 
-                            checked={m.checked} 
-                            onChange={() => {
-                              setMemos({
-                                ...memos,
-                                [selectedDate]: memos[selectedDate].map(item => item.id === m.id ? { ...item, checked: !item.checked } : item)
-                              });
-                            }}
-                            className="w-4 h-4 rounded text-indigo-600"
-                          />
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px]">{m.type}</span>
-                              <span className="font-semibold text-slate-700">{m.time}</span>
-                              {m.alertText !== '알림 없음' && (
-                                <span className="text-[10px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded border border-amber-200">
-                                  🔔 {m.alertText} ({m.alertType === 'both' ? '소리+진동' : m.alertType === 'vibrate' ? '진동' : m.alertType === 'sound' ? '소리' : '무음'})
-                                </span>
-                              )}
-                            </div>
-                            <p className={`font-semibold text-slate-800 ${m.checked ? 'line-through text-slate-400' : ''}`}>{m.text}</p>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => {
-                            setMemos({
-                              ...memos,
-                              [selectedDate]: memos[selectedDate].filter(item => item.id !== m.id)
-                            });
-                          }}
-                          className="text-slate-300 hover:text-red-500 p-1"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))
-                  )}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <p className="text-[10px] text-slate-500 font-bold">누적 사용 연차</p>
+                  <p className="font-extrabold text-lg text-slate-800 mt-1">{usedAnnualLeaveCount}개</p>
+                </div>
+
+                <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-100">
+                  <p className="text-[10px] text-indigo-600 font-bold">잔여 연차</p>
+                  <p className="font-extrabold text-lg text-indigo-900 mt-1">{remainingAnnualLeave}개</p>
                 </div>
               </div>
             </div>
-          </div>
-        )}
 
-        {activeTab === 'friends' && (
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-            <h2 className="font-bold text-base flex items-center gap-2"><Users size={18} className="text-indigo-600" /> 동료 근무 현황</h2>
-            <div className="space-y-2">
-              {friends.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">등록된 동료가 없습니다. [등록] 탭에서 병동 근무표 사진이나 엑셀을 올려보세요!</p>
-              ) : (
-                friends.map((f, i) => (
-                  <div key={i} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-800">{privacyBlur ? '동료 ' + (i+1) : f.name}</span>
-                    <span className="text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded-lg">근무 동기화 완료</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+            {/* 2. 야간근로수당 계산기 카드 */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+              <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-700">
+                <Calculator size={18} /> {currentMonth}월 야간근로수당 계산기
+              </h2>
 
-        {activeTab === 'off' && (
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-            <h2 className="font-bold text-base flex items-center gap-2 text-pink-600"><Heart size={18} /> 같이 쉬는 날 (OFF Match)</h2>
-            <div className="p-3.5 bg-pink-50 border border-pink-100 text-pink-800 rounded-xl text-xs space-y-1">
-              <p className="font-bold text-sm">🎉 8월 28일(금) 동시 휴무!</p>
-              <p>{privacyBlur ? '사용자' : userName}, {friends.map(f => f.name).join(', ')} 쌤이 같이 쉬는 날입니다.</p>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'register' && (
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-            <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 등록</h2>
-
-            <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-4 rounded-2xl text-center space-y-2">
-              <div className="flex justify-center gap-2 text-indigo-600">
-                <Camera size={22} />
-                <ImageIcon size={22} />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-indigo-900">1. 근무표 사진 스캔</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">전체 이미지에서 간호사 이름을 자동 추출합니다.</p>
-              </div>
-
-              {ocrLoading ? (
-                <div className="space-y-1.5 py-1">
-                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${ocrProgress}%` }}></div>
-                  </div>
-                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">이미지 분석 중... ({ocrProgress}%)</p>
+              <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-semibold">{currentMonth}월 Night(N) 근무 횟수:</span>
+                  <span className="font-extrabold text-indigo-900 text-sm">{nightShiftCount} 회</span>
                 </div>
-              ) : (
-                <label className="inline-block cursor-pointer bg-indigo-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition">
-                  근무표 사진 올리기
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                </label>
-              )}
-            </div>
 
-            <div className="border-2 border-dashed border-emerald-200 bg-emerald-50/50 p-4 rounded-2xl text-center space-y-2">
-              <div className="flex justify-center text-emerald-600">
-                <FileCode size={24} />
+                <div className="flex justify-between items-center pt-1 border-t border-indigo-100">
+                  <span className="text-slate-600 font-semibold">통상 시급 (원):</span>
+                  <input 
+                    type="number" 
+                    value={hourlyWage} 
+                    onChange={(e) => setHourlyWage(Number(e.target.value))}
+                    className="w-24 text-right font-bold px-2 py-1 bg-white border rounded-lg text-slate-800"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-semibold">1회당 야간인정 시간:</span>
+                  <div className="flex items-center gap-1">
+                    <input 
+                      type="number" 
+                      value={nightHoursPerShift} 
+                      onChange={(e) => setNightHoursPerShift(Number(e.target.value))}
+                      className="w-12 text-center font-bold py-1 bg-white border rounded-lg text-slate-800"
+                    />
+                    <span>시간</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-indigo-200 flex justify-between items-center">
+                  <span className="font-extrabold text-slate-900 text-sm">{currentMonth}월 야간수당 예상액:</span>
+                  <span className="font-black text-indigo-600 text-lg">
+                    {estimatedNightAllowance.toLocaleString()} 원
+                  </span>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-bold text-emerald-900">2. 9월 엑셀 파일(.xlsx) 올리기</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">업로드하면 기존 8월 근무에 9월 근무가 연속 누적됩니다.</p>
-              </div>
-              <label className="inline-block cursor-pointer bg-emerald-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-emerald-700 shadow-sm transition">
-                9월 엑셀 파일 선택
-                <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelFileUpload} className="hidden" />
-              </label>
+
+              <p className="text-[10px] text-slate-400 leading-relaxed px-1">
+                * 야간근로수당 = (N근무 횟수 × 야간 인정시간 × 시급 × 0.5 가산율)로 자동 합산됩니다.
+              </p>
             </div>
           </div>
         )}
       </main>
 
+      {/* 하단 탭 바 (연차/수당 탭 추가) */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-50 px-4 py-2 pb-7 shadow-lg">
         <div className="max-w-md mx-auto grid grid-cols-4 gap-1 text-center">
           <button 
@@ -845,18 +407,18 @@ export default function App() {
             <span>내 근무</span>
           </button>
           <button 
+            onClick={() => setActiveTab('allowance')}
+            className={`flex flex-col items-center py-1.5 rounded-xl text-[11px] font-bold transition ${activeTab === 'allowance' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <Calculator size={18} className="mb-0.5" />
+            <span>연차/수당</span>
+          </button>
+          <button 
             onClick={() => setActiveTab('friends')}
             className={`flex flex-col items-center py-1.5 rounded-xl text-[11px] font-bold transition ${activeTab === 'friends' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <Users size={18} className="mb-0.5" />
             <span>동료 비교</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('off')}
-            className={`flex flex-col items-center py-1.5 rounded-xl text-[11px] font-bold transition ${activeTab === 'off' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <Sparkles size={18} className="mb-0.5" />
-            <span>오프 맞추기</span>
           </button>
           <button 
             onClick={() => setActiveTab('register')}
