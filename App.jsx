@@ -13,6 +13,12 @@ const SHIFT_TYPES = {
   연차: { name: 'Annual', time: '연차 휴가', color: '#FBCFE8', textColor: '#9D174D' }
 };
 
+// 절대 사람 이름으로 파싱되면 안 되는 금지어 목록
+const INVALID_NAMES = [
+  '근무시간', '근무사', '근무', '보고사항', '보고', '사항', '연차', '연채', '분당', '병동', 
+  '근무표', '합계', '구분', '직급', '성명', '이름', '월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M'
+];
+
 const getTodayDateObj = () => {
   const d = new Date();
   return {
@@ -177,7 +183,7 @@ export default function App() {
     return days;
   };
 
-  // 엑셀 파일 통 파싱 (9월 근무표 대응)
+  // 엑셀 파싱 (금지어 엄격 필터링 적용)
   const handleExcelFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -205,9 +211,7 @@ export default function App() {
     reader.readAsBinaryString(file);
   };
 
-  // 9월 근무표 엑셀 구조 분석 및 날짜 병합 처리
   const processExcel9MonthMatrix = (rows) => {
-    const systemFilter = ['월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M', '합계', '연차', '구분', '직급', '성명', '이름', 'HN', 'CN', 'RN', '분당', '병동'];
     const wardData = {};
     const candidateNames = [];
 
@@ -218,7 +222,7 @@ export default function App() {
       for (let i = 0; i < Math.min(row.length, 5); i++) {
         const cell = String(row[i] || '').replace(/[\n\r]/g, '').trim();
         const match = cell.match(/[가-힣]{2,4}/);
-        if (match && !systemFilter.includes(match[0])) {
+        if (match && !INVALID_NAMES.includes(match[0])) {
           rowName = match[0];
           break;
         }
@@ -228,11 +232,8 @@ export default function App() {
         if (!candidateNames.includes(rowName)) candidateNames.push(rowName);
 
         const personShifts = {};
+        let tokenIndex = 3;
         
-        // 9월 표 기준: 8월 26일~31일(6일간) + 9월 1일~25일(25일간)
-        let tokenIndex = 3; // 엑셀에서 근무 코드가 시작하는 셀 위치
-        
-        // 8월 26일 ~ 31일
         for (let day = 26; day <= 31; day++) {
           const code = String(row[tokenIndex] || 'OFF').trim().toUpperCase();
           const dateStr = `2026-08-${String(day).padStart(2, '0')}`;
@@ -240,7 +241,6 @@ export default function App() {
           tokenIndex++;
         }
 
-        // 9월 1일 ~ 25일
         for (let day = 1; day <= 25; day++) {
           const code = String(row[tokenIndex] || 'OFF').trim().toUpperCase();
           const dateStr = `2026-09-${String(day).padStart(2, '0')}`;
@@ -294,7 +294,6 @@ export default function App() {
 
   const parseSmartWardImage = (ocrData) => {
     const rawText = ocrData.text || '';
-    const systemFilter = ['월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M', '분당', '병동', '근무표', '합계', '연차'];
 
     const exactShiftDatabase = {
       '최수민': { 
@@ -314,7 +313,7 @@ export default function App() {
     lines.forEach((line) => {
       const matchNames = line.match(/[가-힣]{2,4}/g) || [];
       matchNames.forEach((candidate) => {
-        if (!systemFilter.includes(candidate) && !candidateNames.includes(candidate)) {
+        if (!INVALID_NAMES.includes(candidate) && !candidateNames.includes(candidate)) {
           candidateNames.push(candidate);
           
           const tokens = line.toUpperCase().match(/\b(D|E|N|OFF|O|M|연차)\b/g) || [];
@@ -363,13 +362,11 @@ export default function App() {
     setCustomNameInput('');
   };
 
-  // 핵심 수정: 기존 근무표에 새로운 월 데이터 덮어씌우지 않고 병합(Merge)
   const handleSelectMyName = (selectedName) => {
     if (!parsedWardData || !parsedWardData[selectedName]) return;
 
     setUserName(selectedName);
 
-    // prev 객체에 새 월 데이터를 병합하여 누적 유지
     setMyShifts(prev => ({
       ...prev,
       ...parsedWardData[selectedName]
@@ -382,7 +379,7 @@ export default function App() {
     setFriends(updatedFriends);
 
     setShowNameModal(false);
-    alert(`[${selectedName}] 님의 근무표 데이터가 추가 연결되었습니다!`);
+    alert(`[${selectedName}] 님의 근무표가 정상 연결되었습니다!`);
     setActiveTab('my-shift');
   };
 
@@ -464,7 +461,7 @@ export default function App() {
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              분석된 이름 중 <b className="text-indigo-600">본인 이름</b>을 클릭하세요. 기존 근무표 데이터에 새로운 월 스케줄이 누적 저장됩니다.
+              분석된 이름 중 <b className="text-indigo-600">본인 이름</b>을 클릭하세요. 클릭하면 해당 간호사의 근무표가 캘린더에 바로 연결됩니다.
             </p>
 
             <div className="flex gap-1.5">
