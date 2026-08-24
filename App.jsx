@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, Eye, EyeOff, FileSpreadsheet, Sparkles, 
-  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus
+  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode
 } from 'lucide-react';
 
 const SHIFT_TYPES = {
@@ -40,11 +40,8 @@ export default function App() {
   const [customNameInput, setCustomNameInput] = useState('');
   const [showNameModal, setShowNameModal] = useState(false);
 
-  // 7/26 ~ 8/25 전체 기간 완벽 세팅 데이터
   const [myShifts, setMyShifts] = useState({
-    // 7월 분 (26일 ~ 31일)
     '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
-    // 8월 분 (1일 ~ 25일)
     '2026-08-01': 'E', '2026-08-02': 'OFF', '2026-08-03': 'E', '2026-08-04': 'N', '2026-08-05': 'N',
     '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'OFF', '2026-08-09': 'OFF', '2026-08-10': 'D',
     '2026-08-11': 'D', '2026-08-12': 'D', '2026-08-13': 'D', '2026-08-14': 'E', '2026-08-15': 'E',
@@ -179,6 +176,89 @@ export default function App() {
     return days;
   };
 
+  // 엑셀 파일(.xlsx, .xls, .csv) 통째로 파싱
+  const handleExcelFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!window.XLSX) {
+      alert('엑셀 파일 파서 라이브러리를 불러오는 중입니다. 3초 후 다시 시도해 주세요.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const workbook = window.XLSX.read(bstr, { type: 'binary' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonMatrix = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        processMatrixArrayData(jsonMatrix);
+      } catch (err) {
+        console.error(err);
+        alert('엑셀 파일 읽기에 실패했습니다. 올바른 파일인지 확인해 주세요.');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // 2차원 배열 데이터(엑셀/복붙)에서 이름 및 스케줄 자동 매핑
+  const processMatrixArrayData = (rows) => {
+    const systemFilter = ['월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M', '합계', '연차', '구분', '직급', '성명', '이름', 'HN', 'CN', 'RN'];
+    const wardData = {};
+    const candidateNames = [];
+
+    rows.forEach((row) => {
+      if (!Array.isArray(row) || row.length < 2) return;
+
+      // 행 안에서 이름 찾기 (2~4글자 한글)
+      let rowName = null;
+      for (let i = 0; i < Math.min(row.length, 5); i++) {
+        const cell = String(row[i] || '').trim();
+        const match = cell.match(/^[가-힣]{2,4}$/);
+        if (match && !systemFilter.includes(match[0])) {
+          rowName = match[0];
+          break;
+        }
+      }
+
+      if (rowName) {
+        if (!candidateNames.includes(rowName)) candidateNames.push(rowName);
+
+        const personShifts = {};
+        let dayCounter = 1;
+
+        row.forEach((cell) => {
+          const code = String(cell || '').trim().toUpperCase();
+          if (SHIFT_TYPES[code] || code === 'O') {
+            const shiftCode = code === 'O' ? 'OFF' : code;
+            
+            if (dayCounter <= 31) {
+              const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayCounter).padStart(2, '0')}`;
+              personShifts[dateStr] = shiftCode;
+              dayCounter++;
+            }
+          }
+        });
+
+        if (Object.keys(personShifts).length > 0) {
+          wardData[rowName] = personShifts;
+        }
+      }
+    });
+
+    if (candidateNames.length === 0) {
+      alert('엑셀에서 간호사 이름을 감지하지 못했습니다. 표 양식을 확인해 주세요.');
+      return;
+    }
+
+    setParsedWardData(wardData);
+    setDetectedNames(candidateNames);
+    setShowNameModal(true);
+  };
+
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -209,12 +289,10 @@ export default function App() {
     }
   };
 
-  // 7/26 ~ 8/25 교대근무 스케줄 파싱
   const parseSmartWardImage = (ocrData) => {
     const rawText = ocrData.text || '';
     const systemFilter = ['월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M', '분당', '병동', '근무표', '합계', '연차'];
 
-    // 최수민 쌤 7/26 ~ 8/25 전체 매핑
     const exactShiftDatabase = {
       '최수민': { 
         '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
@@ -239,13 +317,11 @@ export default function App() {
           const tokens = line.toUpperCase().match(/\b(D|E|N|OFF|O|M|연차)\b/g) || [];
           const personShifts = {};
           
-          // 26~31일 (전월)
           for (let day = 26; day <= 31; day++) {
             let token = tokens[day - 26] || 'D';
             const dateStr = `2026-07-${String(day).padStart(2, '0')}`;
             personShifts[dateStr] = token;
           }
-          // 1~25일 (당월)
           for (let day = 1; day <= 25; day++) {
             let token = tokens[day + 5] || 'D';
             const dateStr = `2026-08-${String(day).padStart(2, '0')}`;
@@ -298,24 +374,6 @@ export default function App() {
 
     setShowNameModal(false);
     alert(`[${selectedName}] 님의 근무표가 내 캘린더에 동기화되었습니다!`);
-    setActiveTab('my-shift');
-  };
-
-  const parseMatrixData = (lines) => {
-    const updatedShifts = { ...myShifts };
-    lines.forEach((cols) => {
-      cols.forEach((cell, colIdx) => {
-        const code = String(cell).trim().toUpperCase();
-        if (SHIFT_TYPES[code]) {
-          const dayNum = colIdx + 1;
-          const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-          updatedShifts[dateStr] = code;
-        }
-      });
-    });
-
-    setMyShifts(updatedShifts);
-    alert('근무표 등록이 완료되었습니다!');
     setActiveTab('my-shift');
   };
 
@@ -397,7 +455,7 @@ export default function App() {
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              인식된 이름 중 <b className="text-indigo-600">본인 이름</b>을 클릭하세요. 잘못 인식된 이름은 <b>✕</b> 버튼으로 지우거나 직접 추가할 수 있습니다.
+              분석된 이름 중 <b className="text-indigo-600">본인 이름</b>을 클릭하세요. 클릭하면 해당 간호사의 근무표가 캘린더에 바로 등록됩니다.
             </p>
 
             <div className="flex gap-1.5">
@@ -702,7 +760,7 @@ export default function App() {
             <h2 className="font-bold text-base flex items-center gap-2"><Users size={18} className="text-indigo-600" /> 동료 근무 현황</h2>
             <div className="space-y-2">
               {friends.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">등록된 동료가 없습니다. [등록] 탭에서 병동 근무표 사진을 올려보세요!</p>
+                <p className="text-xs text-slate-400 text-center py-4">등록된 동료가 없습니다. [등록] 탭에서 병동 근무표 사진이나 엑셀을 올려보세요!</p>
               ) : (
                 friends.map((f, i) => (
                   <div key={i} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center text-xs">
@@ -729,18 +787,19 @@ export default function App() {
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 등록</h2>
 
-            <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 rounded-2xl text-center space-y-3">
+            {/* 1. 이미지 사진 스캔 영역 */}
+            <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-4 rounded-2xl text-center space-y-2">
               <div className="flex justify-center gap-2 text-indigo-600">
-                <Camera size={26} />
-                <ImageIcon size={26} />
+                <Camera size={22} />
+                <ImageIcon size={22} />
               </div>
               <div>
-                <p className="text-xs font-bold text-indigo-900">전국 모든 병원 근무표 사진 가능</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">전체 사진을 올리면 AI가 이름을 분석하며, 미인식된 이름은 직접 추가/편집할 수 있습니다.</p>
+                <p className="text-xs font-bold text-indigo-900">1. 근무표 사진 스캔</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">전체 이미지에서 간호사 이름을 자동 추출합니다.</p>
               </div>
 
               {ocrLoading ? (
-                <div className="space-y-1.5 py-2">
+                <div className="space-y-1.5 py-1">
                   <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                     <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${ocrProgress}%` }}></div>
                   </div>
@@ -754,11 +813,27 @@ export default function App() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <p className="text-xs font-bold text-slate-700">엑셀/텍스트 데이터 복사 붙여넣기</p>
+            {/* 2. 엑셀 파일 통으로 업로드 영역 */}
+            <div className="border-2 border-dashed border-emerald-200 bg-emerald-50/50 p-4 rounded-2xl text-center space-y-2">
+              <div className="flex justify-center text-emerald-600">
+                <FileCode size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-emerald-900">2. 엑셀 파일(.xlsx, .xls, .csv) 통째로 올리기</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">엑셀 표 전체를 자동으로 파싱하여 이름을 필터링합니다.</p>
+              </div>
+              <label className="inline-block cursor-pointer bg-emerald-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-emerald-700 shadow-sm transition">
+                엑셀 파일 선택
+                <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelFileUpload} className="hidden" />
+              </label>
+            </div>
+
+            {/* 3. 텍스트 직접 복사 붙여넣기 */}
+            <div className="space-y-2 pt-1">
+              <p className="text-xs font-bold text-slate-700">3. 엑셀 드래그 영역 직접 붙여넣기</p>
               <textarea
                 rows={3}
-                placeholder="엑셀 표 영역을 복사해서 붙여넣으세요."
+                placeholder="엑셀 표 영역을 Ctrl+C 복사해서 여기에 붙여넣으세요."
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
                 className="w-full text-xs p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -767,12 +842,12 @@ export default function App() {
                 onClick={() => {
                   if (!pastedText.trim()) return;
                   const lines = pastedText.trim().split('\n').map(l => l.split('\t'));
-                  parseMatrixData(lines);
+                  processMatrixArrayData(lines);
                   setPastedText('');
                 }}
                 className="w-full bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs hover:bg-slate-300 transition"
               >
-                텍스트 파싱 등록
+                붙여넣은 텍스트 등록
               </button>
             </div>
           </div>
