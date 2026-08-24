@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, Eye, EyeOff, FileSpreadsheet, Sparkles, 
-  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode, Calculator, Palmtree, Settings
+  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode, Calculator, Palmtree, Settings, RefreshCw
 } from 'lucide-react';
 
 const INVALID_NAMES = [
@@ -46,18 +46,20 @@ export default function App() {
     연차: { name: 'Annual', time: '연차 휴가', nightHours: 0, color: '#FBCFE8', textColor: '#9D174D' }
   });
 
-  // 연차 관리
+  // 1. 총 부여 연차
   const [totalAnnualLeave, setTotalAnnualLeave] = useState('15');
+  // 2. 수동 수정용 사용 연차 (null이면 캘린더 자동 집계)
+  const [manualUsedAnnual, setManualUsedAnnual] = useState(null);
 
   // 수당 계산 방식 선택 ('fixed': 회당 고정수당, 'hourly': 통상시급 기준)
   const [calcMode, setCalcMode] = useState('fixed');
   
   // 고정 수당 입력값 (회당 원)
-  const [nightFixedAllowance, setNightFixedAllowance] = useState('50000'); // N 1회당 5만원
-  const [eveningFixedAllowance, setEveningFixedAllowance] = useState('10000'); // E 1회당 1만원
+  const [nightFixedAllowance, setNightFixedAllowance] = useState('50000');
+  const [eveningFixedAllowance, setEveningFixedAllowance] = useState('10000');
 
   // 시급 입력값
-  const [hourlyWage, setHourlyWage] = useState('13000'); // 통상시급 1.3만원
+  const [hourlyWage, setHourlyWage] = useState('13000');
 
   const [myShifts, setMyShifts] = useState({
     '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
@@ -93,7 +95,13 @@ export default function App() {
 
   const nightShiftCount = currentMonthShifts.filter(([_, code]) => code === 'N').length;
   const eveningShiftCount = currentMonthShifts.filter(([_, code]) => code === 'E').length;
-  const usedAnnualLeaveCount = Object.values(myShifts).filter(code => code === '연차').length;
+  
+  // 캘린더 상의 자동 집계 연차
+  const autoAnnualLeaveCount = Object.values(myShifts).filter(code => code === '연차').length;
+  
+  // 수동 수정값 적용 (수정값 존재 시 수동값, 없으면 자동 집계)
+  const usedAnnualLeaveCount = manualUsedAnnual !== null ? Number(manualUsedAnnual) : autoAnnualLeaveCount;
+  
   const numTotalAnnual = Number(totalAnnualLeave) || 0;
   const remainingAnnualLeave = numTotalAnnual - usedAnnualLeaveCount;
 
@@ -350,11 +358,23 @@ export default function App() {
               </div>
             </div>
 
-            {/* 2. 연차 현황 */}
+            {/* 2. 연차 현황 (사용연차 직접 수정 가능) */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-              <h2 className="font-extrabold text-base flex items-center gap-2 text-pink-700">
-                <Palmtree size={18} /> 연차(휴가) 현황
-              </h2>
+              <div className="flex justify-between items-center">
+                <h2 className="font-extrabold text-base flex items-center gap-2 text-pink-700">
+                  <Palmtree size={18} /> 연차(휴가) 현황
+                </h2>
+                {manualUsedAnnual !== null && (
+                  <button 
+                    onClick={() => setManualUsedAnnual(null)}
+                    className="flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition"
+                    title="캘린더 자동 집계로 복원"
+                  >
+                    <RefreshCw size={11} />
+                    <span>자동 집계 복원</span>
+                  </button>
+                )}
+              </div>
 
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-pink-50/60 p-3 rounded-xl border border-pink-100">
@@ -372,24 +392,36 @@ export default function App() {
                 </div>
 
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                  <p className="text-[10px] text-slate-500 font-bold">사용 연차</p>
-                  <p className="font-extrabold text-lg text-slate-800 mt-1">{usedAnnualLeaveCount}개</p>
+                  <p className="text-[10px] text-slate-500 font-bold flex items-center justify-center gap-0.5">
+                    <span>사용 연차</span>
+                    {manualUsedAnnual !== null && <span className="text-[9px] text-indigo-600 font-extrabold">(수동)</span>}
+                  </p>
+                  <div className="flex items-center justify-center gap-1 mt-1">
+                    <input 
+                      type="number" 
+                      step="0.5"
+                      value={manualUsedAnnual !== null ? manualUsedAnnual : autoAnnualLeaveCount} 
+                      onChange={(e) => setManualUsedAnnual(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      className="w-12 text-center font-extrabold text-lg bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                    <span className="text-xs font-bold text-slate-600">개</span>
+                  </div>
                 </div>
 
                 <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-100">
                   <p className="text-[10px] text-indigo-600 font-bold">잔여 연차</p>
-                  <p className="font-extrabold text-lg text-indigo-900 mt-1">{remainingAnnualLeave}개</p>
+                  <p className="font-extrabold text-lg text-indigo-900 mt-1.5">{remainingAnnualLeave}개</p>
                 </div>
               </div>
             </div>
 
-            {/* 3. 근무 수당 계산기 (방식 선택 기능 탑재) */}
+            {/* 3. 근무 수당 계산기 */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center">
                 <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-700">
                   <Calculator size={18} /> {currentMonth}월 수당 계산기
                 </h2>
-                {/* 계산 방식 스위치 */}
                 <div className="flex bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
                   <button 
                     onClick={() => setCalcMode('fixed')} 
@@ -472,10 +504,6 @@ export default function App() {
                   </span>
                 </div>
               </div>
-
-              <p className="text-[10px] text-slate-400 leading-relaxed px-1">
-                * 병원 지급 방식에 따라 상단 우측 버튼으로 <b>회당 고정 수당</b> 또는 <b>통상 시급 가산</b> 방식을 변경해 보세요.
-              </p>
             </div>
           </div>
         )}
