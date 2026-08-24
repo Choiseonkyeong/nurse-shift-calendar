@@ -36,7 +36,7 @@ export default function App() {
   const [customNameInput, setCustomNameInput] = useState('');
   const [showNameModal, setShowNameModal] = useState(false);
 
-  // 병원별 맞춤 근무시간 및 야간인정시간 설정
+  // 병원별 근무시간 설정
   const [shiftConfigs, setShiftConfigs] = useState({
     D: { name: 'Day', time: '07:30 - 15:30', nightHours: 0, color: '#FEF08A', textColor: '#854D0E' },
     E: { name: 'Evening', time: '14:30 - 22:30', nightHours: 0.5, color: '#FED7AA', textColor: '#9A3412' },
@@ -46,9 +46,18 @@ export default function App() {
     연차: { name: 'Annual', time: '연차 휴가', nightHours: 0, color: '#FBCFE8', textColor: '#9D174D' }
   });
 
-  // 연차 & 야간수당 설정 상태
-  const [totalAnnualLeave, setTotalAnnualLeave] = useState(15);
-  const [hourlyWage, setHourlyWage] = useState(12000); // 통상시급
+  // 연차 관리
+  const [totalAnnualLeave, setTotalAnnualLeave] = useState('15');
+
+  // 수당 계산 방식 선택 ('fixed': 회당 고정수당, 'hourly': 통상시급 기준)
+  const [calcMode, setCalcMode] = useState('fixed');
+  
+  // 고정 수당 입력값 (회당 원)
+  const [nightFixedAllowance, setNightFixedAllowance] = useState('50000'); // N 1회당 5만원
+  const [eveningFixedAllowance, setEveningFixedAllowance] = useState('10000'); // E 1회당 1만원
+
+  // 시급 입력값
+  const [hourlyWage, setHourlyWage] = useState('13000'); // 통상시급 1.3만원
 
   const [myShifts, setMyShifts] = useState({
     '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
@@ -85,11 +94,19 @@ export default function App() {
   const nightShiftCount = currentMonthShifts.filter(([_, code]) => code === 'N').length;
   const eveningShiftCount = currentMonthShifts.filter(([_, code]) => code === 'E').length;
   const usedAnnualLeaveCount = Object.values(myShifts).filter(code => code === '연차').length;
-  const remainingAnnualLeave = totalAnnualLeave - usedAnnualLeaveCount;
+  const numTotalAnnual = Number(totalAnnualLeave) || 0;
+  const remainingAnnualLeave = numTotalAnnual - usedAnnualLeaveCount;
 
-  // 병원 개별 설정 시간을 반영한 야간수당 계산
-  const totalNightHours = (nightShiftCount * shiftConfigs.N.nightHours) + (eveningShiftCount * shiftConfigs.E.nightHours);
-  const estimatedNightAllowance = Math.round(totalNightHours * hourlyWage * 0.5);
+  // 수당 계산 분기
+  const numNightFixed = Number(String(nightFixedAllowance).replace(/[^0-9]/g, '')) || 0;
+  const numEveFixed = Number(String(eveningFixedAllowance).replace(/[^0-9]/g, '')) || 0;
+  const numHourlyWage = Number(String(hourlyWage).replace(/[^0-9]/g, '')) || 0;
+
+  const totalNightHours = (nightShiftCount * (Number(shiftConfigs.N.nightHours) || 0)) + (eveningShiftCount * (Number(shiftConfigs.E.nightHours) || 0));
+
+  const estimatedAllowance = calcMode === 'fixed'
+    ? (nightShiftCount * numNightFixed) + (eveningShiftCount * numEveFixed)
+    : Math.round(totalNightHours * numHourlyWage * 0.5);
 
   const handlePrevMonth = () => {
     if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); } 
@@ -296,15 +313,14 @@ export default function App() {
           </div>
         )}
 
-        {/* 연차 & 수당 관리 탭 (내 병원 맞춤 설정) */}
         {activeTab === 'allowance' && (
           <div className="space-y-4">
-            {/* 내 병원 3교대 근무시간 설정 카드 */}
+            {/* 1. 병원 근무시간 설정 */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-700">
                 <Settings size={18} /> 내 병원 3교대 근무시간 설정
               </h2>
-              <p className="text-[11px] text-slate-500">우리 병원의 근무 시각과 22시~06시 사이 실제 야간 인정시간을 입력해 두세요.</p>
+              <p className="text-[11px] text-slate-500">병원에 맞는 근무시간 및 야간 인정시간을 설정하세요.</p>
 
               <div className="space-y-2">
                 {['D', 'E', 'N', 'M'].map((code) => (
@@ -323,7 +339,8 @@ export default function App() {
                         type="number" 
                         step="0.5"
                         value={shiftConfigs[code].nightHours} 
-                        onChange={(e) => handleConfigChange(code, 'nightHours', Number(e.target.value))}
+                        onChange={(e) => handleConfigChange(code, 'nightHours', e.target.value)}
+                        onFocus={(e) => e.target.select()}
                         className="w-12 text-center py-1 bg-white border rounded-lg font-bold text-indigo-600"
                       />
                       <span className="text-[10px]">시간</span>
@@ -333,7 +350,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* 연차 관리 카드 */}
+            {/* 2. 연차 현황 */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <h2 className="font-extrabold text-base flex items-center gap-2 text-pink-700">
                 <Palmtree size={18} /> 연차(휴가) 현황
@@ -346,7 +363,8 @@ export default function App() {
                     <input 
                       type="number" 
                       value={totalAnnualLeave} 
-                      onChange={(e) => setTotalAnnualLeave(Number(e.target.value))}
+                      onChange={(e) => setTotalAnnualLeave(e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       className="w-12 text-center font-extrabold text-lg bg-white border rounded-lg text-pink-900"
                     />
                     <span className="text-xs font-bold text-pink-700">개</span>
@@ -365,40 +383,99 @@ export default function App() {
               </div>
             </div>
 
-            {/* 야간근로수당 자동 계산기 */}
+            {/* 3. 근무 수당 계산기 (방식 선택 기능 탑재) */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-              <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-700">
-                <Calculator size={18} /> {currentMonth}월 야간근로수당 계산기
-              </h2>
+              <div className="flex justify-between items-center">
+                <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-700">
+                  <Calculator size={18} /> {currentMonth}월 수당 계산기
+                </h2>
+                {/* 계산 방식 스위치 */}
+                <div className="flex bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
+                  <button 
+                    onClick={() => setCalcMode('fixed')} 
+                    className={`px-2 py-1 rounded-md transition ${calcMode === 'fixed' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500'}`}
+                  >
+                    회당 수당
+                  </button>
+                  <button 
+                    onClick={() => setCalcMode('hourly')} 
+                    className={`px-2 py-1 rounded-md transition ${calcMode === 'hourly' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500'}`}
+                  >
+                    통상 시급
+                  </button>
+                </div>
+              </div>
 
               <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-2 text-xs">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-600 font-semibold">Night(N) 근무:</span>
-                  <span className="font-extrabold text-indigo-900">{nightShiftCount} 회 ({nightShiftCount * shiftConfigs.N.nightHours}시간)</span>
+                  <span className="font-extrabold text-indigo-900">{nightShiftCount} 회</span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-slate-600 font-semibold">Evening(E) 근무:</span>
-                  <span className="font-extrabold text-orange-900">{eveningShiftCount} 회 ({eveningShiftCount * shiftConfigs.E.nightHours}시간)</span>
+                  <span className="font-extrabold text-orange-900">{eveningShiftCount} 회</span>
                 </div>
 
-                <div className="flex justify-between items-center pt-2 border-t border-indigo-100">
-                  <span className="text-slate-600 font-semibold">통상 시급 (원):</span>
-                  <input 
-                    type="number" 
-                    value={hourlyWage} 
-                    onChange={(e) => setHourlyWage(Number(e.target.value))}
-                    className="w-24 text-right font-bold px-2 py-1 bg-white border rounded-lg text-slate-800"
-                  />
-                </div>
+                {calcMode === 'fixed' ? (
+                  <>
+                    <div className="flex justify-between items-center pt-2 border-t border-indigo-100">
+                      <span className="text-slate-600 font-semibold">Night 1회당 수당:</span>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="text" 
+                          value={numNightFixed > 0 ? numNightFixed.toLocaleString() : ''} 
+                          onChange={(e) => setNightFixedAllowance(e.target.value.replace(/[^0-9]/g, ''))}
+                          onFocus={(e) => e.target.select()}
+                          placeholder="예: 50,000"
+                          className="w-24 text-right font-bold px-2 py-1 bg-white border rounded-lg text-slate-800"
+                        />
+                        <span>원</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-600 font-semibold">Evening 1회당 수당:</span>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="text" 
+                          value={numEveFixed > 0 ? numEveFixed.toLocaleString() : ''} 
+                          onChange={(e) => setEveningFixedAllowance(e.target.value.replace(/[^0-9]/g, ''))}
+                          onFocus={(e) => e.target.select()}
+                          placeholder="예: 10,000"
+                          className="w-24 text-right font-bold px-2 py-1 bg-white border rounded-lg text-slate-800"
+                        />
+                        <span>원</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between items-center pt-2 border-t border-indigo-100">
+                    <span className="text-slate-600 font-semibold">통상 시급 (원):</span>
+                    <div className="flex items-center gap-1">
+                      <input 
+                        type="text" 
+                        value={numHourlyWage > 0 ? numHourlyWage.toLocaleString() : ''} 
+                        onChange={(e) => setHourlyWage(e.target.value.replace(/[^0-9]/g, ''))}
+                        onFocus={(e) => e.target.select()}
+                        placeholder="예: 13,000"
+                        className="w-24 text-right font-bold px-2 py-1 bg-white border rounded-lg text-slate-800"
+                      />
+                      <span>원</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="pt-2 border-t border-indigo-200 flex justify-between items-center">
-                  <span className="font-extrabold text-slate-900 text-sm">{currentMonth}월 총 야간수당:</span>
+                  <span className="font-extrabold text-slate-900 text-sm">{currentMonth}월 예상 수당:</span>
                   <span className="font-black text-indigo-600 text-lg">
-                    {estimatedNightAllowance.toLocaleString()} 원
+                    {estimatedAllowance.toLocaleString()} 원
                   </span>
                 </div>
               </div>
+
+              <p className="text-[10px] text-slate-400 leading-relaxed px-1">
+                * 병원 지급 방식에 따라 상단 우측 버튼으로 <b>회당 고정 수당</b> 또는 <b>통상 시급 가산</b> 방식을 변경해 보세요.
+              </p>
             </div>
           </div>
         )}
