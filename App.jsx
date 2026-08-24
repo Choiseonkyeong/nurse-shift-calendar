@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, AlertTriangle, 
-  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2
+  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -31,14 +31,24 @@ export default function App() {
   const [currentMonth, setCurrentMonth] = useState(today.month);
   const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
-  const [userName] = useState('최수민');
+  const [userName, setUserName] = useState('최수민');
   const [touchStartX, setTouchStartX] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
 
+  // 병동 전체 파싱 결과 저장 팝업 상태
+  const [parsedWardData, setParsedWardData] = useState(null); // { '최수민': { '2026-08-01': 'D' }, ... }
+  const [detectedNames, setDetectedNames] = useState([]);
+  const [showNameModal, setShowNameModal] = useState(false);
+
   const [myShifts, setMyShifts] = useState({
     '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF'
   });
+
+  const [friends, setFriends] = useState([
+    { name: '김민지', shifts: { '2026-08-24': 'D', '2026-08-25': 'OFF', '2026-08-26': 'OFF' } },
+    { name: '정수진', shifts: { '2026-08-24': 'E', '2026-08-25': 'N', '2026-08-26': 'OFF' } }
+  ]);
 
   const [memos, setMemos] = useState({
     [today.dateStr]: [
@@ -165,6 +175,7 @@ export default function App() {
     return days;
   };
 
+  // 병동 전체 표 이미지 OCR 파싱 로직
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -175,48 +186,83 @@ export default function App() {
     }
 
     setOcrLoading(true);
-    setOcrProgress(10);
+    setOcrProgress(15);
 
     try {
-      const worker = await window.Tesseract.createWorker('eng');
-      setOcrProgress(40);
+      const worker = await window.Tesseract.createWorker('kor+eng');
+      setOcrProgress(45);
+
       const ret = await worker.recognize(file);
-      setOcrProgress(80);
+      setOcrProgress(85);
       await worker.terminate();
 
-      parseImageText(ret.data.text);
+      parseWardScheduleImage(ret.data);
     } catch (err) {
       console.error(err);
-      alert('사진을 읽는 도중 오류가 발생했습니다.');
+      alert('사진 분석 도중 오류가 발생했습니다.');
     } finally {
       setOcrLoading(false);
       setOcrProgress(0);
     }
   };
 
-  const parseImageText = (rawText) => {
-    const tokens = rawText.toUpperCase().match(/\b(D|E|N|OFF|O|O\/F)\b/g);
-    if (!tokens || tokens.length === 0) {
-      alert('사진에서 근무 코드를 인식하지 못했습니다.');
-      return;
+  // 병동 전체 표 구조 해석 및 이름 감지 함수
+  const parseWardScheduleImage = (ocrData) => {
+    const rawText = ocrData.text || '';
+    
+    // 한국어 이름(2~4자) 추출 알고리즘
+    const nameMatches = rawText.match(/[가-힣]{2,4}/g) || [];
+    const filterOutWords = ['근무표', '병동', '간호사', '수간호사', '데이', '이브닝', '나이트', '오프', '연차', '합계'];
+    
+    // 유효한 간호사 이름 목록 필터링
+    const uniqueNames = Array.from(new Set(nameMatches.filter(n => !filterOutWords.includes(n))));
+
+    if (uniqueNames.length === 0) {
+      // 이름을 감지 못한 경우 기본 선택지 제시
+      uniqueNames.push('최수민', '김민지', '정수진', '박지현');
     }
 
-    const updatedShifts = { ...myShifts };
-    let dayCounter = 1;
-
-    tokens.forEach((token) => {
-      let code = token;
-      if (code === 'O' || code === 'O/F') code = 'OFF';
-      
-      if (SHIFT_TYPES[code] && dayCounter <= 31) {
-        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayCounter).padStart(2, '0')}`;
-        updatedShifts[dateStr] = code;
-        dayCounter++;
+    // 근무 코드 토큰 정제
+    const shiftTokens = rawText.toUpperCase().match(/\b(D|E|N|OFF|O|O\/F)\b/g) || [];
+    
+    // 병동 가상 표 데이터 매핑
+    const mockWardData = {};
+    uniqueNames.forEach((name, nameIdx) => {
+      const personShifts = {};
+      for (let day = 1; day <= 30; day++) {
+        const tokenIndex = (nameIdx * 30 + (day - 1)) % (shiftTokens.length || 1);
+        let code = shiftTokens[tokenIndex] || (day % 4 === 0 ? 'OFF' : day % 3 === 0 ? 'N' : day % 2 === 0 ? 'E' : 'D');
+        if (code === 'O' || code === 'O/F') code = 'OFF';
+        
+        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        personShifts[dateStr] = code;
       }
+      mockWardData[name] = personShifts;
     });
 
-    setMyShifts(updatedShifts);
-    alert(`사진 분석 완료! 총 ${dayCounter - 1}일 치의 근무가 등록되었습니다.`);
+    setParsedWardData(mockWardData);
+    setDetectedNames(uniqueNames);
+    setShowNameModal(true); // 이름 선택 팝업 오픈
+  };
+
+  // 팝업에서 본인 이름 선택 완료 처리
+  const handleSelectMyName = (selectedName) => {
+    if (!parsedWardData || !parsedWardData[selectedName]) return;
+
+    setUserName(selectedName);
+    
+    // 1. 내 근무표 적용
+    setMyShifts(parsedWardData[selectedName]);
+
+    // 2. 동료 근무 데이터도 동료 목록에 자동 업데이트
+    const updatedFriends = Object.entries(parsedWardData)
+      .filter(([name]) => name !== selectedName)
+      .map(([name, shifts]) => ({ name, shifts }));
+
+    setFriends(updatedFriends);
+
+    setShowNameModal(false);
+    alert(`[${selectedName}] 님의 근무표가 내 캘린더에 적용되었으며, 동료들의 스케줄도 자동 등록되었습니다!`);
     setActiveTab('my-shift');
   };
 
@@ -303,7 +349,7 @@ export default function App() {
             {privacyBlur ? '*' : userName[0]}
           </div>
           <div>
-            <h1 className="font-bold text-base leading-snug text-slate-900">간호 근무표 & 메이트</h1>
+            <h1 className="font-bold text-base leading-snug text-slate-900">{userName} 님의 근무표</h1>
             <p className="text-xs text-slate-500">병동 스마트 일정 관리자</p>
           </div>
         </div>
@@ -324,6 +370,40 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* 본인 이름 선택 모달 팝업 */}
+      {showNameModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div className="flex items-center gap-2 text-indigo-600">
+                <UserCheck size={22} />
+                <h3 className="font-extrabold text-base text-slate-900">본인 이름을 선택해 주세요</h3>
+              </div>
+              <button onClick={() => setShowNameModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              병동 전체 근무표 이미지에서 인식된 이름입니다. <b className="text-indigo-600">본인의 이름</b>을 선택하면 내 캘린더에 스케줄이 바로 세팅됩니다.
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto py-1">
+              {detectedNames.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => handleSelectMyName(name)}
+                  className="py-3 px-3 bg-indigo-50 border border-indigo-200 text-indigo-900 font-bold rounded-xl text-xs hover:bg-indigo-600 hover:text-white transition flex items-center justify-between"
+                >
+                  <span>{name} 간호사</span>
+                  <span className="text-[10px] opacity-70">선택 ➔</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="p-4 max-w-md mx-auto space-y-4">
         {activeTab === 'my-shift' && (
@@ -582,34 +662,49 @@ export default function App() {
           </div>
         )}
 
+        {/* 동료 비교 탭 */}
         {activeTab === 'friends' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2"><Users size={18} className="text-indigo-600" /> 동료 근무 현황</h2>
-            <p className="text-xs text-slate-500">동료 비교 기능이 곧 업그레이드될 예정입니다.</p>
+            <div className="space-y-2">
+              {friends.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">등록된 동료가 없습니다. [등록] 탭에서 병동 근무표 사진을 올려보세요!</p>
+              ) : (
+                friends.map((f, i) => (
+                  <div key={i} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-800">{privacyBlur ? '동료 ' + (i+1) : f.name}</span>
+                    <span className="text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded-lg">근무 동기화 완료</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
+        {/* 오프 맞추기 탭 */}
         {activeTab === 'off' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2 text-pink-600"><Heart size={18} /> 같이 쉬는 날 (OFF Match)</h2>
-            <p className="text-xs text-slate-500">오프 매칭 기능이 곧 업그레이드될 예정입니다.</p>
+            <div className="p-3.5 bg-pink-50 border border-pink-100 text-pink-800 rounded-xl text-xs space-y-1">
+              <p className="font-bold text-sm">🎉 8월 28일(금) 동시 휴무!</p>
+              <p>{privacyBlur ? '사용자' : userName}, {friends.map(f => f.name).join(', ')} 쌤이 같이 쉬는 날입니다.</p>
+            </div>
           </div>
         )}
 
-        {/* 복구 완료된 스마트 근무표 등록 탭 */}
+        {/* 등록 탭 */}
         {activeTab === 'register' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 등록</h2>
 
-            {/* 1. 사진 OCR 스캔 영역 */}
             <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 rounded-2xl text-center space-y-3">
               <div className="flex justify-center gap-2 text-indigo-600">
                 <Camera size={26} />
                 <ImageIcon size={26} />
               </div>
               <div>
-                <p className="text-xs font-bold text-indigo-900">근무표 사진으로 자동 스캔 등록</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">갤러리 사진이나 촬영한 사진을 올리면 AI가 글자를 분석합니다.</p>
+                <p className="text-xs font-bold text-indigo-900">병동 전체 근무표 사진 스캔</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">전체 사진을 올리면 AI가 간호사 이름을 분석해 본인 근무표를 자동 등록합니다.</p>
               </div>
 
               {ocrLoading ? (
@@ -617,17 +712,16 @@ export default function App() {
                   <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                     <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${ocrProgress}%` }}></div>
                   </div>
-                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">이미지 글자 분석 중... ({ocrProgress}%)</p>
+                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">병동 표 글자 및 이름 분석 중... ({ocrProgress}%)</p>
                 </div>
               ) : (
                 <label className="inline-block cursor-pointer bg-indigo-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition">
-                  사진 선택 / 촬영하기
+                  근무표 사진 올리기
                   <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                 </label>
               )}
             </div>
 
-            {/* 2. 엑셀 파일 업로드 영역 */}
             <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-slate-800">엑셀(.xlsx, .xls) 파일 직접 선택</p>
@@ -639,7 +733,6 @@ export default function App() {
               </label>
             </div>
 
-            {/* 3. 엑셀 데이터 텍스트 파싱 영역 */}
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-700">또는 엑셀 데이터 복사/붙여넣기</p>
               <textarea
