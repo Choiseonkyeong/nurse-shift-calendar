@@ -52,23 +52,20 @@ export default function App() {
   const [hour, setHour] = useState('09');
   const [minute, setMinute] = useState('00');
   const [alertOffset, setAlertOffset] = useState('10');
-  const [alertType, setAlertType] = useState('both'); // both(소리+진동), sound(소리만), vibrate(진동만), silent(무음)
+  const [alertType, setAlertType] = useState('both');
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
   const [pastedText, setPastedText] = useState('');
 
-  // 소리 및 진동 알림 실행 함수
   const playNotificationSoundAndVibrate = (type) => {
-    // 1. 소리 재생
     if (type === 'both' || type === 'sound') {
       try {
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
         audio.play().catch(() => {});
       } catch (e) {}
     }
-    // 2. 진동 실행 (모바일 웹 API)
     if ((type === 'both' || type === 'vibrate') && 'vibrate' in navigator) {
-      navigator.vibrate([200, 100, 200]); // 짧게 2번 진동
+      navigator.vibrate([200, 100, 200]);
     }
   };
 
@@ -101,8 +98,6 @@ export default function App() {
 
         if (now >= alertTime && now < targetTime) {
           m.alertTriggered = true;
-          
-          // 소리 및 진동 피드백 발동
           playNotificationSoundAndVibrate(m.alertType || 'both');
 
           if ('Notification' in window && Notification.permission === 'granted') {
@@ -168,6 +163,102 @@ export default function App() {
       days.push({ dateStr: `${nextY}-${String(nextM).padStart(2, '0')}-${String(i).padStart(2, '0')}`, dayNum: i, isCurrentMonth: false });
     }
     return days;
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!window.Tesseract) {
+      alert('이미지 분석 엔진을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    setOcrLoading(true);
+    setOcrProgress(10);
+
+    try {
+      const worker = await window.Tesseract.createWorker('eng');
+      setOcrProgress(40);
+      const ret = await worker.recognize(file);
+      setOcrProgress(80);
+      await worker.terminate();
+
+      parseImageText(ret.data.text);
+    } catch (err) {
+      console.error(err);
+      alert('사진을 읽는 도중 오류가 발생했습니다.');
+    } finally {
+      setOcrLoading(false);
+      setOcrProgress(0);
+    }
+  };
+
+  const parseImageText = (rawText) => {
+    const tokens = rawText.toUpperCase().match(/\b(D|E|N|OFF|O|O\/F)\b/g);
+    if (!tokens || tokens.length === 0) {
+      alert('사진에서 근무 코드를 인식하지 못했습니다.');
+      return;
+    }
+
+    const updatedShifts = { ...myShifts };
+    let dayCounter = 1;
+
+    tokens.forEach((token) => {
+      let code = token;
+      if (code === 'O' || code === 'O/F') code = 'OFF';
+      
+      if (SHIFT_TYPES[code] && dayCounter <= 31) {
+        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayCounter).padStart(2, '0')}`;
+        updatedShifts[dateStr] = code;
+        dayCounter++;
+      }
+    });
+
+    setMyShifts(updatedShifts);
+    alert(`사진 분석 완료! 총 ${dayCounter - 1}일 치의 근무가 등록되었습니다.`);
+    setActiveTab('my-shift');
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const wb = XLSX.read(evt.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      if (data.length > 0) parseMatrixData(data);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const parseMatrixData = (rows) => {
+    let dateRow = rows[0];
+    let codeRow = rows[1] || rows[0];
+    const updatedShifts = { ...myShifts };
+    let currMonth = currentMonth;
+    let currYear = currentYear;
+    let prevDay = 0;
+
+    codeRow.forEach((rawCode, idx) => {
+      if (!rawCode) return;
+      const code = String(rawCode).trim().toUpperCase();
+      let dayNum = parseInt(dateRow[idx], 10);
+      if (isNaN(dayNum)) dayNum = idx + 1;
+      if (dayNum < prevDay) { 
+        currMonth += 1; 
+        if (currMonth > 12) { currMonth = 1; currYear += 1; } 
+      }
+      prevDay = dayNum;
+      const dateStr = `${currYear}-${String(currMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      if (SHIFT_TYPES[code]) updatedShifts[dateStr] = code;
+    });
+
+    setMyShifts(updatedShifts);
+    alert('근무표 등록이 완료되었습니다!');
+    setActiveTab('my-shift');
   };
 
   const handleAddMemo = () => {
@@ -349,7 +440,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Schedule Form with Sound/Vibration Selection */}
+              {/* Schedule Form */}
               <div className="space-y-3 pt-1">
                 <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <Bell size={16} className="text-indigo-600" />
@@ -371,7 +462,6 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* Time & Alert Timing Selection */}
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="flex items-center gap-1 bg-white p-1.5 rounded-lg border">
                       <Clock size={14} className="text-slate-400" />
@@ -405,7 +495,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Sound / Vibration Option Bar */}
                   <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border text-xs">
                     <span className="text-slate-500 font-semibold flex items-center gap-1">
                       <Volume2 size={13} />
@@ -507,9 +596,12 @@ export default function App() {
           </div>
         )}
 
+        {/* 복구 완료된 스마트 근무표 등록 탭 */}
         {activeTab === 'register' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 등록</h2>
+
+            {/* 1. 사진 OCR 스캔 영역 */}
             <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 rounded-2xl text-center space-y-3">
               <div className="flex justify-center gap-2 text-indigo-600">
                 <Camera size={26} />
@@ -517,8 +609,57 @@ export default function App() {
               </div>
               <div>
                 <p className="text-xs font-bold text-indigo-900">근무표 사진으로 자동 스캔 등록</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">사진을 올리면 글자를 자동으로 분석합니다.</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">갤러리 사진이나 촬영한 사진을 올리면 AI가 글자를 분석합니다.</p>
               </div>
+
+              {ocrLoading ? (
+                <div className="space-y-1.5 py-2">
+                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                    <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${ocrProgress}%` }}></div>
+                  </div>
+                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">이미지 글자 분석 중... ({ocrProgress}%)</p>
+                </div>
+              ) : (
+                <label className="inline-block cursor-pointer bg-indigo-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition">
+                  사진 선택 / 촬영하기
+                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                </label>
+              )}
+            </div>
+
+            {/* 2. 엑셀 파일 업로드 영역 */}
+            <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-800">엑셀(.xlsx, .xls) 파일 직접 선택</p>
+                <p className="text-[10px] text-slate-500">병원 근무표 파일 그대로 업로드</p>
+              </div>
+              <label className="cursor-pointer bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl hover:bg-slate-900 transition">
+                파일 선택
+                <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="hidden" />
+              </label>
+            </div>
+
+            {/* 3. 엑셀 데이터 텍스트 파싱 영역 */}
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-700">또는 엑셀 데이터 복사/붙여넣기</p>
+              <textarea
+                rows={3}
+                placeholder="엑셀 표 영역을 선택 복사해서 붙여넣으세요."
+                value={pastedText}
+                onChange={(e) => setPastedText(e.target.value)}
+                className="w-full text-xs p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+              <button 
+                onClick={() => {
+                  if (!pastedText.trim()) return;
+                  const lines = pastedText.trim().split('\n').map(l => l.split('\t'));
+                  parseMatrixData(lines);
+                  setPastedText('');
+                }}
+                className="w-full bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs hover:bg-slate-300 transition"
+              >
+                텍스트 파싱 등록
+              </button>
             </div>
           </div>
         )}
