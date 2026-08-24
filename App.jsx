@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calendar, Users, Heart, AlertTriangle, 
-  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight
+  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -26,18 +26,17 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('my-shift');
   const [currentYear, setCurrentYear] = useState(2026);
-  const [currentMonth, setCurrentMonth] = useState(9); // 기본 9월 선택
+  const [currentMonth, setCurrentMonth] = useState(9);
   const [userName] = useState('최수민');
   const [selectedDate, setSelectedDate] = useState('2026-09-01');
 
-  // 스와이프 터치 이벤트 상태
   const [touchStartX, setTouchStartX] = useState(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
 
   const [myShifts, setMyShifts] = useState({
-    // 8월 데이터
     '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', 
     '2026-08-29': 'OFF', '2026-08-30': 'OFF', '2026-08-31': 'D',
-    // 9월 데이터
     '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E', '2026-09-05': 'OFF',
     '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N', '2026-09-10': 'N',
     '2026-09-11': 'N', '2026-09-12': 'OFF', '2026-09-13': 'OFF', '2026-09-14': 'D', '2026-09-15': 'E',
@@ -49,9 +48,6 @@ export default function App() {
   const [memos, setMemos] = useState({
     '2026-09-01': [
       { id: 1, type: '개인일정', time: '09:00', text: '9월 첫날 병동 일정 확인', checked: false }
-    ],
-    '2026-09-11': [
-      { id: 2, type: '인수인계', time: '21:30', text: '3연나이트 시작 환자 인수인계 주의', checked: false }
     ]
   });
 
@@ -66,83 +62,111 @@ export default function App() {
     { name: '정수진', shifts: { '2026-09-05': 'OFF', '2026-09-12': 'OFF', '2026-09-11': 'N' } }
   ];
 
-  // 이전 달 이동
   const handlePrevMonth = () => {
-    if (currentMonth === 1) {
-      setCurrentMonth(12);
-      setCurrentYear(currentYear - 1);
-    } else {
-      setCurrentMonth(currentMonth - 1);
-    }
+    if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); } 
+    else { setCurrentMonth(currentMonth - 1); }
   };
 
-  // 다음 달 이동
   const handleNextMonth = () => {
-    if (currentMonth === 12) {
-      setCurrentMonth(1);
-      setCurrentYear(currentYear + 1);
-    } else {
-      setCurrentMonth(currentMonth + 1);
-    }
+    if (currentMonth === 12) { setCurrentMonth(1); setCurrentYear(currentYear + 1); } 
+    else { setCurrentMonth(currentMonth + 1); }
   };
 
-  // 터치 스와이프 제스처 핸들러
-  const handleTouchStart = (e) => {
-    setTouchStartX(e.touches[0].clientX);
-  };
-
+  const handleTouchStart = (e) => setTouchStartX(e.touches[0].clientX);
   const handleTouchEnd = (e) => {
     if (!touchStartX) return;
-    const touchEndX = e.changedTouches[0].clientX;
-    const diffX = touchStartX - touchEndX;
-
-    if (diffX > 50) {
-      handleNextMonth(); // 왼쪽으로 밀면 다음달
-    } else if (diffX < -50) {
-      handlePrevMonth(); // 오른쪽으로 밀면 저번달
-    }
+    const diffX = touchStartX - e.changedTouches[0].clientX;
+    if (diffX > 50) handleNextMonth();
+    else if (diffX < -50) handlePrevMonth();
     setTouchStartX(null);
   };
 
-  // 표준 월별 그리드 생성 함수 (안드로이드 캘린더 동일 방식)
   const generateCalendarDays = () => {
-    const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1);
-    const lastDayOfMonth = new Date(currentYear, currentMonth, 0);
-    
-    const startDayOfWeek = firstDayOfMonth.getDay(); // 시작 요일 (0:일 ~ 6:토)
-    const daysInMonth = lastDayOfMonth.getDate();
-
+    const firstDay = new Date(currentYear, currentMonth - 1, 1);
+    const lastDay = new Date(currentYear, currentMonth, 0);
+    const startDayOfWeek = firstDay.getDay();
+    const daysInMonth = lastDay.getDate();
     const days = [];
 
-    // 1. 이전 달 이월 날짜 채우기
     const prevMonthLastDay = new Date(currentYear, currentMonth - 1, 0).getDate();
     for (let i = startDayOfWeek - 1; i >= 0; i--) {
       const prevDay = prevMonthLastDay - i;
-      const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
-      const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
-      const dateStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevDay).padStart(2, '0')}`;
-      days.push({ dateStr, dayNum: prevDay, isCurrentMonth: false });
+      const prevM = currentMonth === 1 ? 12 : currentMonth - 1;
+      const prevY = currentMonth === 1 ? currentYear - 1 : currentYear;
+      days.push({ dateStr: `${prevY}-${String(prevM).padStart(2, '0')}-${String(prevDay).padStart(2, '0')}`, dayNum: prevDay, isCurrentMonth: false });
     }
 
-    // 2. 현재 선택된 달 날짜 채우기 (1일 ~ 말일)
     for (let i = 1; i <= daysInMonth; i++) {
-      const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-      days.push({ dateStr, dayNum: i, isCurrentMonth: true });
+      days.push({ dateStr: `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(i).padStart(2, '0')}`, dayNum: i, isCurrentMonth: true });
     }
 
-    // 3. 다음 달 이월 날짜 채우기 (7열 그리드 맞춤)
     const remainingSlots = (7 - (days.length % 7)) % 7;
     for (let i = 1; i <= remainingSlots; i++) {
-      const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
-      const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
-      const dateStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-      days.push({ dateStr, dayNum: i, isCurrentMonth: false });
+      const nextM = currentMonth === 12 ? 1 : currentMonth + 1;
+      const nextY = currentMonth === 12 ? currentYear + 1 : currentYear;
+      days.push({ dateStr: `${nextY}-${String(nextM).padStart(2, '0')}-${String(i).padStart(2, '0')}`, dayNum: i, isCurrentMonth: false });
     }
-
     return days;
   };
 
-  const calendarDays = generateCalendarDays();
+  // 사진(이미지) 업로드 후 OCR 스캔 처리
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!window.Tesseract) {
+      alert('이미지 분석 엔진을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    setOcrLoading(true);
+    setOcrProgress(10);
+
+    try {
+      const worker = await window.Tesseract.createWorker('eng');
+      setOcrProgress(40);
+
+      const ret = await worker.recognize(file);
+      setOcrProgress(80);
+      await worker.terminate();
+
+      const extractedText = ret.data.text;
+      parseImageText(extractedText);
+    } catch (err) {
+      console.error(err);
+      alert('사진을 읽는 도중 오류가 발생했습니다.');
+    } finally {
+      setOcrLoading(false);
+      setOcrProgress(0);
+    }
+  };
+
+  // 사진에서 읽은 글자 분석 후 근무표 적용
+  const parseImageText = (rawText) => {
+    const tokens = rawText.toUpperCase().match(/\b(D|E|N|OFF|O|O\/F)\b/g);
+    if (!tokens || tokens.length === 0) {
+      alert('사진에서 근무 코드(D, E, N, OFF)를 인식하지 못했습니다. 더 선명한 사진으로 시도해보세요.');
+      return;
+    }
+
+    const updatedShifts = { ...myShifts };
+    let dayCounter = 1;
+
+    tokens.forEach((token) => {
+      let code = token;
+      if (code === 'O' || code === 'O/F') code = 'OFF';
+      
+      if (SHIFT_TYPES[code] && dayCounter <= 31) {
+        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayCounter).padStart(2, '0')}`;
+        updatedShifts[dateStr] = code;
+        dayCounter++;
+      }
+    });
+
+    setMyShifts(updatedShifts);
+    alert(`사진 분석 완료! 총 ${dayCounter - 1}일 치의 근무가 등록되었습니다.`);
+    setActiveTab('my-shift');
+  };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -150,8 +174,7 @@ export default function App() {
 
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const bstr = evt.target.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
+      const wb = XLSX.read(evt.target.result, { type: 'binary' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
       if (data.length > 0) parseMatrixData(data);
@@ -197,7 +220,6 @@ export default function App() {
     setMemoTime('');
   };
 
-  // 현재 선택된 달(1일~말일) 근무 통계
   const getShiftCount = (code) => {
     const monthPrefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
     return Object.entries(myShifts).filter(([d, c]) => c === code && d.startsWith(monthPrefix)).length;
@@ -235,7 +257,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Shift Summary & Year-Month Navigation */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
@@ -280,7 +301,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Standard Calendar Grid (Supports Swipe Gesture) */}
             <div 
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
@@ -291,7 +311,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-7 gap-1.5">
-                {calendarDays.map(({ dateStr, dayNum, isCurrentMonth }) => {
+                {generateCalendarDays().map(({ dateStr, dayNum, isCurrentMonth }) => {
                   const code = myShifts[dateStr] || 'OFF';
                   const info = SHIFT_TYPES[code] || SHIFT_TYPES.OFF;
                   const isSelected = dateStr === selectedDate;
@@ -331,7 +351,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Memo Section */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="font-bold text-slate-800 text-sm">
@@ -456,30 +475,51 @@ export default function App() {
 
         {activeTab === 'register' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-            <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 근무표 파일/텍스트 등록</h2>
+            <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 등록</h2>
 
-            <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-6 rounded-2xl text-center space-y-2">
-              <Upload size={28} className="mx-auto text-indigo-600" />
-              <div>
-                <p className="text-xs font-bold text-indigo-900">엑셀(.xlsx, .xls) 파일 직접 선택</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">병원 근무표 파일을 그대로 올려주세요.</p>
+            {/* Photo / Camera OCR Section */}
+            <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 rounded-2xl text-center space-y-3">
+              <div className="flex justify-center gap-2 text-indigo-600">
+                <Camera size={26} />
+                <ImageIcon size={26} />
               </div>
-              <label className="inline-block cursor-pointer bg-indigo-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition">
-                파일 찾기
+              <div>
+                <p className="text-xs font-bold text-indigo-900">근무표 사진으로 자동 스캔 등록</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">갤러리 사진이나 촬영한 사진을 올리면 AI가 글자를 분석합니다.</p>
+              </div>
+
+              {ocrLoading ? (
+                <div className="space-y-1.5 py-2">
+                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                    <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${ocrProgress}%` }}></div>
+                  </div>
+                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">이미지 글자 분석 중... ({ocrProgress}%)</p>
+                </div>
+              ) : (
+                <label className="inline-block cursor-pointer bg-indigo-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition">
+                  사진 선택 / 촬영하기
+                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                </label>
+              )}
+            </div>
+
+            {/* Excel Upload Section */}
+            <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-800">엑셀(.xlsx) 파일 업로드</p>
+                <p className="text-[10px] text-slate-500">엑셀 파일 그대로 등록</p>
+              </div>
+              <label className="cursor-pointer bg-slate-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg hover:bg-slate-900 transition">
+                파일 선택
                 <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="hidden" />
               </label>
             </div>
 
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="flex-shrink mx-3 text-slate-400 text-[11px] font-semibold">또는 엑셀 데이터 복사/붙여넣기</span>
-              <div className="flex-grow border-t border-slate-200"></div>
-            </div>
-
+            {/* Paste Section */}
             <div className="space-y-2">
               <textarea
-                rows={4}
-                placeholder="엑셀 표의 영역을 복사해서 붙여넣으세요."
+                rows={3}
+                placeholder="엑셀 표 텍스트 복사/붙여넣기"
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
                 className="w-full text-xs p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -491,7 +531,7 @@ export default function App() {
                   parseMatrixData(lines);
                   setPastedText('');
                 }}
-                className="w-full bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-slate-900 transition"
+                className="w-full bg-slate-200 text-slate-700 font-bold py-2 rounded-xl text-xs hover:bg-slate-300 transition"
               >
                 텍스트 파싱 등록
               </button>
