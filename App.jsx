@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calendar, Users, Heart, AlertTriangle, 
-  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon
+  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -34,6 +34,7 @@ export default function App() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
 
+  // 등록되지 않은 날짜는 빈값으로 처리 (자동 OFF 지정 안함)
   const [myShifts, setMyShifts] = useState({
     '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', 
     '2026-08-29': 'OFF', '2026-08-30': 'OFF', '2026-08-31': 'D',
@@ -41,8 +42,7 @@ export default function App() {
     '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N', '2026-09-10': 'N',
     '2026-09-11': 'N', '2026-09-12': 'OFF', '2026-09-13': 'OFF', '2026-09-14': 'D', '2026-09-15': 'E',
     '2026-09-16': 'E', '2026-09-17': 'N', '2026-09-18': 'OFF', '2026-09-19': 'OFF', '2026-09-20': 'D',
-    '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N',
-    '2026-09-26': 'E', '2026-09-27': 'E', '2026-09-28': 'N', '2026-09-29': 'OFF', '2026-09-30': 'OFF'
+    '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N'
   });
 
   const [memos, setMemos] = useState({
@@ -81,6 +81,19 @@ export default function App() {
     setTouchStartX(null);
   };
 
+  // 터치한 날짜의 근무 변경 처리
+  const handleShiftChange = (dateStr, newCode) => {
+    setMyShifts(prev => {
+      const updated = { ...prev };
+      if (newCode === '') {
+        delete updated[dateStr]; // 미등록 상태로 변경
+      } else {
+        updated[dateStr] = newCode;
+      }
+      return updated;
+    });
+  };
+
   const generateCalendarDays = () => {
     const firstDay = new Date(currentYear, currentMonth - 1, 1);
     const lastDay = new Date(currentYear, currentMonth, 0);
@@ -109,7 +122,6 @@ export default function App() {
     return days;
   };
 
-  // 사진(이미지) 업로드 후 OCR 스캔 처리
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -130,8 +142,7 @@ export default function App() {
       setOcrProgress(80);
       await worker.terminate();
 
-      const extractedText = ret.data.text;
-      parseImageText(extractedText);
+      parseImageText(ret.data.text);
     } catch (err) {
       console.error(err);
       alert('사진을 읽는 도중 오류가 발생했습니다.');
@@ -141,11 +152,10 @@ export default function App() {
     }
   };
 
-  // 사진에서 읽은 글자 분석 후 근무표 적용
   const parseImageText = (rawText) => {
     const tokens = rawText.toUpperCase().match(/\b(D|E|N|OFF|O|O\/F)\b/g);
     if (!tokens || tokens.length === 0) {
-      alert('사진에서 근무 코드(D, E, N, OFF)를 인식하지 못했습니다. 더 선명한 사진으로 시도해보세요.');
+      alert('사진에서 근무 코드를 인식하지 못했습니다.');
       return;
     }
 
@@ -225,6 +235,8 @@ export default function App() {
     return Object.entries(myShifts).filter(([d, c]) => c === code && d.startsWith(monthPrefix)).length;
   };
 
+  const currentSelectedShiftCode = myShifts[selectedDate] || '';
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 font-sans">
       <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between shadow-sm">
@@ -301,6 +313,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Calendar View */}
             <div 
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
@@ -312,8 +325,8 @@ export default function App() {
 
               <div className="grid grid-cols-7 gap-1.5">
                 {generateCalendarDays().map(({ dateStr, dayNum, isCurrentMonth }) => {
-                  const code = myShifts[dateStr] || 'OFF';
-                  const info = SHIFT_TYPES[code] || SHIFT_TYPES.OFF;
+                  const code = myShifts[dateStr] || '';
+                  const info = SHIFT_TYPES[code];
                   const isSelected = dateStr === selectedDate;
                   const isToday = dateStr === todayStr;
 
@@ -330,10 +343,10 @@ export default function App() {
                             ? 'border-amber-500 ring-2 ring-amber-100' 
                             : 'border-transparent'
                       }`}
-                      style={{ backgroundColor: info.color }}
+                      style={{ backgroundColor: info ? info.color : '#FFFFFF' }}
                     >
                       <div className="flex justify-between items-center w-full px-0.5">
-                        <span className="text-[10px] font-bold opacity-80" style={{ color: info.textColor }}>
+                        <span className="text-[10px] font-bold opacity-80" style={{ color: info ? info.textColor : '#64748B' }}>
                           {dayNum}
                         </span>
                         {isToday && (
@@ -342,8 +355,8 @@ export default function App() {
                           </span>
                         )}
                       </div>
-                      <span className="text-xs font-extrabold pb-0.5 text-center" style={{ color: info.textColor }}>
-                        {code}
+                      <span className="text-xs font-extrabold pb-0.5 text-center" style={{ color: info ? info.textColor : '#94A3B8' }}>
+                        {code || ''}
                       </span>
                     </button>
                   );
@@ -351,13 +364,47 @@ export default function App() {
               </div>
             </div>
 
+            {/* Shift Quick Editor & Memo Section */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-              <div className="flex justify-between items-center border-b pb-2">
+              {/* Selected Day Quick Shift Changer */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Edit3 size={14} className="text-indigo-600" />
+                    <span>{selectedDate} 근무 변경</span>
+                  </span>
+                  <span className="text-[11px] font-semibold text-indigo-600">
+                    현재: {currentSelectedShiftCode ? SHIFT_TYPES[currentSelectedShiftCode]?.name : '미등록'}
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-5 gap-1.5">
+                  {Object.entries(SHIFT_TYPES).map(([typeKey, typeInfo]) => (
+                    <button
+                      key={typeKey}
+                      onClick={() => handleShiftChange(selectedDate, typeKey)}
+                      style={{ 
+                        backgroundColor: currentSelectedShiftCode === typeKey ? typeInfo.color : '#FFFFFF',
+                        borderColor: currentSelectedShiftCode === typeKey ? typeInfo.textColor : '#E2E8F0',
+                        color: typeInfo.textColor
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition shadow-xs ${
+                        currentSelectedShiftCode === typeKey ? 'ring-2 ring-indigo-200 font-extrabold scale-105' : 'hover:bg-slate-100'
+                      }`}
+                    >
+                      {typeKey}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Memo Input */}
+              <div className="flex justify-between items-center border-b pb-2 pt-1">
                 <span className="font-bold text-slate-800 text-sm">
-                  📅 {selectedDate} {selectedDate === todayStr ? '(오늘)' : ''} 메모 & 알림
+                  📅 메모 & 알림
                 </span>
                 <span className="text-xs text-indigo-600 font-semibold bg-indigo-50 px-2.5 py-1 rounded-lg">
-                  {SHIFT_TYPES[myShifts[selectedDate]]?.name || '근무'} ({SHIFT_TYPES[myShifts[selectedDate]]?.time})
+                  {currentSelectedShiftCode ? `${SHIFT_TYPES[currentSelectedShiftCode]?.name} (${SHIFT_TYPES[currentSelectedShiftCode]?.time})` : '근무 없음'}
                 </span>
               </div>
 
@@ -477,7 +524,6 @@ export default function App() {
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 등록</h2>
 
-            {/* Photo / Camera OCR Section */}
             <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 rounded-2xl text-center space-y-3">
               <div className="flex justify-center gap-2 text-indigo-600">
                 <Camera size={26} />
@@ -503,7 +549,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Excel Upload Section */}
             <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-slate-800">엑셀(.xlsx) 파일 업로드</p>
@@ -515,7 +560,6 @@ export default function App() {
               </label>
             </div>
 
-            {/* Paste Section */}
             <div className="space-y-2">
               <textarea
                 rows={3}
