@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Calendar, Users, Heart, AlertTriangle, 
   DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload
@@ -13,7 +13,6 @@ const SHIFT_TYPES = {
   연차: { name: 'Annual', time: '연차 휴가', color: '#FBCFE8', textColor: '#9D174D' }
 };
 
-// YYYY-MM-DD 포맷 반환 함수
 const getTodayString = () => {
   const d = new Date();
   const year = d.getFullYear();
@@ -22,41 +21,35 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-const getTodayMonthString = () => {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
-};
-
 export default function App() {
   const todayStr = getTodayString();
-  const todayMonthStr = getTodayMonthString();
 
   const [activeTab, setActiveTab] = useState('my-shift');
-  const [baseMonth, setBaseMonth] = useState(todayMonthStr);
+  const [baseMonth, setBaseMonth] = useState('2026-09');
   const [userName] = useState('최수민');
-  
-  // 오늘 날짜가 기본 선택되도록 설정
   const [selectedDate, setSelectedDate] = useState(todayStr);
 
   const [myShifts, setMyShifts] = useState({
-    '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', 
-    '2026-08-29': 'OFF', '2026-08-30': 'OFF', '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', 
-    '2026-09-03': 'E', '2026-09-04': 'E', '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-07': 'D', 
-    '2026-09-08': 'D', '2026-09-09': 'N', '2026-09-10': 'N', '2026-09-11': 'N', '2026-09-12': 'OFF', 
-    '2026-09-13': 'OFF', '2026-09-14': 'D', '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'E', 
-    '2026-09-18': 'OFF', '2026-09-19': 'OFF', '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', 
-    '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N'
+    // 이전 달 영역 (비활성/투명 처리 대상)
+    '2026-08-23': 'OFF', '2026-08-24': 'D', '2026-08-25': 'D',
+    // 9월 주기 (8/26 ~ 9/25) - 활성 구간
+    '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF',
+    '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E',
+    '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N',
+    '2026-09-10': 'N', '2026-09-11': 'N', '2026-09-12': 'OFF', '2026-09-13': 'OFF', '2026-09-14': 'D',
+    '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'E', '2026-09-18': 'OFF', '2026-09-19': 'OFF',
+    '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N',
+    // 다음 달 영역 (비활성/투명 처리 대상)
+    '2026-09-26': 'OFF', '2026-09-27': 'OFF'
   });
 
   const [memos, setMemos] = useState({
     '2026-08-24': [
-      { id: 1, type: '인수인계', time: '08:00', text: '인수인계 및 정기 V/S 체크', alert: '알림 없음', checked: false }
+      { id: 1, type: '인수인계', time: '08:00', text: '인수인계 및 정기 V/S 체크', checked: false }
     ],
     '2026-09-09': [
-      { id: 2, type: '인수인계', time: '14:00', text: '502호 중증 환자 수혈 및 V/S 체크 예정', alert: '30분전', checked: false },
-      { id: 3, type: '중요/공지', time: '16:00', text: '16시 병동 수당/인수인계 컨퍼런스 참석', alert: '알림 없음', checked: true }
+      { id: 2, type: '인수인계', time: '14:00', text: '502호 중증 환자 수혈 및 V/S 체크 예정', checked: false },
+      { id: 3, type: '중요/공지', time: '16:00', text: '16시 병동 수당/인수인계 컨퍼런스 참석', checked: true }
     ]
   });
 
@@ -68,10 +61,21 @@ export default function App() {
 
   const friends = [
     { name: '김민지', shifts: { '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-09': 'E' } },
-    { name: '정수진', shifts: { '2026-09-05': 'OFF', '2026-09-12': 'OFF', '2026-09-09': 'N' } },
-    { name: '박지현', shifts: { '2026-09-05': 'OFF' } },
-    { name: '이서연', shifts: { '2026-09-05': 'OFF' } }
+    { name: '정수진', shifts: { '2026-09-05': 'OFF', '2026-09-12': 'OFF', '2026-09-09': 'N' } }
   ];
+
+  // 선택된 baseMonth(예: 2026-09) 주기에 속하는 날짜인지 판단 (전월 26일 ~ 당월 25일)
+  const isDateInCurrentPeriod = (dateStr) => {
+    const [targetYear, targetMonth] = baseMonth.split('-').map(Number);
+    const date = new Date(dateStr);
+    
+    // 시작일: 전월 26일
+    const startDate = new Date(targetYear, targetMonth - 2, 26);
+    // 종료일: 당월 25일
+    const endDate = new Date(targetYear, targetMonth - 1, 25);
+
+    return date >= startDate && date <= endDate;
+  };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -81,13 +85,9 @@ export default function App() {
     reader.onload = (evt) => {
       const bstr = evt.target.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
+      const ws = wb.Sheets[wb.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-
-      if (data.length > 0) {
-        parseMatrixData(data);
-      }
+      if (data.length > 0) parseMatrixData(data);
     };
     reader.readAsBinaryString(file);
   };
@@ -121,43 +121,19 @@ export default function App() {
 
   const handleAddMemo = () => {
     if (!memoText.trim()) return;
-    const newEntry = {
-      id: Date.now(),
-      type: memoCategory,
-      time: memoTime || '자율',
-      text: memoText,
-      checked: false
-    };
     setMemos({
       ...memos,
-      [selectedDate]: [...(memos[selectedDate] || []), newEntry]
+      [selectedDate]: [...(memos[selectedDate] || []), {
+        id: Date.now(), type: memoCategory, time: memoTime || '자율', text: memoText, checked: false
+      }]
     });
     setMemoText('');
     setMemoTime('');
   };
 
-  const handleToggleMemo = (date, id) => {
-    setMemos({
-      ...memos,
-      [date]: memos[date].map(m => m.id === id ? { ...m, checked: !m.checked } : m)
-    });
+  const getShiftCount = (code) => {
+    return Object.entries(myShifts).filter(([d, c]) => c === code && isDateInCurrentPeriod(d)).length;
   };
-
-  const handleDeleteMemo = (date, id) => {
-    setMemos({
-      ...memos,
-      [date]: memos[date].filter(m => m.id !== id)
-    });
-  };
-
-  const handleParsePaste = () => {
-    if (!pastedText.trim()) return;
-    const lines = pastedText.trim().split('\n').map(l => l.split('\t'));
-    parseMatrixData(lines);
-    setPastedText('');
-  };
-
-  const getShiftCount = (code) => Object.values(myShifts).filter(c => c === code).length;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 font-sans">
@@ -223,6 +199,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Calendar View */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-2">
               <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400 pb-2">
                 <span className="text-red-500">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span className="text-blue-500">토</span>
@@ -230,37 +207,41 @@ export default function App() {
 
               <div className="grid grid-cols-7 gap-1.5">
                 {Object.entries(myShifts).map(([dateStr, code]) => {
-                  const dayNum = dateStr.split('-')[2];
+                  const [y, m, d] = dateStr.split('-');
+                  const dayNum = parseInt(d, 10);
+                  const monthNum = parseInt(m, 10);
+                  
                   const info = SHIFT_TYPES[code] || SHIFT_TYPES.OFF;
+                  const isCurrentPeriod = isDateInCurrentPeriod(dateStr);
                   const isSelected = dateStr === selectedDate;
                   const isToday = dateStr === todayStr;
                   const dayMemos = memos[dateStr] || [];
+
+                  // 월이 바뀌는 첫 번째날(1일 또는 26일)에 월 라벨 표시 (예: 8/26, 9/1)
+                  const showMonthLabel = dayNum === 1 || dayNum === 26;
 
                   return (
                     <button
                       key={dateStr}
                       onClick={() => setSelectedDate(dateStr)}
                       className={`relative aspect-square rounded-2xl p-1 flex flex-col justify-between transition-all border-2 ${
+                        !isCurrentPeriod ? 'opacity-30 saturate-50' : 'opacity-100'
+                      } ${
                         isSelected 
-                          ? 'border-indigo-600 shadow-md ring-2 ring-indigo-100' 
+                          ? 'border-indigo-600 shadow-md ring-2 ring-indigo-100 z-10' 
                           : isToday 
-                            ? 'border-amber-400 ring-2 ring-amber-100' 
+                            ? 'border-amber-500 ring-2 ring-amber-100' 
                             : 'border-transparent'
                       }`}
                       style={{ backgroundColor: info.color }}
                     >
-                      <div className="flex justify-between items-center w-full px-1">
-                        <span className="text-[11px] font-bold opacity-80" style={{ color: info.textColor }}>
-                          {parseInt(dayNum, 10)}
+                      <div className="flex justify-between items-center w-full px-0.5">
+                        <span className="text-[10px] font-bold opacity-80" style={{ color: info.textColor }}>
+                          {showMonthLabel ? `${monthNum}/${dayNum}` : dayNum}
                         </span>
                         {isToday && (
-                          <span className="text-[9px] bg-amber-500 text-white font-extrabold px-1 rounded-sm">
+                          <span className="text-[8px] bg-amber-500 text-white font-extrabold px-1 rounded-xs">
                             오늘
-                          </span>
-                        )}
-                        {dayMemos.length > 0 && !isToday && (
-                          <span className="w-3.5 h-3.5 bg-indigo-600 text-white rounded-full text-[9px] flex items-center justify-center font-extrabold">
-                            {dayMemos.length}
                           </span>
                         )}
                       </div>
@@ -273,10 +254,11 @@ export default function App() {
               </div>
             </div>
 
+            {/* Memo Section */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center border-b pb-2">
-                <span className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                  <span>📅 {selectedDate} {selectedDate === todayStr ? '(오늘)' : ''} 메모 & 알림</span>
+                <span className="font-bold text-slate-800 text-sm">
+                  📅 {selectedDate} {selectedDate === todayStr ? '(오늘)' : ''} 메모 & 알림
                 </span>
                 <span className="text-xs text-indigo-600 font-semibold bg-indigo-50 px-2.5 py-1 rounded-lg">
                   {SHIFT_TYPES[myShifts[selectedDate]]?.name || '근무'} ({SHIFT_TYPES[myShifts[selectedDate]]?.time})
@@ -336,7 +318,12 @@ export default function App() {
                         <input 
                           type="checkbox" 
                           checked={m.checked} 
-                          onChange={() => handleToggleMemo(selectedDate, m.id)}
+                          onChange={() => {
+                            setMemos({
+                              ...memos,
+                              [selectedDate]: memos[selectedDate].map(item => item.id === m.id ? { ...item, checked: !item.checked } : item)
+                            });
+                          }}
                           className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
                         />
                         <div className="space-y-0.5">
@@ -348,7 +335,12 @@ export default function App() {
                         </div>
                       </div>
                       <button 
-                        onClick={() => handleDeleteMemo(selectedDate, m.id)}
+                        onClick={() => {
+                          setMemos({
+                            ...memos,
+                            [selectedDate]: memos[selectedDate].filter(item => item.id !== m.id)
+                          });
+                        }}
                         className="text-slate-300 hover:text-red-500 p-1"
                       >
                         ✕
@@ -380,7 +372,7 @@ export default function App() {
             <h2 className="font-bold text-base flex items-center gap-2 text-pink-600"><Heart size={18} /> 같이 쉬는 날 (OFF Match)</h2>
             <div className="p-3.5 bg-pink-50 border border-pink-100 text-pink-800 rounded-xl text-xs space-y-1">
               <p className="font-bold text-sm">🎉 9월 5일(토) 동시 휴무!</p>
-              <p>{privacyBlur ? '사용자' : userName}, 김민지, 정수진, 박지현 쌤이 같이 쉬는 날입니다.</p>
+              <p>{privacyBlur ? '사용자' : userName}, 김민지, 정수진 쌤이 같이 쉬는 날입니다.</p>
             </div>
           </div>
         )}
@@ -416,7 +408,12 @@ export default function App() {
                 className="w-full text-xs p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
               />
               <button 
-                onClick={handleParsePaste}
+                onClick={() => {
+                  if (!pastedText.trim()) return;
+                  const lines = pastedText.trim().split('\n').map(l => l.split('\t'));
+                  parseMatrixData(lines);
+                  setPastedText('');
+                }}
                 className="w-full bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-slate-900 transition"
               >
                 텍스트 파싱 등록
