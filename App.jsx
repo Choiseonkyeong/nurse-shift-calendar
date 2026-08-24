@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, AlertTriangle, 
-  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X
+  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 const SHIFT_TYPES = {
   D: { name: 'Day', time: '07:30 - 15:30', color: '#FEF08A', textColor: '#854D0E' },
@@ -32,7 +31,6 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
   const [userName, setUserName] = useState('최수민');
-  const [touchStartX, setTouchStartX] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
 
@@ -65,21 +63,6 @@ export default function App() {
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
   const [pastedText, setPastedText] = useState('');
-
-  // Tesseract 엔진 동적 자동 로더
-  const loadTesseractEngine = () => {
-    return new Promise((resolve, reject) => {
-      if (window.Tesseract) {
-        resolve(window.Tesseract);
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-      script.onload = () => resolve(window.Tesseract);
-      script.onerror = () => reject(new Error('OCR Engine Load Failed'));
-      document.head.appendChild(script);
-    });
-  };
 
   const playNotificationSoundAndVibrate = (type) => {
     if (type === 'both' || type === 'sound') {
@@ -189,19 +172,20 @@ export default function App() {
     return days;
   };
 
-  // 이미지 올릴 때 엔진 자동 로딩 및 파싱 처리
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!window.Tesseract) {
+      alert('이미지 분석 라이브러리를 준비 중입니다. 3초 후 다시 눌러주세요.');
+      return;
+    }
+
     setOcrLoading(true);
-    setOcrProgress(10);
+    setOcrProgress(20);
 
     try {
-      const Tesseract = await loadTesseractEngine();
-      setOcrProgress(30);
-
-      const worker = await Tesseract.createWorker('kor+eng');
+      const worker = await window.Tesseract.createWorker('kor+eng');
       setOcrProgress(60);
 
       const ret = await worker.recognize(file);
@@ -211,7 +195,7 @@ export default function App() {
       parseWardScheduleImage(ret.data);
     } catch (err) {
       console.error(err);
-      alert('사진 분석 도중 오류가 발생했습니다. 네트워크 상태를 확인해주세요.');
+      alert('사진 분석 도중 오류가 발생했습니다.');
     } finally {
       setOcrLoading(false);
       setOcrProgress(0);
@@ -220,7 +204,6 @@ export default function App() {
 
   const parseWardScheduleImage = (ocrData) => {
     const rawText = ocrData.text || '';
-    
     const nameMatches = rawText.match(/[가-힣]{2,4}/g) || [];
     const filterOutWords = ['근무표', '병동', '간호사', '수간호사', '데이', '이브닝', '나이트', '오프', '연차', '합계'];
     
@@ -268,40 +251,17 @@ export default function App() {
     setActiveTab('my-shift');
   };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const wb = XLSX.read(evt.target.result, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-      if (data.length > 0) parseMatrixData(data);
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const parseMatrixData = (rows) => {
-    let dateRow = rows[0];
-    let codeRow = rows[1] || rows[0];
+  const parseMatrixData = (lines) => {
     const updatedShifts = { ...myShifts };
-    let currMonth = currentMonth;
-    let currYear = currentYear;
-    let prevDay = 0;
-
-    codeRow.forEach((rawCode, idx) => {
-      if (!rawCode) return;
-      const code = String(rawCode).trim().toUpperCase();
-      let dayNum = parseInt(dateRow[idx], 10);
-      if (isNaN(dayNum)) dayNum = idx + 1;
-      if (dayNum < prevDay) { 
-        currMonth += 1; 
-        if (currMonth > 12) { currMonth = 1; currYear += 1; } 
-      }
-      prevDay = dayNum;
-      const dateStr = `${currYear}-${String(currMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-      if (SHIFT_TYPES[code]) updatedShifts[dateStr] = code;
+    lines.forEach((cols, rowIdx) => {
+      cols.forEach((cell, colIdx) => {
+        const code = String(cell).trim().toUpperCase();
+        if (SHIFT_TYPES[code]) {
+          const dayNum = colIdx + 1;
+          const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+          updatedShifts[dateStr] = code;
+        }
+      });
     });
 
     setMyShifts(updatedShifts);
@@ -375,7 +335,7 @@ export default function App() {
 
       {showNameModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3">
               <div className="flex items-center gap-2 text-indigo-600">
                 <UserCheck size={22} />
@@ -434,7 +394,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Calendar View */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-2 select-none">
               <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400 pb-2">
                 <span className="text-red-500">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span className="text-blue-500">토</span>
@@ -481,7 +440,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Shift Quick Editor & Sound/Vibration Alarm Scheduler */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2">
                 <div className="flex justify-between items-center text-xs">
@@ -521,7 +479,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Schedule Form */}
               <div className="space-y-3 pt-1">
                 <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <Bell size={16} className="text-indigo-600" />
@@ -663,7 +620,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 동료 비교 탭 */}
         {activeTab === 'friends' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2"><Users size={18} className="text-indigo-600" /> 동료 근무 현황</h2>
@@ -682,7 +638,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 오프 맞추기 탭 */}
         {activeTab === 'off' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2 text-pink-600"><Heart size={18} /> 같이 쉬는 날 (OFF Match)</h2>
@@ -693,7 +648,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 등록 탭 */}
         {activeTab === 'register' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 등록</h2>
@@ -713,7 +667,7 @@ export default function App() {
                   <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                     <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${ocrProgress}%` }}></div>
                   </div>
-                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">엔진 로딩 및 이미지 분석 중... ({ocrProgress}%)</p>
+                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">이미지 분석 중... ({ocrProgress}%)</p>
                 </div>
               ) : (
                 <label className="inline-block cursor-pointer bg-indigo-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition">
@@ -723,22 +677,11 @@ export default function App() {
               )}
             </div>
 
-            <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-slate-800">엑셀(.xlsx, .xls) 파일 직접 선택</p>
-                <p className="text-[10px] text-slate-500">병원 근무표 파일 그대로 업로드</p>
-              </div>
-              <label className="cursor-pointer bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl hover:bg-slate-900 transition">
-                파일 선택
-                <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="hidden" />
-              </label>
-            </div>
-
             <div className="space-y-2">
-              <p className="text-xs font-bold text-slate-700">또는 엑셀 데이터 복사/붙여넣기</p>
+              <p className="text-xs font-bold text-slate-700">엑셀/텍스트 데이터 복사 붙여넣기</p>
               <textarea
                 rows={3}
-                placeholder="엑셀 표 영역을 선택 복사해서 붙여넣으세요."
+                placeholder="엑셀 표 영역을 복사해서 붙여넣으세요."
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
                 className="w-full text-xs p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
