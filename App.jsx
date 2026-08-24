@@ -36,8 +36,7 @@ export default function App() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
 
-  // 병동 전체 파싱 결과 저장 팝업 상태
-  const [parsedWardData, setParsedWardData] = useState(null); // { '최수민': { '2026-08-01': 'D' }, ... }
+  const [parsedWardData, setParsedWardData] = useState(null);
   const [detectedNames, setDetectedNames] = useState([]);
   const [showNameModal, setShowNameModal] = useState(false);
 
@@ -66,6 +65,21 @@ export default function App() {
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
   const [pastedText, setPastedText] = useState('');
+
+  // Tesseract 엔진 동적 자동 로더
+  const loadTesseractEngine = () => {
+    return new Promise((resolve, reject) => {
+      if (window.Tesseract) {
+        resolve(window.Tesseract);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      script.onload = () => resolve(window.Tesseract);
+      script.onerror = () => reject(new Error('OCR Engine Load Failed'));
+      document.head.appendChild(script);
+    });
+  };
 
   const playNotificationSoundAndVibrate = (type) => {
     if (type === 'both' || type === 'sound') {
@@ -175,57 +189,49 @@ export default function App() {
     return days;
   };
 
-  // 병동 전체 표 이미지 OCR 파싱 로직
+  // 이미지 올릴 때 엔진 자동 로딩 및 파싱 처리
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!window.Tesseract) {
-      alert('이미지 분석 엔진을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
-      return;
-    }
-
     setOcrLoading(true);
-    setOcrProgress(15);
+    setOcrProgress(10);
 
     try {
-      const worker = await window.Tesseract.createWorker('kor+eng');
-      setOcrProgress(45);
+      const Tesseract = await loadTesseractEngine();
+      setOcrProgress(30);
+
+      const worker = await Tesseract.createWorker('kor+eng');
+      setOcrProgress(60);
 
       const ret = await worker.recognize(file);
-      setOcrProgress(85);
+      setOcrProgress(90);
       await worker.terminate();
 
       parseWardScheduleImage(ret.data);
     } catch (err) {
       console.error(err);
-      alert('사진 분석 도중 오류가 발생했습니다.');
+      alert('사진 분석 도중 오류가 발생했습니다. 네트워크 상태를 확인해주세요.');
     } finally {
       setOcrLoading(false);
       setOcrProgress(0);
     }
   };
 
-  // 병동 전체 표 구조 해석 및 이름 감지 함수
   const parseWardScheduleImage = (ocrData) => {
     const rawText = ocrData.text || '';
     
-    // 한국어 이름(2~4자) 추출 알고리즘
     const nameMatches = rawText.match(/[가-힣]{2,4}/g) || [];
     const filterOutWords = ['근무표', '병동', '간호사', '수간호사', '데이', '이브닝', '나이트', '오프', '연차', '합계'];
     
-    // 유효한 간호사 이름 목록 필터링
     const uniqueNames = Array.from(new Set(nameMatches.filter(n => !filterOutWords.includes(n))));
 
     if (uniqueNames.length === 0) {
-      // 이름을 감지 못한 경우 기본 선택지 제시
       uniqueNames.push('최수민', '김민지', '정수진', '박지현');
     }
 
-    // 근무 코드 토큰 정제
     const shiftTokens = rawText.toUpperCase().match(/\b(D|E|N|OFF|O|O\/F)\b/g) || [];
     
-    // 병동 가상 표 데이터 매핑
     const mockWardData = {};
     uniqueNames.forEach((name, nameIdx) => {
       const personShifts = {};
@@ -242,19 +248,15 @@ export default function App() {
 
     setParsedWardData(mockWardData);
     setDetectedNames(uniqueNames);
-    setShowNameModal(true); // 이름 선택 팝업 오픈
+    setShowNameModal(true);
   };
 
-  // 팝업에서 본인 이름 선택 완료 처리
   const handleSelectMyName = (selectedName) => {
     if (!parsedWardData || !parsedWardData[selectedName]) return;
 
     setUserName(selectedName);
-    
-    // 1. 내 근무표 적용
     setMyShifts(parsedWardData[selectedName]);
 
-    // 2. 동료 근무 데이터도 동료 목록에 자동 업데이트
     const updatedFriends = Object.entries(parsedWardData)
       .filter(([name]) => name !== selectedName)
       .map(([name, shifts]) => ({ name, shifts }));
@@ -262,7 +264,7 @@ export default function App() {
     setFriends(updatedFriends);
 
     setShowNameModal(false);
-    alert(`[${selectedName}] 님의 근무표가 내 캘린더에 적용되었으며, 동료들의 스케줄도 자동 등록되었습니다!`);
+    alert(`[${selectedName}] 님의 근무표가 내 캘린더에 적용되었습니다!`);
     setActiveTab('my-shift');
   };
 
@@ -371,7 +373,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* 본인 이름 선택 모달 팝업 */}
       {showNameModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
@@ -712,7 +713,7 @@ export default function App() {
                   <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                     <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${ocrProgress}%` }}></div>
                   </div>
-                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">병동 표 글자 및 이름 분석 중... ({ocrProgress}%)</p>
+                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">엔진 로딩 및 이미지 분석 중... ({ocrProgress}%)</p>
                 </div>
               ) : (
                 <label className="inline-block cursor-pointer bg-indigo-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition">
