@@ -177,7 +177,7 @@ export default function App() {
     if (!file) return;
 
     if (!window.Tesseract) {
-      alert('이미지 분석 라이브러리를 준비 중입니다. 3초 후 다시 눌러주세요.');
+      alert('이미지 분석 라이브러리를 준비 중입니다. 3초 후 다시 시도해 주세요.');
       return;
     }
 
@@ -253,7 +253,7 @@ export default function App() {
 
   const parseMatrixData = (lines) => {
     const updatedShifts = { ...myShifts };
-    lines.forEach((cols, rowIdx) => {
+    lines.forEach((cols) => {
       cols.forEach((cell, colIdx) => {
         const code = String(cell).trim().toUpperCase();
         if (SHIFT_TYPES[code]) {
