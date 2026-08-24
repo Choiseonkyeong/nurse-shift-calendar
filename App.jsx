@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, AlertTriangle, 
   DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload
@@ -13,25 +13,50 @@ const SHIFT_TYPES = {
   연차: { name: 'Annual', time: '연차 휴가', color: '#FBCFE8', textColor: '#9D174D' }
 };
 
+// YYYY-MM-DD 포맷 반환 함수
+const getTodayString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getTodayMonthString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
 export default function App() {
+  const todayStr = getTodayString();
+  const todayMonthStr = getTodayMonthString();
+
   const [activeTab, setActiveTab] = useState('my-shift');
-  const [baseMonth, setBaseMonth] = useState('2026-09');
+  const [baseMonth, setBaseMonth] = useState(todayMonthStr);
   const [userName] = useState('최수민');
+  
+  // 오늘 날짜가 기본 선택되도록 설정
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+
   const [myShifts, setMyShifts] = useState({
-    '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF',
-    '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E',
-    '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N',
-    '2026-09-10': 'N', '2026-09-11': 'N', '2026-09-12': 'OFF', '2026-09-13': 'OFF', '2026-09-14': 'D',
-    '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'E', '2026-09-18': 'OFF', '2026-09-19': 'OFF',
-    '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N'
+    '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', 
+    '2026-08-29': 'OFF', '2026-08-30': 'OFF', '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', 
+    '2026-09-03': 'E', '2026-09-04': 'E', '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-07': 'D', 
+    '2026-09-08': 'D', '2026-09-09': 'N', '2026-09-10': 'N', '2026-09-11': 'N', '2026-09-12': 'OFF', 
+    '2026-09-13': 'OFF', '2026-09-14': 'D', '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'E', 
+    '2026-09-18': 'OFF', '2026-09-19': 'OFF', '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', 
+    '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N'
   });
 
-  const [selectedDate, setSelectedDate] = useState('2026-09-09');
   const [memos, setMemos] = useState({
+    '2026-08-24': [
+      { id: 1, type: '인수인계', time: '08:00', text: '인수인계 및 정기 V/S 체크', alert: '알림 없음', checked: false }
+    ],
     '2026-09-09': [
-      { id: 1, type: '인수인계', time: '14:00', text: '502호 중증 환자 수혈 및 V/S 체크 예정', alert: '30분전', checked: false },
-      { id: 2, type: '중요/공지', time: '16:00', text: '16시 병동 수당/인수인계 컨퍼런스 참석', alert: '알림 없음', checked: true },
-      { id: 3, type: '개인일정', time: '18:30', text: '퇴근 후 민지 쌤이랑 저녁 약속', alert: '10분전', checked: false }
+      { id: 2, type: '인수인계', time: '14:00', text: '502호 중증 환자 수혈 및 V/S 체크 예정', alert: '30분전', checked: false },
+      { id: 3, type: '중요/공지', time: '16:00', text: '16시 병동 수당/인수인계 컨퍼런스 참석', alert: '알림 없음', checked: true }
     ]
   });
 
@@ -48,7 +73,6 @@ export default function App() {
     { name: '이서연', shifts: { '2026-09-05': 'OFF' } }
   ];
 
-  // 엑셀 파일 직접 파싱 함수
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -92,7 +116,7 @@ export default function App() {
     });
 
     setMyShifts(updatedShifts);
-    alert('엑셀 파일 분석 완료! 근무표가 등록되었습니다.');
+    alert('근무표 등록이 완료되었습니다!');
   };
 
   const handleAddMemo = () => {
@@ -209,6 +233,7 @@ export default function App() {
                   const dayNum = dateStr.split('-')[2];
                   const info = SHIFT_TYPES[code] || SHIFT_TYPES.OFF;
                   const isSelected = dateStr === selectedDate;
+                  const isToday = dateStr === todayStr;
                   const dayMemos = memos[dateStr] || [];
 
                   return (
@@ -216,7 +241,11 @@ export default function App() {
                       key={dateStr}
                       onClick={() => setSelectedDate(dateStr)}
                       className={`relative aspect-square rounded-2xl p-1 flex flex-col justify-between transition-all border-2 ${
-                        isSelected ? 'border-indigo-600 shadow-md ring-2 ring-indigo-100' : 'border-transparent'
+                        isSelected 
+                          ? 'border-indigo-600 shadow-md ring-2 ring-indigo-100' 
+                          : isToday 
+                            ? 'border-amber-400 ring-2 ring-amber-100' 
+                            : 'border-transparent'
                       }`}
                       style={{ backgroundColor: info.color }}
                     >
@@ -224,7 +253,12 @@ export default function App() {
                         <span className="text-[11px] font-bold opacity-80" style={{ color: info.textColor }}>
                           {parseInt(dayNum, 10)}
                         </span>
-                        {dayMemos.length > 0 && (
+                        {isToday && (
+                          <span className="text-[9px] bg-amber-500 text-white font-extrabold px-1 rounded-sm">
+                            오늘
+                          </span>
+                        )}
+                        {dayMemos.length > 0 && !isToday && (
                           <span className="w-3.5 h-3.5 bg-indigo-600 text-white rounded-full text-[9px] flex items-center justify-center font-extrabold">
                             {dayMemos.length}
                           </span>
@@ -242,7 +276,7 @@ export default function App() {
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                  <span>📅 {selectedDate} 메모 & 알림</span>
+                  <span>📅 {selectedDate} {selectedDate === todayStr ? '(오늘)' : ''} 메모 & 알림</span>
                 </span>
                 <span className="text-xs text-indigo-600 font-semibold bg-indigo-50 px-2.5 py-1 rounded-lg">
                   {SHIFT_TYPES[myShifts[selectedDate]]?.name || '근무'} ({SHIFT_TYPES[myShifts[selectedDate]]?.time})
@@ -355,7 +389,6 @@ export default function App() {
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 근무표 파일/텍스트 등록</h2>
 
-            {/* Excel File Upload Box */}
             <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-6 rounded-2xl text-center space-y-2">
               <Upload size={28} className="mx-auto text-indigo-600" />
               <div>
