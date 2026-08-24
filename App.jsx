@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, AlertTriangle, 
-  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3
+  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -13,41 +13,43 @@ const SHIFT_TYPES = {
   연차: { name: 'Annual', time: '연차 휴가', color: '#FBCFE8', textColor: '#9D174D' }
 };
 
-const getTodayString = () => {
+// 현재 실시간 오늘 날짜 정보 계산
+const getTodayDateObj = () => {
   const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return {
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+    dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  };
 };
 
 export default function App() {
-  const todayStr = getTodayString();
+  const today = getTodayDateObj();
 
   const [activeTab, setActiveTab] = useState('my-shift');
-  const [currentYear, setCurrentYear] = useState(2026);
-  const [currentMonth, setCurrentMonth] = useState(9);
-  const [userName] = useState('최수민');
-  const [selectedDate, setSelectedDate] = useState('2026-09-01');
+  
+  // 무조건 오늘 년/월로 첫 화면 기준 설정
+  const [currentYear, setCurrentYear] = useState(today.year);
+  const [currentMonth, setCurrentMonth] = useState(today.month);
+  const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
+  const [userName] = useState('최수민');
   const [touchStartX, setTouchStartX] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
 
-  // 등록되지 않은 날짜는 빈값으로 처리 (자동 OFF 지정 안함)
+  // 기본 스케줄 세팅
   const [myShifts, setMyShifts] = useState({
     '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', 
     '2026-08-29': 'OFF', '2026-08-30': 'OFF', '2026-08-31': 'D',
     '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E', '2026-09-05': 'OFF',
-    '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N', '2026-09-10': 'N',
-    '2026-09-11': 'N', '2026-09-12': 'OFF', '2026-09-13': 'OFF', '2026-09-14': 'D', '2026-09-15': 'E',
-    '2026-09-16': 'E', '2026-09-17': 'N', '2026-09-18': 'OFF', '2026-09-19': 'OFF', '2026-09-20': 'D',
-    '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N'
+    '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N', '2026-09-10': 'N'
   });
 
   const [memos, setMemos] = useState({
-    '2026-09-01': [
-      { id: 1, type: '개인일정', time: '09:00', text: '9월 첫날 병동 일정 확인', checked: false }
+    [today.dateStr]: [
+      { id: 1, type: '인수인계', time: '08:00', text: '오늘 스케줄 및 병동 상태 확인', checked: false }
     ]
   });
 
@@ -58,8 +60,8 @@ export default function App() {
   const [pastedText, setPastedText] = useState('');
 
   const friends = [
-    { name: '김민지', shifts: { '2026-09-05': 'OFF', '2026-09-12': 'OFF', '2026-09-11': 'E' } },
-    { name: '정수진', shifts: { '2026-09-05': 'OFF', '2026-09-12': 'OFF', '2026-09-11': 'N' } }
+    { name: '김민지', shifts: { '2026-08-24': 'D', '2026-08-25': 'OFF' } },
+    { name: '정수진', shifts: { '2026-08-24': 'E', '2026-08-25': 'N' } }
   ];
 
   const handlePrevMonth = () => {
@@ -72,6 +74,13 @@ export default function App() {
     else { setCurrentMonth(currentMonth + 1); }
   };
 
+  // 오늘 날짜로 즉시 이동하는 버튼 처리
+  const handleGoToToday = () => {
+    setCurrentYear(today.year);
+    setCurrentMonth(today.month);
+    setSelectedDate(today.dateStr);
+  };
+
   const handleTouchStart = (e) => setTouchStartX(e.touches[0].clientX);
   const handleTouchEnd = (e) => {
     if (!touchStartX) return;
@@ -81,12 +90,12 @@ export default function App() {
     setTouchStartX(null);
   };
 
-  // 터치한 날짜의 근무 변경 처리
+  // 터치한 날짜의 근무 변경 및 삭제 처리
   const handleShiftChange = (dateStr, newCode) => {
     setMyShifts(prev => {
       const updated = { ...prev };
-      if (newCode === '') {
-        delete updated[dateStr]; // 미등록 상태로 변경
+      if (newCode === '' || newCode === null) {
+        delete updated[dateStr]; // 아무것도 없는 빈칸(삭제)으로 처리
       } else {
         updated[dateStr] = newCode;
       }
@@ -137,7 +146,6 @@ export default function App() {
     try {
       const worker = await window.Tesseract.createWorker('eng');
       setOcrProgress(40);
-
       const ret = await worker.recognize(file);
       setOcrProgress(80);
       await worker.terminate();
@@ -249,13 +257,22 @@ export default function App() {
             <p className="text-xs text-slate-500">병동 스마트 일정 관리자</p>
           </div>
         </div>
-        <button 
-          onClick={() => setPrivacyBlur(!privacyBlur)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-200 transition"
-        >
-          {privacyBlur ? <EyeOff size={16} /> : <Eye size={16} />}
-          <span>보안</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleGoToToday}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-700 hover:bg-amber-100 transition"
+          >
+            <RotateCcw size={13} />
+            <span>오늘</span>
+          </button>
+          <button 
+            onClick={() => setPrivacyBlur(!privacyBlur)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-200 transition"
+          >
+            {privacyBlur ? <EyeOff size={16} /> : <Eye size={16} />}
+            <span>보안</span>
+          </button>
+        </div>
       </header>
 
       <main className="p-4 max-w-md mx-auto space-y-4">
@@ -328,7 +345,7 @@ export default function App() {
                   const code = myShifts[dateStr] || '';
                   const info = SHIFT_TYPES[code];
                   const isSelected = dateStr === selectedDate;
-                  const isToday = dateStr === todayStr;
+                  const isToday = dateStr === today.dateStr;
 
                   return (
                     <button
@@ -364,21 +381,21 @@ export default function App() {
               </div>
             </div>
 
-            {/* Shift Quick Editor & Memo Section */}
+            {/* Shift Quick Editor (Including Clear/Delete Option) */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-              {/* Selected Day Quick Shift Changer */}
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2.5">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-slate-800 flex items-center gap-1.5">
                     <Edit3 size={14} className="text-indigo-600" />
-                    <span>{selectedDate} 근무 변경</span>
+                    <span>{selectedDate} 근무 등록 및 수정</span>
                   </span>
                   <span className="text-[11px] font-semibold text-indigo-600">
-                    현재: {currentSelectedShiftCode ? SHIFT_TYPES[currentSelectedShiftCode]?.name : '미등록'}
+                    상태: {currentSelectedShiftCode ? SHIFT_TYPES[currentSelectedShiftCode]?.name : '미등록 (빈칸)'}
                   </span>
                 </div>
                 
-                <div className="grid grid-cols-5 gap-1.5">
+                {/* D, E, N, OFF, 연차 + 삭제(빈칸) 버튼 배열 */}
+                <div className="grid grid-cols-6 gap-1">
                   {Object.entries(SHIFT_TYPES).map(([typeKey, typeInfo]) => (
                     <button
                       key={typeKey}
@@ -395,10 +412,23 @@ export default function App() {
                       {typeKey}
                     </button>
                   ))}
+
+                  {/* 미등록(삭제) 전용 버튼 */}
+                  <button
+                    onClick={() => handleShiftChange(selectedDate, '')}
+                    className={`py-2 rounded-xl text-[11px] font-bold border transition flex items-center justify-center gap-0.5 ${
+                      !currentSelectedShiftCode 
+                        ? 'bg-rose-50 border-rose-300 text-rose-600 ring-2 ring-rose-200 font-extrabold' 
+                        : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Trash2 size={12} />
+                    <span>삭제</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Memo Input */}
+              {/* Memo Section */}
               <div className="flex justify-between items-center border-b pb-2 pt-1">
                 <span className="font-bold text-slate-800 text-sm">
                   📅 메모 & 알림
@@ -514,8 +544,8 @@ export default function App() {
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2 text-pink-600"><Heart size={18} /> 같이 쉬는 날 (OFF Match)</h2>
             <div className="p-3.5 bg-pink-50 border border-pink-100 text-pink-800 rounded-xl text-xs space-y-1">
-              <p className="font-bold text-sm">🎉 9월 5일(토) 동시 휴무!</p>
-              <p>{privacyBlur ? '사용자' : userName}, 김민지, 정수진 쌤이 같이 쉬는 날입니다.</p>
+              <p className="font-bold text-sm">🎉 8월 25일(화) 동시 휴무!</p>
+              <p>{privacyBlur ? '사용자' : userName}, 김민지 쌤이 같이 쉬는 날입니다.</p>
             </div>
           </div>
         )}
