@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { 
-  Calendar, Users, Heart, PlusCircle, AlertTriangle, 
-  DollarSign, Bell, Shield, Eye, EyeOff, Share2, FileSpreadsheet, Lock, Sparkles, Smartphone
+  Calendar, Users, Heart, AlertTriangle, 
+  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const SHIFT_TYPES = {
   D: { name: 'Day', time: '07:30 - 15:30', color: '#FEF08A', textColor: '#854D0E' },
@@ -15,7 +16,7 @@ const SHIFT_TYPES = {
 export default function App() {
   const [activeTab, setActiveTab] = useState('my-shift');
   const [baseMonth, setBaseMonth] = useState('2026-09');
-  const [userName, setUserName] = useState('최수민');
+  const [userName] = useState('최수민');
   const [myShifts, setMyShifts] = useState({
     '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF',
     '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E',
@@ -37,7 +38,6 @@ export default function App() {
   const [memoText, setMemoText] = useState('');
   const [memoCategory, setMemoCategory] = useState('인수인계');
   const [memoTime, setMemoTime] = useState('');
-  const [memoAlert, setMemoAlert] = useState('알림 없음');
   const [privacyBlur, setPrivacyBlur] = useState(false);
   const [pastedText, setPastedText] = useState('');
 
@@ -48,6 +48,53 @@ export default function App() {
     { name: '이서연', shifts: { '2026-09-05': 'OFF' } }
   ];
 
+  // 엑셀 파일 직접 파싱 함수
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const bstr = evt.target.result;
+      const wb = XLSX.read(bstr, { type: 'binary' });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+      if (data.length > 0) {
+        parseMatrixData(data);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const parseMatrixData = (rows) => {
+    let dateRow = rows[0];
+    let codeRow = rows[1] || rows[0];
+    const [year, month] = baseMonth.split('-').map(Number);
+    const updatedShifts = { ...myShifts };
+    let currMonth = month - 1;
+    let currYear = year;
+    let prevDay = 0;
+
+    codeRow.forEach((rawCode, idx) => {
+      if (!rawCode) return;
+      const code = String(rawCode).trim().toUpperCase();
+      let dayNum = parseInt(dateRow[idx], 10);
+      if (isNaN(dayNum)) dayNum = idx + 1;
+      if (dayNum < prevDay) { 
+        currMonth += 1; 
+        if (currMonth > 12) { currMonth = 1; currYear += 1; } 
+      }
+      prevDay = dayNum;
+      const dateStr = `${currYear}-${String(currMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      if (SHIFT_TYPES[code]) updatedShifts[dateStr] = code;
+    });
+
+    setMyShifts(updatedShifts);
+    alert('엑셀 파일 분석 완료! 근무표가 등록되었습니다.');
+  };
+
   const handleAddMemo = () => {
     if (!memoText.trim()) return;
     const newEntry = {
@@ -55,7 +102,6 @@ export default function App() {
       type: memoCategory,
       time: memoTime || '자율',
       text: memoText,
-      alert: memoAlert,
       checked: false
     };
     setMemos({
@@ -83,35 +129,14 @@ export default function App() {
   const handleParsePaste = () => {
     if (!pastedText.trim()) return;
     const lines = pastedText.trim().split('\n').map(l => l.split('\t'));
-    let dateRow = lines[0];
-    let codeRow = lines[1] || lines[0];
-    const [year, month] = baseMonth.split('-').map(Number);
-    const updatedShifts = { ...myShifts };
-    let currMonth = month - 1;
-    let currYear = year;
-    let prevDay = 0;
-
-    codeRow.forEach((rawCode, idx) => {
-      const code = rawCode.trim().toUpperCase();
-      if (!code) return;
-      let dayNum = parseInt(dateRow[idx], 10);
-      if (isNaN(dayNum)) dayNum = idx + 1;
-      if (dayNum < prevDay) { currMonth += 1; if (currMonth > 12) { currMonth = 1; currYear += 1; } }
-      prevDay = dayNum;
-      const dateStr = `${currYear}-${String(currMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-      if (SHIFT_TYPES[code]) updatedShifts[dateStr] = code;
-    });
-
-    setMyShifts(updatedShifts);
+    parseMatrixData(lines);
     setPastedText('');
-    alert('근무표 등록이 완료되었습니다!');
   };
 
   const getShiftCount = (code) => Object.values(myShifts).filter(c => c === code).length;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 font-sans">
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-lg shadow-inner">
@@ -122,22 +147,18 @@ export default function App() {
             <p className="text-xs text-slate-500">병동 스마트 일정 관리자</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setPrivacyBlur(!privacyBlur)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-200 transition"
-          >
-            {privacyBlur ? <EyeOff size={16} /> : <Eye size={16} />}
-            <span>보안</span>
-          </button>
-        </div>
+        <button 
+          onClick={() => setPrivacyBlur(!privacyBlur)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-200 transition"
+        >
+          {privacyBlur ? <EyeOff size={16} /> : <Eye size={16} />}
+          <span>보안</span>
+        </button>
       </header>
 
-      {/* Main Container */}
       <main className="p-4 max-w-md mx-auto space-y-4">
         {activeTab === 'my-shift' && (
           <div className="space-y-4">
-            {/* Health Alert Notice */}
             <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl flex items-start gap-3 text-amber-900 shadow-sm">
               <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
               <div className="text-xs space-y-1">
@@ -146,7 +167,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Shift Summary Card */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center">
                 <div>
@@ -179,7 +199,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Main Calendar View */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-2">
               <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400 pb-2">
                 <span className="text-red-500">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span className="text-blue-500">토</span>
@@ -220,7 +239,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Selected Day Memo & Schedule Section */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="font-bold text-slate-800 text-sm flex items-center gap-2">
@@ -231,7 +249,6 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Add Memo Form */}
               <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
                 <div className="flex gap-1.5 text-xs">
                   {['인수인계', '중요/공지', '개인일정'].map((cat) => (
@@ -270,7 +287,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Memo List */}
               <div className="space-y-2">
                 {(memos[selectedDate] || []).length === 0 ? (
                   <p className="text-xs text-slate-400 text-center py-3">등록된 메모나 인수인계 사항이 없습니다.</p>
@@ -311,7 +327,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 2: Friends */}
         {activeTab === 'friends' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2"><Users size={18} className="text-indigo-600" /> 동료 근무 현황</h2>
@@ -326,7 +341,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 3: Off Match */}
         {activeTab === 'off' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2 text-pink-600"><Heart size={18} /> 같이 쉬는 날 (OFF Match)</h2>
@@ -337,29 +351,48 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 4: Register */}
         {activeTab === 'register' && (
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-            <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 엑셀 복사/붙여넣기 등록</h2>
-            <p className="text-xs text-slate-500">엑셀 표의 날짜 행과 근무 코드 행을 선택해 복사 후 아래 붙여넣으세요.</p>
-            <textarea
-              rows={5}
-              placeholder="엑셀 데이터를 이곳에 붙여넣으세요."
-              value={pastedText}
-              onChange={(e) => setPastedText(e.target.value)}
-              className="w-full text-xs p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
-            <button 
-              onClick={handleParsePaste}
-              className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl text-xs shadow-md hover:bg-indigo-700 transition"
-            >
-              근무표 자동 인식 및 등록
-            </button>
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+            <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 근무표 파일/텍스트 등록</h2>
+
+            {/* Excel File Upload Box */}
+            <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-6 rounded-2xl text-center space-y-2">
+              <Upload size={28} className="mx-auto text-indigo-600" />
+              <div>
+                <p className="text-xs font-bold text-indigo-900">엑셀(.xlsx, .xls) 파일 직접 선택</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">병원 근무표 파일을 그대로 올려주세요.</p>
+              </div>
+              <label className="inline-block cursor-pointer bg-indigo-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition">
+                파일 찾기
+                <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="hidden" />
+              </label>
+            </div>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink mx-3 text-slate-400 text-[11px] font-semibold">또는 엑셀 데이터 복사/붙여넣기</span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
+
+            <div className="space-y-2">
+              <textarea
+                rows={4}
+                placeholder="엑셀 표의 영역을 복사해서 붙여넣으세요."
+                value={pastedText}
+                onChange={(e) => setPastedText(e.target.value)}
+                className="w-full text-xs p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+              <button 
+                onClick={handleParsePaste}
+                className="w-full bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-slate-900 transition"
+              >
+                텍스트 파싱 등록
+              </button>
+            </div>
           </div>
         )}
       </main>
 
-      {/* Fixed Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-50 px-4 py-2 pb-7 shadow-lg">
         <div className="max-w-md mx-auto grid grid-cols-4 gap-1 text-center">
           <button 
@@ -387,7 +420,7 @@ export default function App() {
             onClick={() => setActiveTab('register')}
             className={`flex flex-col items-center py-1.5 rounded-xl text-[11px] font-bold transition ${activeTab === 'register' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <PlusCircle size={18} className="mb-0.5" />
+            <FileSpreadsheet size={18} className="mb-0.5" />
             <span>등록</span>
           </button>
         </div>
