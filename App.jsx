@@ -25,22 +25,20 @@ export default function App() {
   const todayStr = getTodayString();
 
   const [activeTab, setActiveTab] = useState('my-shift');
+  // 기본 선택 월을 9월로 두되, 8월 26일~9월 25일을 정식 주기로 설정
   const [baseMonth, setBaseMonth] = useState('2026-09');
   const [userName] = useState('최수민');
-  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [selectedDate, setSelectedDate] = useState('2026-08-26');
 
   const [myShifts, setMyShifts] = useState({
-    // 이전 달 영역 (비활성/투명 처리 대상)
-    '2026-08-23': 'OFF', '2026-08-24': 'D', '2026-08-25': 'D',
-    // 9월 주기 (8/26 ~ 9/25) - 활성 구간
+    '2026-08-24': 'D', '2026-08-25': 'D',
+    // 9월 주기 (8/26 ~ 9/25)
     '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF',
     '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E',
     '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N',
     '2026-09-10': 'N', '2026-09-11': 'N', '2026-09-12': 'OFF', '2026-09-13': 'OFF', '2026-09-14': 'D',
     '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'E', '2026-09-18': 'OFF', '2026-09-19': 'OFF',
-    '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N',
-    // 다음 달 영역 (비활성/투명 처리 대상)
-    '2026-09-26': 'OFF', '2026-09-27': 'OFF'
+    '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N'
   });
 
   const [memos, setMemos] = useState({
@@ -64,14 +62,13 @@ export default function App() {
     { name: '정수진', shifts: { '2026-09-05': 'OFF', '2026-09-12': 'OFF', '2026-09-09': 'N' } }
   ];
 
-  // 선택된 baseMonth(예: 2026-09) 주기에 속하는 날짜인지 판단 (전월 26일 ~ 당월 25일)
+  // 정확한 주기에 속해있는지 판별하는 함수 (예: 9월 캘린더 = 8/26 ~ 9/25)
   const isDateInCurrentPeriod = (dateStr) => {
     const [targetYear, targetMonth] = baseMonth.split('-').map(Number);
     const date = new Date(dateStr);
     
-    // 시작일: 전월 26일
+    // 전월 26일 ~ 당월 25일
     const startDate = new Date(targetYear, targetMonth - 2, 26);
-    // 종료일: 당월 25일
     const endDate = new Date(targetYear, targetMonth - 1, 25);
 
     return date >= startDate && date <= endDate;
@@ -135,6 +132,9 @@ export default function App() {
     return Object.entries(myShifts).filter(([d, c]) => c === code && isDateInCurrentPeriod(d)).length;
   };
 
+  // 현재 주기 (전월 26일 ~ 당월 25일) 목록만 추출
+  const currentPeriodShifts = Object.entries(myShifts).filter(([dateStr]) => isDateInCurrentPeriod(dateStr));
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 font-sans">
       <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between shadow-sm">
@@ -170,7 +170,7 @@ export default function App() {
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center">
                 <div>
-                  <h2 className="font-extrabold text-xl text-slate-900">2026년 9월</h2>
+                  <h2 className="font-extrabold text-xl text-slate-900">{baseMonth.split('-')[0]}년 {parseInt(baseMonth.split('-')[1], 10)}월</h2>
                   <span className="inline-block bg-indigo-50 text-indigo-600 text-[11px] px-2 py-0.5 rounded-md font-semibold mt-0.5">26일~25일 주기</span>
                 </div>
                 <input 
@@ -206,18 +206,16 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-7 gap-1.5">
-                {Object.entries(myShifts).map(([dateStr, code]) => {
+                {currentPeriodShifts.map(([dateStr, code]) => {
                   const [y, m, d] = dateStr.split('-');
                   const dayNum = parseInt(d, 10);
                   const monthNum = parseInt(m, 10);
                   
                   const info = SHIFT_TYPES[code] || SHIFT_TYPES.OFF;
-                  const isCurrentPeriod = isDateInCurrentPeriod(dateStr);
                   const isSelected = dateStr === selectedDate;
                   const isToday = dateStr === todayStr;
-                  const dayMemos = memos[dateStr] || [];
 
-                  // 월이 바뀌는 첫 번째날(1일 또는 26일)에 월 라벨 표시 (예: 8/26, 9/1)
+                  // 26일, 1일 등 주기가 시작하거나 월이 변경되는 날짜에 라벨 추가
                   const showMonthLabel = dayNum === 1 || dayNum === 26;
 
                   return (
@@ -225,8 +223,6 @@ export default function App() {
                       key={dateStr}
                       onClick={() => setSelectedDate(dateStr)}
                       className={`relative aspect-square rounded-2xl p-1 flex flex-col justify-between transition-all border-2 ${
-                        !isCurrentPeriod ? 'opacity-30 saturate-50' : 'opacity-100'
-                      } ${
                         isSelected 
                           ? 'border-indigo-600 shadow-md ring-2 ring-indigo-100 z-10' 
                           : isToday 
