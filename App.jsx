@@ -25,29 +25,28 @@ export default function App() {
   const todayStr = getTodayString();
 
   const [activeTab, setActiveTab] = useState('my-shift');
-  // 기본 선택 월을 9월로 두되, 8월 26일~9월 25일을 정식 주기로 설정
-  const [baseMonth, setBaseMonth] = useState('2026-09');
+  const [baseMonth, setBaseMonth] = useState('2026-08');
   const [userName] = useState('최수민');
-  const [selectedDate, setSelectedDate] = useState('2026-08-26');
+  const [selectedDate, setSelectedDate] = useState(todayStr);
 
   const [myShifts, setMyShifts] = useState({
-    '2026-08-24': 'D', '2026-08-25': 'D',
-    // 9월 주기 (8/26 ~ 9/25)
+    // 7월 이월 영역
+    '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'OFF',
+    // 8월 달력 실제 날짜 (8/1 ~ 8/31)
+    '2026-08-01': 'OFF', '2026-08-02': 'D', '2026-08-03': 'D', '2026-08-04': 'E', '2026-08-05': 'E',
+    '2026-08-06': 'OFF', '2026-08-07': 'OFF', '2026-08-08': 'N', '2026-08-09': 'N', '2026-08-10': 'OFF',
+    '2026-08-11': 'OFF', '2026-08-12': 'D', '2026-08-13': 'D', '2026-08-14': 'E', '2026-08-15': 'E',
+    '2026-08-16': 'OFF', '2026-08-17': 'OFF', '2026-08-18': 'D', '2026-08-19': 'D', '2026-08-20': 'N',
+    '2026-08-21': 'N', '2026-08-22': 'N', '2026-08-23': 'OFF', '2026-08-24': 'D', '2026-08-25': 'D',
     '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF',
-    '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E',
-    '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N',
-    '2026-09-10': 'N', '2026-09-11': 'N', '2026-09-12': 'OFF', '2026-09-13': 'OFF', '2026-09-14': 'D',
-    '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'E', '2026-09-18': 'OFF', '2026-09-19': 'OFF',
-    '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N'
+    '2026-08-31': 'D',
+    // 9월 이월 영역
+    '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E', '2026-09-05': 'OFF'
   });
 
   const [memos, setMemos] = useState({
     '2026-08-24': [
       { id: 1, type: '인수인계', time: '08:00', text: '인수인계 및 정기 V/S 체크', checked: false }
-    ],
-    '2026-09-09': [
-      { id: 2, type: '인수인계', time: '14:00', text: '502호 중증 환자 수혈 및 V/S 체크 예정', checked: false },
-      { id: 3, type: '중요/공지', time: '16:00', text: '16시 병동 수당/인수인계 컨퍼런스 참석', checked: true }
     ]
   });
 
@@ -58,20 +57,13 @@ export default function App() {
   const [pastedText, setPastedText] = useState('');
 
   const friends = [
-    { name: '김민지', shifts: { '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-09': 'E' } },
-    { name: '정수진', shifts: { '2026-09-05': 'OFF', '2026-09-12': 'OFF', '2026-09-09': 'N' } }
+    { name: '김민지', shifts: { '2026-08-24': 'D', '2026-08-25': 'OFF' } },
+    { name: '정수진', shifts: { '2026-08-24': 'E', '2026-08-25': 'N' } }
   ];
 
-  // 정확한 주기에 속해있는지 판별하는 함수 (예: 9월 캘린더 = 8/26 ~ 9/25)
-  const isDateInCurrentPeriod = (dateStr) => {
-    const [targetYear, targetMonth] = baseMonth.split('-').map(Number);
-    const date = new Date(dateStr);
-    
-    // 전월 26일 ~ 당월 25일
-    const startDate = new Date(targetYear, targetMonth - 2, 26);
-    const endDate = new Date(targetYear, targetMonth - 1, 25);
-
-    return date >= startDate && date <= endDate;
+  // 해당 날짜가 현재 선택된 '월(baseMonth)'의 날짜인지 판별 (예: baseMonth가 2026-08이면 8월 달만 true)
+  const isCurrentMonth = (dateStr) => {
+    return dateStr.startsWith(baseMonth);
   };
 
   const handleFileUpload = (e) => {
@@ -94,7 +86,7 @@ export default function App() {
     let codeRow = rows[1] || rows[0];
     const [year, month] = baseMonth.split('-').map(Number);
     const updatedShifts = { ...myShifts };
-    let currMonth = month - 1;
+    let currMonth = month;
     let currYear = year;
     let prevDay = 0;
 
@@ -129,11 +121,8 @@ export default function App() {
   };
 
   const getShiftCount = (code) => {
-    return Object.entries(myShifts).filter(([d, c]) => c === code && isDateInCurrentPeriod(d)).length;
+    return Object.entries(myShifts).filter(([d, c]) => c === code && isCurrentMonth(d)).length;
   };
-
-  // 현재 주기 (전월 26일 ~ 당월 25일) 목록만 추출
-  const currentPeriodShifts = Object.entries(myShifts).filter(([dateStr]) => isDateInCurrentPeriod(dateStr));
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 font-sans">
@@ -163,7 +152,7 @@ export default function App() {
               <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
               <div className="text-xs space-y-1">
                 <span className="font-bold block text-amber-900">3연속 나이트(3N) 피로도 경고</span>
-                <p className="text-amber-700 leading-relaxed">2026-09-11 기준 연속 3번째 나이트 근무입니다. 누적 피로에 유의하세요!</p>
+                <p className="text-amber-700 leading-relaxed">2026-08-22 기준 연속 3번째 나이트 근무입니다. 누적 피로에 유의하세요!</p>
               </div>
             </div>
 
@@ -171,7 +160,7 @@ export default function App() {
               <div className="flex justify-between items-center">
                 <div>
                   <h2 className="font-extrabold text-xl text-slate-900">{baseMonth.split('-')[0]}년 {parseInt(baseMonth.split('-')[1], 10)}월</h2>
-                  <span className="inline-block bg-indigo-50 text-indigo-600 text-[11px] px-2 py-0.5 rounded-md font-semibold mt-0.5">26일~25일 주기</span>
+                  <span className="inline-block bg-indigo-50 text-indigo-600 text-[11px] px-2 py-0.5 rounded-md font-semibold mt-0.5">표준 캘린더 모드</span>
                 </div>
                 <input 
                   type="month" 
@@ -199,30 +188,27 @@ export default function App() {
               </div>
             </div>
 
-            {/* Calendar View */}
+            {/* Standard Calendar Grid Layout */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-2">
               <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400 pb-2">
                 <span className="text-red-500">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span className="text-blue-500">토</span>
               </div>
 
               <div className="grid grid-cols-7 gap-1.5">
-                {currentPeriodShifts.map(([dateStr, code]) => {
-                  const [y, m, d] = dateStr.split('-');
-                  const dayNum = parseInt(d, 10);
-                  const monthNum = parseInt(m, 10);
-                  
+                {Object.entries(myShifts).map(([dateStr, code]) => {
+                  const dayNum = parseInt(dateStr.split('-')[2], 10);
                   const info = SHIFT_TYPES[code] || SHIFT_TYPES.OFF;
+                  const isCurrent = isCurrentMonth(dateStr);
                   const isSelected = dateStr === selectedDate;
                   const isToday = dateStr === todayStr;
-
-                  // 26일, 1일 등 주기가 시작하거나 월이 변경되는 날짜에 라벨 추가
-                  const showMonthLabel = dayNum === 1 || dayNum === 26;
 
                   return (
                     <button
                       key={dateStr}
                       onClick={() => setSelectedDate(dateStr)}
                       className={`relative aspect-square rounded-2xl p-1 flex flex-col justify-between transition-all border-2 ${
+                        !isCurrent ? 'opacity-25 grayscale-[30%]' : 'opacity-100'
+                      } ${
                         isSelected 
                           ? 'border-indigo-600 shadow-md ring-2 ring-indigo-100 z-10' 
                           : isToday 
@@ -233,7 +219,7 @@ export default function App() {
                     >
                       <div className="flex justify-between items-center w-full px-0.5">
                         <span className="text-[10px] font-bold opacity-80" style={{ color: info.textColor }}>
-                          {showMonthLabel ? `${monthNum}/${dayNum}` : dayNum}
+                          {dayNum}
                         </span>
                         {isToday && (
                           <span className="text-[8px] bg-amber-500 text-white font-extrabold px-1 rounded-xs">
@@ -367,7 +353,7 @@ export default function App() {
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2 text-pink-600"><Heart size={18} /> 같이 쉬는 날 (OFF Match)</h2>
             <div className="p-3.5 bg-pink-50 border border-pink-100 text-pink-800 rounded-xl text-xs space-y-1">
-              <p className="font-bold text-sm">🎉 9월 5일(토) 동시 휴무!</p>
+              <p className="font-bold text-sm">🎉 8월 23일(일) 동시 휴무!</p>
               <p>{privacyBlur ? '사용자' : userName}, 김민지, 정수진 쌤이 같이 쉬는 날입니다.</p>
             </div>
           </div>
