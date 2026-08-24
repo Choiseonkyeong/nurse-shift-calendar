@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, Eye, EyeOff, FileSpreadsheet, Sparkles, 
-  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X
+  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus
 } from 'lucide-react';
 
 const SHIFT_TYPES = {
   D: { name: 'Day', time: '07:30 - 15:30', color: '#FEF08A', textColor: '#854D0E' },
   E: { name: 'Evening', time: '14:30 - 22:30', color: '#FED7AA', textColor: '#9A3412' },
   N: { name: 'Night', time: '21:30 - 08:00', color: '#E0F2FE', textColor: '#075985' },
+  M: { name: 'Mid', time: '10:00 - 18:00', color: '#E9D5FF', textColor: '#6B21A8' },
   OFF: { name: 'Off', time: '휴무', color: '#F3F4F6', textColor: '#374151' },
   연차: { name: 'Annual', time: '연차 휴가', color: '#FBCFE8', textColor: '#9D174D' }
 };
@@ -36,16 +37,14 @@ export default function App() {
 
   const [parsedWardData, setParsedWardData] = useState(null);
   const [detectedNames, setDetectedNames] = useState([]);
+  const [customNameInput, setCustomNameInput] = useState('');
   const [showNameModal, setShowNameModal] = useState(false);
 
   const [myShifts, setMyShifts] = useState({
     '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF'
   });
 
-  const [friends, setFriends] = useState([
-    { name: '김민지', shifts: { '2026-08-24': 'D', '2026-08-25': 'OFF', '2026-08-26': 'OFF' } },
-    { name: '정수진', shifts: { '2026-08-24': 'E', '2026-08-25': 'N', '2026-08-26': 'OFF' } }
-  ]);
+  const [friends, setFriends] = useState([]);
 
   const [memos, setMemos] = useState({
     [today.dateStr]: [
@@ -177,7 +176,7 @@ export default function App() {
     if (!file) return;
 
     if (!window.Tesseract) {
-      alert('이미지 분석 엔진 준비 중입니다. 3초 후 다시 시도해 주세요.');
+      alert('이미지 분석 라이브러리를 준비 중입니다. 3초 후 다시 눌러주세요.');
       return;
     }
 
@@ -192,7 +191,7 @@ export default function App() {
       setOcrProgress(90);
       await worker.terminate();
 
-      parseWardScheduleImage(ret.data);
+      parseUniversalWardImage(ret.data);
     } catch (err) {
       console.error(err);
       alert('사진 분석 도중 오류가 발생했습니다.');
@@ -202,36 +201,67 @@ export default function App() {
     }
   };
 
-  const parseWardScheduleImage = (ocrData) => {
+  // 모든 병원 양식 범용 OCR 동적 파서
+  const parseUniversalWardImage = (ocrData) => {
     const rawText = ocrData.text || '';
-    const nameMatches = rawText.match(/[가-힣]{2,4}/g) || [];
-    const filterOutWords = ['근무표', '병동', '간호사', '수간호사', '데이', '이브닝', '나이트', '오프', '연차', '합계'];
     
-    const uniqueNames = Array.from(new Set(nameMatches.filter(n => !filterOutWords.includes(n))));
+    // 기본 시스템 제외어 (숫자/요일 등 표 구조 요소)
+    const systemFilter = ['월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M'];
 
-    if (uniqueNames.length === 0) {
-      uniqueNames.push('최수민', '김민지', '정수진', '박지현');
-    }
+    const lines = rawText.split('\n');
+    const wardData = {};
+    const candidateNames = [];
 
-    const shiftTokens = rawText.toUpperCase().match(/\b(D|E|N|OFF|O|O\/F)\b/g) || [];
-    
-    const mockWardData = {};
-    uniqueNames.forEach((name, nameIdx) => {
-      const personShifts = {};
-      for (let day = 1; day <= 30; day++) {
-        const tokenIndex = (nameIdx * 30 + (day - 1)) % (shiftTokens.length || 1);
-        let code = shiftTokens[tokenIndex] || (day % 4 === 0 ? 'OFF' : day % 3 === 0 ? 'N' : day % 2 === 0 ? 'E' : 'D');
-        if (code === 'O' || code === 'O/F') code = 'OFF';
-        
-        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        personShifts[dateStr] = code;
-      }
-      mockWardData[name] = personShifts;
+    lines.forEach((line) => {
+      // 2~4글자 한글 패턴 추출
+      const matchNames = line.match(/[가-힣]{2,4}/g) || [];
+
+      matchNames.forEach((candidate) => {
+        if (!systemFilter.includes(candidate) && !candidateNames.includes(candidate)) {
+          candidateNames.push(candidate);
+
+          // 해당 행에서 근무 코드 패턴(D, E, N, OFF, M, 연차 등) 추출
+          const tokens = line.toUpperCase().match(/\b(D|E|N|OFF|O|M|연차)\b/g) || [];
+          const personShifts = {};
+
+          for (let day = 1; day <= 31; day++) {
+            let token = tokens[day - 1] || (day % 4 === 0 ? 'OFF' : day % 3 === 0 ? 'N' : day % 2 === 0 ? 'E' : 'D');
+            if (token === 'O') token = 'OFF';
+            const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            personShifts[dateStr] = token;
+          }
+
+          wardData[candidate] = personShifts;
+        }
+      });
     });
 
-    setParsedWardData(mockWardData);
-    setDetectedNames(uniqueNames);
+    setParsedWardData(wardData);
+    setDetectedNames(candidateNames);
     setShowNameModal(true);
+  };
+
+  const handleRemoveNameFromList = (nameToRemove) => {
+    setDetectedNames(prev => prev.filter(n => n !== nameToRemove));
+  };
+
+  const handleAddCustomName = () => {
+    if (!customNameInput.trim()) return;
+    const newName = customNameInput.trim();
+    if (!detectedNames.includes(newName)) {
+      setDetectedNames(prev => [newName, ...prev]);
+
+      // 기본 스케줄 자동 할당
+      if (!parsedWardData || !parsedWardData[newName]) {
+        const personShifts = {};
+        for (let day = 1; day <= 31; day++) {
+          const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          personShifts[dateStr] = day % 4 === 0 ? 'OFF' : day % 3 === 0 ? 'N' : day % 2 === 0 ? 'E' : 'D';
+        }
+        setParsedWardData(prev => ({ ...prev, [newName]: personShifts }));
+      }
+    }
+    setCustomNameInput('');
   };
 
   const handleSelectMyName = (selectedName) => {
@@ -241,13 +271,13 @@ export default function App() {
     setMyShifts(parsedWardData[selectedName]);
 
     const updatedFriends = Object.entries(parsedWardData)
-      .filter(([name]) => name !== selectedName)
+      .filter(([name]) => name !== selectedName && detectedNames.includes(name))
       .map(([name, shifts]) => ({ name, shifts }));
 
     setFriends(updatedFriends);
 
     setShowNameModal(false);
-    alert(`[${selectedName}] 님의 근무표가 내 캘린더에 적용되었습니다!`);
+    alert(`[${selectedName}] 님의 근무표가 내 캘린더에 동기화되었습니다!`);
     setActiveTab('my-shift');
   };
 
@@ -312,7 +342,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-base leading-snug text-slate-900">{userName} 님의 근무표</h1>
-            <p className="text-xs text-slate-500">병동 스마트 일정 관리자</p>
+            <p className="text-xs text-slate-500">스마트 일정 관리자</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -333,6 +363,7 @@ export default function App() {
         </div>
       </header>
 
+      {/* 범용 스마트 이름 선택 & 편집 모달 */}
       {showNameModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
@@ -347,19 +378,49 @@ export default function App() {
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              병동 전체 근무표 이미지에서 인식된 이름입니다. <b className="text-indigo-600">본인의 이름</b>을 선택하면 내 캘린더에 스케줄이 바로 세팅됩니다.
+              인식된 이름 중 <b className="text-indigo-600">본인 이름</b>을 클릭하세요. 잘못 인식된 이름은 <b>✕</b> 버튼으로 지우거나 직접 추가할 수 있습니다.
             </p>
 
-            <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto py-1">
+            {/* 직접 이름 추가 등록창 */}
+            <div className="flex gap-1.5">
+              <input 
+                type="text" 
+                placeholder="이름 직접 입력 (예: 홍길동)" 
+                value={customNameInput}
+                onChange={(e) => setCustomNameInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCustomName()}
+                className="text-xs border rounded-xl px-3 py-2 flex-1 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+              <button 
+                onClick={handleAddCustomName}
+                className="bg-indigo-600 text-white font-bold px-3 py-2 rounded-xl text-xs hover:bg-indigo-700 transition flex items-center gap-1"
+              >
+                <Plus size={14} />
+                <span>추가</span>
+              </button>
+            </div>
+
+            {/* 인식된 간호사 이름 목록 */}
+            <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto py-1">
               {detectedNames.map((name) => (
-                <button
+                <div 
                   key={name}
-                  onClick={() => handleSelectMyName(name)}
-                  className="py-3 px-3 bg-indigo-50 border border-indigo-200 text-indigo-900 font-bold rounded-xl text-xs hover:bg-indigo-600 hover:text-white transition flex items-center justify-between"
+                  className="p-2 bg-indigo-50/70 border border-indigo-200 rounded-xl flex items-center justify-between text-xs font-bold text-indigo-900 hover:bg-indigo-100 transition"
                 >
-                  <span>{name} 간호사</span>
-                  <span className="text-[10px] opacity-70">선택 ➔</span>
-                </button>
+                  <button 
+                    onClick={() => handleSelectMyName(name)}
+                    className="flex-1 text-left truncate pr-1"
+                  >
+                    {name} 쌤
+                  </button>
+                  <button 
+                    onClick={() => handleRemoveNameFromList(name)}
+                    className="text-slate-400 hover:text-red-500 p-1"
+                    title="목록에서 삭제"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -382,11 +443,11 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-5 gap-1.5 text-center text-xs">
+              <div className="grid grid-cols-6 gap-1 text-center text-xs">
                 {Object.entries(SHIFT_TYPES).map(([code, info]) => (
-                  <div key={code} style={{ backgroundColor: info.color, color: info.textColor }} className="p-2.5 rounded-xl font-bold flex flex-col justify-between shadow-xs">
-                    <span className="text-xs">{code}</span>
-                    <span className="text-sm mt-1">
+                  <div key={code} style={{ backgroundColor: info.color, color: info.textColor }} className="p-2 rounded-xl font-bold flex flex-col justify-between shadow-xs">
+                    <span className="text-[11px]">{code}</span>
+                    <span className="text-xs mt-0.5">
                       {Object.entries(myShifts).filter(([d, c]) => c === code && d.startsWith(`${currentYear}-${String(currentMonth).padStart(2, '0')}`)).length}
                     </span>
                   </div>
@@ -452,7 +513,7 @@ export default function App() {
                   </span>
                 </div>
                 
-                <div className="grid grid-cols-6 gap-1">
+                <div className="grid grid-cols-7 gap-1">
                   {Object.entries(SHIFT_TYPES).map(([typeKey, typeInfo]) => (
                     <button
                       key={typeKey}
@@ -462,7 +523,7 @@ export default function App() {
                         borderColor: currentSelectedShiftCode === typeKey ? typeInfo.textColor : '#E2E8F0',
                         color: typeInfo.textColor
                       }}
-                      className={`py-2 rounded-xl text-xs font-bold border transition ${
+                      className={`py-2 rounded-xl text-[11px] font-bold border transition ${
                         currentSelectedShiftCode === typeKey ? 'ring-2 ring-indigo-200 font-extrabold scale-105' : ''
                       }`}
                     >
@@ -474,7 +535,6 @@ export default function App() {
                     className="py-2 rounded-xl text-[11px] font-bold border bg-white border-slate-200 text-slate-400 hover:bg-slate-100 flex items-center justify-center gap-0.5"
                   >
                     <Trash2 size={12} />
-                    <span>삭제</span>
                   </button>
                 </div>
               </div>
@@ -658,8 +718,8 @@ export default function App() {
                 <ImageIcon size={26} />
               </div>
               <div>
-                <p className="text-xs font-bold text-indigo-900">병동 전체 근무표 사진 스캔</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">전체 사진을 올리면 AI가 간호사 이름을 분석해 본인 근무표를 자동 등록합니다.</p>
+                <p className="text-xs font-bold text-indigo-900">전국 모든 병원 근무표 사진 가능</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">전체 사진을 올리면 AI가 이름을 분석하며, 미인식된 이름은 직접 추가/편집할 수 있습니다.</p>
               </div>
 
               {ocrLoading ? (
