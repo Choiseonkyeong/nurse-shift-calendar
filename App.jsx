@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calendar, Users, Heart, AlertTriangle, 
-  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload
+  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -25,28 +25,33 @@ export default function App() {
   const todayStr = getTodayString();
 
   const [activeTab, setActiveTab] = useState('my-shift');
-  const [baseMonth, setBaseMonth] = useState('2026-08');
+  const [currentYear, setCurrentYear] = useState(2026);
+  const [currentMonth, setCurrentMonth] = useState(9); // 기본 9월 선택
   const [userName] = useState('최수민');
-  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [selectedDate, setSelectedDate] = useState('2026-09-01');
+
+  // 스와이프 터치 이벤트 상태
+  const [touchStartX, setTouchStartX] = useState(null);
 
   const [myShifts, setMyShifts] = useState({
-    // 7월 이월 영역
-    '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'OFF',
-    // 8월 달력 실제 날짜 (8/1 ~ 8/31)
-    '2026-08-01': 'OFF', '2026-08-02': 'D', '2026-08-03': 'D', '2026-08-04': 'E', '2026-08-05': 'E',
-    '2026-08-06': 'OFF', '2026-08-07': 'OFF', '2026-08-08': 'N', '2026-08-09': 'N', '2026-08-10': 'OFF',
-    '2026-08-11': 'OFF', '2026-08-12': 'D', '2026-08-13': 'D', '2026-08-14': 'E', '2026-08-15': 'E',
-    '2026-08-16': 'OFF', '2026-08-17': 'OFF', '2026-08-18': 'D', '2026-08-19': 'D', '2026-08-20': 'N',
-    '2026-08-21': 'N', '2026-08-22': 'N', '2026-08-23': 'OFF', '2026-08-24': 'D', '2026-08-25': 'D',
-    '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF',
-    '2026-08-31': 'D',
-    // 9월 이월 영역
-    '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E', '2026-09-05': 'OFF'
+    // 8월 데이터
+    '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', 
+    '2026-08-29': 'OFF', '2026-08-30': 'OFF', '2026-08-31': 'D',
+    // 9월 데이터
+    '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E', '2026-09-05': 'OFF',
+    '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N', '2026-09-10': 'N',
+    '2026-09-11': 'N', '2026-09-12': 'OFF', '2026-09-13': 'OFF', '2026-09-14': 'D', '2026-09-15': 'E',
+    '2026-09-16': 'E', '2026-09-17': 'N', '2026-09-18': 'OFF', '2026-09-19': 'OFF', '2026-09-20': 'D',
+    '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N',
+    '2026-09-26': 'E', '2026-09-27': 'E', '2026-09-28': 'N', '2026-09-29': 'OFF', '2026-09-30': 'OFF'
   });
 
   const [memos, setMemos] = useState({
-    '2026-08-24': [
-      { id: 1, type: '인수인계', time: '08:00', text: '인수인계 및 정기 V/S 체크', checked: false }
+    '2026-09-01': [
+      { id: 1, type: '개인일정', time: '09:00', text: '9월 첫날 병동 일정 확인', checked: false }
+    ],
+    '2026-09-11': [
+      { id: 2, type: '인수인계', time: '21:30', text: '3연나이트 시작 환자 인수인계 주의', checked: false }
     ]
   });
 
@@ -57,14 +62,87 @@ export default function App() {
   const [pastedText, setPastedText] = useState('');
 
   const friends = [
-    { name: '김민지', shifts: { '2026-08-24': 'D', '2026-08-25': 'OFF' } },
-    { name: '정수진', shifts: { '2026-08-24': 'E', '2026-08-25': 'N' } }
+    { name: '김민지', shifts: { '2026-09-05': 'OFF', '2026-09-12': 'OFF', '2026-09-11': 'E' } },
+    { name: '정수진', shifts: { '2026-09-05': 'OFF', '2026-09-12': 'OFF', '2026-09-11': 'N' } }
   ];
 
-  // 해당 날짜가 현재 선택된 '월(baseMonth)'의 날짜인지 판별 (예: baseMonth가 2026-08이면 8월 달만 true)
-  const isCurrentMonth = (dateStr) => {
-    return dateStr.startsWith(baseMonth);
+  // 이전 달 이동
+  const handlePrevMonth = () => {
+    if (currentMonth === 1) {
+      setCurrentMonth(12);
+      setCurrentYear(currentYear - 1);
+    } else {
+      setCurrentMonth(currentMonth - 1);
+    }
   };
+
+  // 다음 달 이동
+  const handleNextMonth = () => {
+    if (currentMonth === 12) {
+      setCurrentMonth(1);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(currentMonth + 1);
+    }
+  };
+
+  // 터치 스와이프 제스처 핸들러
+  const handleTouchStart = (e) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!touchStartX) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diffX = touchStartX - touchEndX;
+
+    if (diffX > 50) {
+      handleNextMonth(); // 왼쪽으로 밀면 다음달
+    } else if (diffX < -50) {
+      handlePrevMonth(); // 오른쪽으로 밀면 저번달
+    }
+    setTouchStartX(null);
+  };
+
+  // 표준 월별 그리드 생성 함수 (안드로이드 캘린더 동일 방식)
+  const generateCalendarDays = () => {
+    const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1);
+    const lastDayOfMonth = new Date(currentYear, currentMonth, 0);
+    
+    const startDayOfWeek = firstDayOfMonth.getDay(); // 시작 요일 (0:일 ~ 6:토)
+    const daysInMonth = lastDayOfMonth.getDate();
+
+    const days = [];
+
+    // 1. 이전 달 이월 날짜 채우기
+    const prevMonthLastDay = new Date(currentYear, currentMonth - 1, 0).getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      const prevDay = prevMonthLastDay - i;
+      const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+      const dateStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevDay).padStart(2, '0')}`;
+      days.push({ dateStr, dayNum: prevDay, isCurrentMonth: false });
+    }
+
+    // 2. 현재 선택된 달 날짜 채우기 (1일 ~ 말일)
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      days.push({ dateStr, dayNum: i, isCurrentMonth: true });
+    }
+
+    // 3. 다음 달 이월 날짜 채우기 (7열 그리드 맞춤)
+    const remainingSlots = (7 - (days.length % 7)) % 7;
+    for (let i = 1; i <= remainingSlots; i++) {
+      const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+      const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+      const dateStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      days.push({ dateStr, dayNum: i, isCurrentMonth: false });
+    }
+
+    return days;
+  };
+
+  const calendarDays = generateCalendarDays();
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -84,10 +162,9 @@ export default function App() {
   const parseMatrixData = (rows) => {
     let dateRow = rows[0];
     let codeRow = rows[1] || rows[0];
-    const [year, month] = baseMonth.split('-').map(Number);
     const updatedShifts = { ...myShifts };
-    let currMonth = month;
-    let currYear = year;
+    let currMonth = currentMonth;
+    let currYear = currentYear;
     let prevDay = 0;
 
     codeRow.forEach((rawCode, idx) => {
@@ -120,8 +197,10 @@ export default function App() {
     setMemoTime('');
   };
 
+  // 현재 선택된 달(1일~말일) 근무 통계
   const getShiftCount = (code) => {
-    return Object.entries(myShifts).filter(([d, c]) => c === code && isCurrentMonth(d)).length;
+    const monthPrefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+    return Object.entries(myShifts).filter(([d, c]) => c === code && d.startsWith(monthPrefix)).length;
   };
 
   return (
@@ -152,20 +231,33 @@ export default function App() {
               <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
               <div className="text-xs space-y-1">
                 <span className="font-bold block text-amber-900">3연속 나이트(3N) 피로도 경고</span>
-                <p className="text-amber-700 leading-relaxed">2026-08-22 기준 연속 3번째 나이트 근무입니다. 누적 피로에 유의하세요!</p>
+                <p className="text-amber-700 leading-relaxed">2026-09-11 기준 연속 3번째 나이트 근무입니다. 누적 피로에 유의하세요!</p>
               </div>
             </div>
 
+            {/* Shift Summary & Year-Month Navigation */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="font-extrabold text-xl text-slate-900">{baseMonth.split('-')[0]}년 {parseInt(baseMonth.split('-')[1], 10)}월</h2>
-                  <span className="inline-block bg-indigo-50 text-indigo-600 text-[11px] px-2 py-0.5 rounded-md font-semibold mt-0.5">표준 캘린더 모드</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={handlePrevMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <h2 className="font-extrabold text-xl text-slate-900">{currentYear}년 {currentMonth}월</h2>
+                  <button onClick={handleNextMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600">
+                    <ChevronRight size={20} />
+                  </button>
                 </div>
                 <input 
                   type="month" 
-                  value={baseMonth} 
-                  onChange={(e) => setBaseMonth(e.target.value)}
+                  value={`${currentYear}-${String(currentMonth).padStart(2, '0')}`} 
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const [y, m] = e.target.value.split('-').map(Number);
+                      setCurrentYear(y);
+                      setCurrentMonth(m);
+                      setSelectedDate(`${y}-${String(m).padStart(2, '0')}-01`);
+                    }
+                  }}
                   className="text-xs border rounded-lg p-1.5 text-slate-600 font-medium"
                 />
               </div>
@@ -188,17 +280,20 @@ export default function App() {
               </div>
             </div>
 
-            {/* Standard Calendar Grid Layout */}
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-2">
+            {/* Standard Calendar Grid (Supports Swipe Gesture) */}
+            <div 
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-2 select-none"
+            >
               <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400 pb-2">
                 <span className="text-red-500">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span className="text-blue-500">토</span>
               </div>
 
               <div className="grid grid-cols-7 gap-1.5">
-                {Object.entries(myShifts).map(([dateStr, code]) => {
-                  const dayNum = parseInt(dateStr.split('-')[2], 10);
+                {calendarDays.map(({ dateStr, dayNum, isCurrentMonth }) => {
+                  const code = myShifts[dateStr] || 'OFF';
                   const info = SHIFT_TYPES[code] || SHIFT_TYPES.OFF;
-                  const isCurrent = isCurrentMonth(dateStr);
                   const isSelected = dateStr === selectedDate;
                   const isToday = dateStr === todayStr;
 
@@ -207,7 +302,7 @@ export default function App() {
                       key={dateStr}
                       onClick={() => setSelectedDate(dateStr)}
                       className={`relative aspect-square rounded-2xl p-1 flex flex-col justify-between transition-all border-2 ${
-                        !isCurrent ? 'opacity-25 grayscale-[30%]' : 'opacity-100'
+                        !isCurrentMonth ? 'opacity-20 grayscale-[50%]' : 'opacity-100'
                       } ${
                         isSelected 
                           ? 'border-indigo-600 shadow-md ring-2 ring-indigo-100 z-10' 
@@ -353,7 +448,7 @@ export default function App() {
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2 text-pink-600"><Heart size={18} /> 같이 쉬는 날 (OFF Match)</h2>
             <div className="p-3.5 bg-pink-50 border border-pink-100 text-pink-800 rounded-xl text-xs space-y-1">
-              <p className="font-bold text-sm">🎉 8월 23일(일) 동시 휴무!</p>
+              <p className="font-bold text-sm">🎉 9월 5일(토) 동시 휴무!</p>
               <p>{privacyBlur ? '사용자' : userName}, 김민지, 정수진 쌤이 같이 쉬는 날입니다.</p>
             </div>
           </div>
