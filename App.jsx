@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Calendar, Users, Heart, AlertTriangle, 
-  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X
+  Calendar, Users, Heart, Eye, EyeOff, FileSpreadsheet, Sparkles, 
+  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X
 } from 'lucide-react';
 
 const SHIFT_TYPES = {
@@ -177,7 +177,7 @@ export default function App() {
     if (!file) return;
 
     if (!window.Tesseract) {
-      alert('이미지 분석 라이브러리를 준비 중입니다. 3초 후 다시 시도해 주세요.');
+      alert('이미지 분석 엔진 준비 중입니다. 3초 후 다시 시도해 주세요.');
       return;
     }
 
@@ -334,7 +334,7 @@ export default function App() {
       </header>
 
       {showNameModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3">
               <div className="flex items-center gap-2 text-indigo-600">
