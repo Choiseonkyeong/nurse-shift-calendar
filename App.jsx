@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, AlertTriangle, 
-  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock
+  DollarSign, Eye, EyeOff, FileSpreadsheet, Sparkles, Upload, ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -42,22 +42,36 @@ export default function App() {
 
   const [memos, setMemos] = useState({
     [today.dateStr]: [
-      { id: 1, type: '인수인계', time: '오전 08:00', text: '오늘 스케줄 및 병동 상태 확인', alertOffset: '0', alertText: '정시 알림', checked: false }
+      { id: 1, type: '인수인계', time: '오전 08:00', text: '오늘 스케줄 및 병동 상태 확인', alertOffset: '0', alertText: '정시 알림', alertType: 'both', checked: false }
     ]
   });
 
-  // 메모 및 시간/알림 입력 폼 상태
   const [memoText, setMemoText] = useState('');
   const [memoCategory, setMemoCategory] = useState('인수인계');
   const [ampm, setAmpm] = useState('오전');
   const [hour, setHour] = useState('09');
   const [minute, setMinute] = useState('00');
-  const [alertOffset, setAlertOffset] = useState('10'); // 기본 10분 전 알림
+  const [alertOffset, setAlertOffset] = useState('10');
+  const [alertType, setAlertType] = useState('both'); // both(소리+진동), sound(소리만), vibrate(진동만), silent(무음)
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
   const [pastedText, setPastedText] = useState('');
 
-  // 브라우저 알림 권한 요청 및 타이머 체크
+  // 소리 및 진동 알림 실행 함수
+  const playNotificationSoundAndVibrate = (type) => {
+    // 1. 소리 재생
+    if (type === 'both' || type === 'sound') {
+      try {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(() => {});
+      } catch (e) {}
+    }
+    // 2. 진동 실행 (모바일 웹 API)
+    if ((type === 'both' || type === 'vibrate') && 'vibrate' in navigator) {
+      navigator.vibrate([200, 100, 200]); // 짧게 2번 진동
+    }
+  };
+
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
@@ -65,7 +79,7 @@ export default function App() {
 
     const timer = setInterval(() => {
       checkScheduledAlerts();
-    }, 30000); // 30초마다 체크
+    }, 30000);
 
     return () => clearInterval(timer);
   }, [memos]);
@@ -77,7 +91,6 @@ export default function App() {
 
     todayMemos.forEach(m => {
       if (m.alertOffset !== 'none' && !m.alertTriggered) {
-        // 알림 시간 계산 로직
         let [ap, timeStr] = m.time.split(' ');
         let [h, min] = timeStr.split(':').map(Number);
         if (ap === '오후' && h < 12) h += 12;
@@ -88,10 +101,13 @@ export default function App() {
 
         if (now >= alertTime && now < targetTime) {
           m.alertTriggered = true;
+          
+          // 소리 및 진동 피드백 발동
+          playNotificationSoundAndVibrate(m.alertType || 'both');
+
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(`[간호 근무표] ${m.type} 알림`, {
-              body: `${m.text} (${m.time} - ${m.alertText})`,
-              icon: '/favicon.ico'
+              body: `${m.text} (${m.time} - ${m.alertText})`
             });
           } else {
             alert(`⏰ [알림] ${m.text}\n시간: ${m.time} (${m.alertText})`);
@@ -177,6 +193,7 @@ export default function App() {
         time: formattedTime,
         alertOffset: alertOffset,
         alertText: alertTextMap[alertOffset],
+        alertType: alertType,
         text: memoText,
         checked: false,
         alertTriggered: false
@@ -292,7 +309,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Shift Quick Editor & Detailed Alarm Scheduler */}
+            {/* Shift Quick Editor & Sound/Vibration Alarm Scheduler */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2">
                 <div className="flex justify-between items-center text-xs">
@@ -332,15 +349,14 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Schedule & Custom Alarm Input Form */}
+              {/* Schedule Form with Sound/Vibration Selection */}
               <div className="space-y-3 pt-1">
                 <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <Bell size={16} className="text-indigo-600" />
-                  <span>일정 및 사용자 지정 알림 등록</span>
+                  <span>일정 및 알림 방식 설정</span>
                 </span>
 
                 <div className="space-y-2 bg-indigo-50/40 p-3.5 rounded-xl border border-indigo-100">
-                  {/* Category Buttons */}
                   <div className="flex gap-1.5 text-xs">
                     {['인수인계', '중요/공지', '개인일정'].map((cat) => (
                       <button
@@ -355,7 +371,7 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* AM/PM, Time & Alarm Offset Selector */}
+                  {/* Time & Alert Timing Selection */}
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="flex items-center gap-1 bg-white p-1.5 rounded-lg border">
                       <Clock size={14} className="text-slate-400" />
@@ -377,7 +393,6 @@ export default function App() {
 
                     <div className="flex items-center gap-1 bg-white p-1.5 rounded-lg border">
                       <Bell size={14} className="text-slate-400" />
-                      <span className="text-slate-500 text-[11px]">미리 알림:</span>
                       <select value={alertOffset} onChange={(e) => setAlertOffset(e.target.value)} className="bg-transparent font-bold text-indigo-600 outline-none flex-1">
                         <option value="none">알림 없음</option>
                         <option value="0">정시 알림</option>
@@ -390,11 +405,24 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Text Input & Add Button */}
-                  <div className="flex gap-2">
+                  {/* Sound / Vibration Option Bar */}
+                  <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border text-xs">
+                    <span className="text-slate-500 font-semibold flex items-center gap-1">
+                      <Volume2 size={13} />
+                      <span>알림 방식:</span>
+                    </span>
+                    <select value={alertType} onChange={(e) => setAlertType(e.target.value)} className="bg-transparent font-bold text-indigo-600 outline-none">
+                      <option value="both">🔊 소리 + 📳 진동</option>
+                      <option value="sound">🔊 소리만</option>
+                      <option value="vibrate">📳 진동만</option>
+                      <option value="silent">🔇 무음 (화면 팝업만)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
                     <input 
                       type="text" 
-                      placeholder="일정/메모 내용 입력" 
+                      placeholder="일정 내용 입력" 
                       value={memoText} 
                       onChange={(e) => setMemoText(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddMemo()}
@@ -409,7 +437,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Scheduled List */}
                 <div className="space-y-2 pt-1">
                   {(memos[selectedDate] || []).length === 0 ? (
                     <p className="text-xs text-slate-400 text-center py-3">등록된 알림 일정이 없습니다.</p>
@@ -434,12 +461,12 @@ export default function App() {
                             className="w-4 h-4 rounded text-indigo-600"
                           />
                           <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px]">{m.type}</span>
                               <span className="font-semibold text-slate-700">{m.time}</span>
                               {m.alertText !== '알림 없음' && (
-                                <span className="text-[10px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-0.5">
-                                  🔔 {m.alertText}
+                                <span className="text-[10px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded border border-amber-200">
+                                  🔔 {m.alertText} ({m.alertType === 'both' ? '소리+진동' : m.alertType === 'vibrate' ? '진동' : m.alertType === 'sound' ? '소리' : '무음'})
                                 </span>
                               )}
                             </div>
@@ -469,31 +496,20 @@ export default function App() {
         {activeTab === 'friends' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2"><Users size={18} className="text-indigo-600" /> 동료 근무 현황</h2>
-            <div className="space-y-2">
-              {friends.map((f, i) => (
-                <div key={i} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-800">{privacyBlur ? '동료 ' + (i+1) : f.name}</span>
-                  <span className="text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded-lg">동기화 완료</span>
-                </div>
-              ))}
-            </div>
+            <p className="text-xs text-slate-500">동료 비교 기능이 곧 업그레이드될 예정입니다.</p>
           </div>
         )}
 
         {activeTab === 'off' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
             <h2 className="font-bold text-base flex items-center gap-2 text-pink-600"><Heart size={18} /> 같이 쉬는 날 (OFF Match)</h2>
-            <div className="p-3.5 bg-pink-50 border border-pink-100 text-pink-800 rounded-xl text-xs space-y-1">
-              <p className="font-bold text-sm">🎉 8월 25일(화) 동시 휴무!</p>
-              <p>{privacyBlur ? '사용자' : userName}, 김민지 쌤이 같이 쉬는 날입니다.</p>
-            </div>
+            <p className="text-xs text-slate-500">오프 매칭 기능이 곧 업그레이드될 예정입니다.</p>
           </div>
         )}
 
         {activeTab === 'register' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 등록</h2>
-
             <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 rounded-2xl text-center space-y-3">
               <div className="flex justify-center gap-2 text-indigo-600">
                 <Camera size={26} />
@@ -501,22 +517,8 @@ export default function App() {
               </div>
               <div>
                 <p className="text-xs font-bold text-indigo-900">근무표 사진으로 자동 스캔 등록</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">갤러리 사진이나 촬영한 사진을 올리면 AI가 글자를 분석합니다.</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">사진을 올리면 글자를 자동으로 분석합니다.</p>
               </div>
-
-              {ocrLoading ? (
-                <div className="space-y-1.5 py-2">
-                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${ocrProgress}%` }}></div>
-                  </div>
-                  <p className="text-[11px] font-bold text-indigo-600 animate-pulse">이미지 글자 분석 중... ({ocrProgress}%)</p>
-                </div>
-              ) : (
-                <label className="inline-block cursor-pointer bg-indigo-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition">
-                  사진 선택 / 촬영하기
-                  <input type="file" accept="image/*" onChange={() => {}} className="hidden" />
-                </label>
-              )}
             </div>
           </div>
         )}
