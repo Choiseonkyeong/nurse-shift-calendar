@@ -25,11 +25,22 @@ jobs:
     - name: Build Web App
       run: npm run build
 
+    - name: Check Build Directory
+      run: |
+        if [ -d "dist" ]; then
+          echo "WEB_DIR=dist" >> $GITHUB_ENV
+        elif [ -d "build" ]; then
+          echo "WEB_DIR=build" >> $GITHUB_ENV
+        else
+          echo "WEB_DIR=dist" >> $GITHUB_ENV
+        fi
+
     - name: Initialize Capacitor & Add Android Platform
       run: |
-        npx cap init "NurseShift" "com.nurseshift.app" --web-dir dist
-        npx cap add android
-        npx cap copy android
+        npx cap init "NurseShift" "com.nurseshift.app" --web-dir ${{ env.WEB_DIR }}
+        if [ ! -d "android" ]; then
+          npx cap add android
+        fi
         npx cap sync android
 
     - name: Setup Java JDK
