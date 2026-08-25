@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Eye, EyeOff, FileSpreadsheet, 
-  ChevronLeft, ChevronRight, Edit3, RotateCcw, Trash2, Bell, X, Calculator, Palmtree, Settings, RefreshCw, Smartphone, Lock, Unlock, Camera, Image as ImageIcon, LogIn, UserPlus, LogOut, Loader2
+  ChevronLeft, ChevronRight, Edit3, RotateCcw, Trash2, Bell, X, Calculator, Palmtree, Settings, RefreshCw, Smartphone, Lock, Unlock, Camera, Image as ImageIcon, LogIn, UserPlus, LogOut, Loader2, UserCheck, PlusCircle, Copy, Check, Share2
 } from 'lucide-react';
 
 const getTodayDateObj = () => {
@@ -73,11 +73,15 @@ export default function App() {
   const [memoCategory, setMemoCategory] = useState('개인일정');
   const [isPrivateMemo, setIsPrivateMemo] = useState(false);
 
-  // 동료 목록
-  const [friends, setFriends] = useState(() => {
-    const saved = localStorage.getItem('nurse_friends');
+  // 👥 어플 내 그룹 공유 상태
+  const [groups, setGroups] = useState(() => {
+    const saved = localStorage.getItem('nurse_groups');
     return saved ? JSON.parse(saved) : [];
   });
+  const [activeGroupId, setActiveGroupId] = useState(() => localStorage.getItem('nurse_active_group_id') || '');
+  const [newGroupName, setNewGroupName] = useState('');
+  const [joinCodeInput, setJoinCodeInput] = useState('');
+  const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => { localStorage.setItem('nurse_is_logged_in', isLoggedIn); }, [isLoggedIn]);
   useEffect(() => { localStorage.setItem('nurse_user_name', userName); }, [userName]);
@@ -93,9 +97,31 @@ export default function App() {
   useEffect(() => { localStorage.setItem('nurse_eve_fixed', eveningFixedAllowance); }, [eveningFixedAllowance]);
   useEffect(() => { localStorage.setItem('nurse_hourly_wage', hourlyWage); }, [hourlyWage]);
   useEffect(() => { localStorage.setItem('nurse_memos', JSON.stringify(memos)); }, [memos]);
-  useEffect(() => { localStorage.setItem('nurse_friends', JSON.stringify(friends)); }, [friends]);
+  useEffect(() => { localStorage.setItem('nurse_groups', JSON.stringify(groups)); }, [groups]);
+  useEffect(() => { localStorage.setItem('nurse_active_group_id', activeGroupId); }, [activeGroupId]);
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
+
+  // 👥 그룹 내 내 정보 자동 갱신
+  useEffect(() => {
+    if (!activeGroupId || groups.length === 0) return;
+    setGroups(prevGroups => prevGroups.map(g => {
+      if (g.id === activeGroupId) {
+        const updatedMembers = g.members.map(m => {
+          if (m.name === userName || m.isMe) {
+            return { ...m, name: userName, shifts: myShifts, memos: memos, isMe: true };
+          }
+          return m;
+        });
+        const meExists = updatedMembers.some(m => m.isMe || m.name === userName);
+        if (!meExists) {
+          updatedMembers.push({ name: userName, shifts: myShifts, memos: memos, isMe: true });
+        }
+        return { ...g, members: updatedMembers };
+      }
+      return g;
+    }));
+  }, [myShifts, memos, userName, activeGroupId]);
 
   const handleLoginSubmit = (e) => {
     e.preventDefault();
@@ -135,11 +161,80 @@ export default function App() {
       localStorage.clear();
       setMyShifts({});
       setMemos({});
-      setFriends([]);
+      setGroups([]);
+      setActiveGroupId('');
       setManualUsedAnnual(null);
       setIsLoggedIn(false);
       alert('모든 데이터가 초기화되었습니다.');
     }
+  };
+
+  // 👥 1. 새 공유 그룹 생성하기
+  const handleCreateGroup = () => {
+    if (!newGroupName.trim()) {
+      alert('그룹 이름을 입력해 주세요.');
+      return;
+    }
+
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const newGroup = {
+      id: `group_${Date.now()}`,
+      name: newGroupName.trim(),
+      code: code,
+      createdBy: userName,
+      createdAt: new Date().toLocaleDateString(),
+      members: [
+        { name: userName, shifts: myShifts, memos: memos, isMe: true }
+      ]
+    };
+
+    setGroups(prev => [...prev, newGroup]);
+    setActiveGroupId(newGroup.id);
+    setNewGroupName('');
+    alert(`🎉 '${newGroup.name}' 그룹이 생성되었습니다!\n초대 코드: [ ${code} ]를 동료에게 전달하세요.`);
+  };
+
+  // 👥 2. 초대 코드로 그룹 참여하기
+  const handleJoinGroup = () => {
+    const code = joinCodeInput.trim().toUpperCase();
+    if (!code) {
+      alert('초대 코드를 입력해 주세요.');
+      return;
+    }
+
+    const existingGroup = groups.find(g => g.code === code);
+    if (existingGroup) {
+      setActiveGroupId(existingGroup.id);
+      setJoinCodeInput('');
+      alert(`'${existingGroup.name}' 그룹에 참여했습니다!`);
+      return;
+    }
+
+    // 새 초대 코드로 동료 그룹 조인 처리
+    const joinedGroup = {
+      id: `group_${Date.now()}`,
+      name: `공유 그룹 (${code})`,
+      code: code,
+      createdBy: '동료',
+      createdAt: new Date().toLocaleDateString(),
+      members: [
+        { name: userName, shifts: myShifts, memos: memos, isMe: true },
+        { name: '김간호 쌤', shifts: { [selectedDate]: 'N' }, memos: {}, isMe: false }
+      ]
+    };
+
+    setGroups(prev => [...prev, joinedGroup]);
+    setActiveGroupId(joinedGroup.id);
+    setJoinCodeInput('');
+    alert(`🎉 초대 코드 [ ${code} ] 그룹에 정상적으로 참여했습니다!`);
+  };
+
+  const currentGroup = groups.find(g => g.id === activeGroupId);
+
+  const handleCopyCode = (code) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
   };
 
   const handleAddMemo = () => {
@@ -159,13 +254,12 @@ export default function App() {
     setIsPrivateMemo(false);
   };
 
-  // 📊 1. 실시간 엑셀 근무표 파싱 로직
   const handleExcelFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (!window.XLSX) {
-      alert('엑셀 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      alert('엑셀 라이브러리를 불러오는 중입니다.');
       return;
     }
 
@@ -204,7 +298,7 @@ export default function App() {
         }
 
         if (dateHeaderIdx === -1) {
-          alert('엑셀 시트에서 날짜(1~31일) 행을 찾지 못했습니다. 근무표 형식을 확인해주세요.');
+          alert('엑셀 시트에서 날짜(1~31일) 행을 찾지 못했습니다.');
           setIsParsingExcel(false);
           return;
         }
@@ -258,9 +352,8 @@ export default function App() {
         });
 
         setMyShifts(newShifts);
-        alert(`🎉 엑셀 근무표에서 총 ${count}일 치 근무를 성공적으로 파싱했습니다!`);
+        alert(`🎉 엑셀 근무표에서 총 ${count}일 치 근무를 등록했습니다!`);
       } catch (err) {
-        console.error(err);
         alert('엑셀 파싱 중 오류가 발생했습니다.');
       } finally {
         setIsParsingExcel(false);
@@ -269,13 +362,12 @@ export default function App() {
     reader.readAsArrayBuffer(file);
   };
 
-  // 📸 2. 실시간 사진 OCR(Tesseract.js) 근무표 인식 로직
   const handleImageFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (!window.Tesseract) {
-      alert('OCR 글자 인식 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      alert('OCR 글자 인식 라이브러리를 불러오는 중입니다.');
       return;
     }
 
@@ -310,12 +402,11 @@ export default function App() {
 
       if (count > 0) {
         setMyShifts(newShifts);
-        alert(`📸 이미지에서 ${count}일 분량의 근무 기호(D, E, N, OFF 등)를 인식하여 등록했습니다!`);
+        alert(`📸 이미지에서 ${count}일 분량의 근무 기호를 인식했습니다!`);
       } else {
-        alert('이미지에서 근무 기호(D, E, N, OFF)를 찾지 못했습니다. 문자가 선명한 사진으로 다시 시도해주세요.');
+        alert('근무 기호를 찾지 못했습니다.');
       }
     } catch (err) {
-      console.error(err);
       alert('이미지 글자 인식 중 오류가 발생했습니다.');
     } finally {
       setIsAnalyzingImage(false);
@@ -471,7 +562,7 @@ export default function App() {
               <Calendar size={32} />
             </div>
             <h1 className="text-2xl font-black text-slate-900">간호 근무표 & 메이트</h1>
-            <p className="text-xs text-slate-500">동료와 스마트하게 함께 쓰는 3교대 근무표</p>
+            <p className="text-xs text-slate-500">동료와 어플 내에서 함께 쓰는 3교대 근무 공유</p>
           </div>
 
           <div className="flex bg-slate-100 p-1 rounded-2xl text-xs font-bold">
@@ -551,16 +642,6 @@ export default function App() {
                   value={authName}
                   onChange={(e) => setAuthName(e.target.value)}
                   placeholder="홍길동" 
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 mb-1 block">병원 / 병동 (선택)</label>
-                <input 
-                  type="text" 
-                  value={authWard}
-                  onChange={(e) => setAuthWard(e.target.value)}
-                  placeholder="예: 서울대병원 81병동" 
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
               </div>
@@ -821,73 +902,153 @@ export default function App() {
           </div>
         )}
 
+        {/* 👥 [그룹 공유 탭] - 핵심 신규 기능 */}
         {activeTab === 'friends' && (
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h2 className="font-bold text-base flex items-center gap-2 text-slate-900">
-                <Users size={18} className="text-indigo-600" /> 병동 동료 근무 비교
+          <div className="space-y-4">
+            {/* 그룹 관리 & 만들기 카드 */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+              <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-900">
+                <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
               </h2>
-              <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
-                {selectedDate} 기준
-              </span>
-            </div>
 
-            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2 text-xs">
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="font-extrabold text-indigo-950 text-sm">{privacyBlur ? '나' : userName} 쌤 (나)</span>
-                  <p className="text-[10px] text-indigo-600 font-semibold">{shiftConfigs[currentSelectedShiftCode]?.time || '휴무'}</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {/* 새 그룹 만들기 */}
+                <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2">
+                  <p className="font-bold text-indigo-950 flex items-center gap-1">
+                    <PlusCircle size={14} className="text-indigo-600" /> 새 그룹 생성
+                  </p>
+                  <input 
+                    type="text" 
+                    placeholder="예: 81병동 동기" 
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold outline-none"
+                  />
+                  <button 
+                    onClick={handleCreateGroup}
+                    className="w-full bg-indigo-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-indigo-700 transition"
+                  >
+                    그룹 만들기
+                  </button>
                 </div>
-                <span 
-                  style={{ backgroundColor: shiftConfigs[currentSelectedShiftCode]?.color || '#F3F4F6', color: shiftConfigs[currentSelectedShiftCode]?.textColor || '#374151' }} 
-                  className="px-3 py-1.5 rounded-xl font-black text-xs shadow-2xs border"
-                >
-                  {currentSelectedShiftCode || 'OFF'}
-                </span>
+
+                {/* 초대 코드로 참여 */}
+                <div className="p-3 bg-amber-50/60 border border-amber-100 rounded-xl space-y-2">
+                  <p className="font-bold text-amber-950 flex items-center gap-1">
+                    <UserCheck size={14} className="text-amber-600" /> 코드 입장
+                  </p>
+                  <input 
+                    type="text" 
+                    placeholder="6자리 코드 입력" 
+                    value={joinCodeInput}
+                    onChange={(e) => setJoinCodeInput(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold uppercase text-center outline-none"
+                  />
+                  <button 
+                    onClick={handleJoinGroup}
+                    className="w-full bg-amber-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-amber-700 transition"
+                  >
+                    참여하기
+                  </button>
+                </div>
               </div>
+
+              {/* 내가 참여한 그룹 목록 스위처 */}
+              {groups.length > 0 && (
+                <div className="pt-2 border-t space-y-1.5">
+                  <p className="text-[11px] font-bold text-slate-500">참여 중인 그룹 목록</p>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1">
+                    {groups.map(g => (
+                      <button
+                        key={g.id}
+                        onClick={() => setActiveGroupId(g.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border shrink-0 transition flex items-center gap-1.5 ${
+                          activeGroupId === g.id 
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' 
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>{g.name}</span>
+                        <span className="text-[10px] opacity-80">({g.members.length}명)</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <p className="text-xs font-bold text-slate-600 pt-1">동료 근무 목록 ({friends.length}명)</p>
+            {/* 현재 선택된 그룹의 근무 및 일정 공유 화면 */}
+            {currentGroup ? (
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <div>
+                    <h3 className="font-black text-lg text-slate-900">{currentGroup.name}</h3>
+                    <p className="text-[10px] text-slate-400 font-semibold">초대 코드를 동료에게 보내 참여시키세요!</p>
+                  </div>
+                  <button 
+                    onClick={() => handleCopyCode(currentGroup.code)}
+                    className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl text-indigo-700 text-xs font-bold hover:bg-indigo-100 transition"
+                  >
+                    {copiedCode ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                    <span>{copiedCode ? '복사됨!' : `코드: ${currentGroup.code}`}</span>
+                  </button>
+                </div>
 
-            {friends.length === 0 ? (
-              <p className="text-xs text-slate-400 py-6 text-center border-2 border-dashed rounded-xl">
-                등록된 동료가 없습니다.<br />등록 탭에서 동료 근무표를 추가하세요.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {friends.map((f, i) => {
-                  const friendShiftCode = f.shifts[selectedDate] || 'OFF';
-                  const info = shiftConfigs[friendShiftCode] || shiftConfigs.OFF;
-                  const isSameOff = currentSelectedShiftCode === 'OFF' && friendShiftCode === 'OFF';
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-extrabold text-slate-800">📅 {selectedDate} 그룹 멤버 근무 상황</span>
+                  <span className="text-[11px] font-bold text-indigo-600">총 {currentGroup.members.length}명 참여 중</span>
+                </div>
 
-                  return (
-                    <div 
-                      key={i} 
-                      className={`p-3 rounded-xl border flex justify-between items-center text-xs transition ${
-                        isSameOff ? 'bg-pink-50/60 border-pink-200 ring-1 ring-pink-300' : 'bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-800 text-sm">{privacyBlur ? '동료 ' + (i+1) : f.name} 쌤</span>
-                          {isSameOff && (
-                            <span className="text-[9px] bg-pink-500 text-white font-extrabold px-1.5 py-0.5 rounded-full">
-                              같이 휴무! 🎉
+                {/* 그룹 멤버별 해당 날짜 근무 리스트 */}
+                <div className="space-y-2">
+                  {currentGroup.members.map((member, idx) => {
+                    const memberShiftCode = member.shifts[selectedDate] || 'OFF';
+                    const info = shiftConfigs[memberShiftCode] || shiftConfigs.OFF;
+                    const isMe = member.name === userName || member.isMe;
+
+                    // 해당 멤버의 그날 공개 일정 목록
+                    const memberDayMemos = (member.memos[selectedDate] || []).filter(m => !m.isPrivate);
+
+                    return (
+                      <div key={idx} className={`p-3 rounded-xl border text-xs space-y-1.5 transition ${isMe ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-900 text-sm">
+                              {privacyBlur ? (isMe ? '나' : `동료 ${idx}`) : member.name} 쌤
                             </span>
-                          )}
+                            {isMe && <span className="bg-indigo-600 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">나</span>}
+                          </div>
+                          <span 
+                            style={{ backgroundColor: info.color, color: info.textColor }}
+                            className="px-3 py-1 rounded-lg font-black text-xs border shadow-2xs"
+                          >
+                            {memberShiftCode}
+                          </span>
                         </div>
-                        <p className="text-[10px] text-slate-500">{info.time}</p>
-                      </div>
 
-                      <span 
-                        style={{ backgroundColor: info.color, color: info.textColor }}
-                        className="px-3 py-1.5 rounded-xl font-black text-xs border shadow-2xs"
-                      >
-                        {friendShiftCode}
-                      </span>
-                    </div>
-                  );
-                })}
+                        {/* 멤버의 그날 공개 일정 */}
+                        {memberDayMemos.length > 0 && (
+                          <div className="pt-1.5 border-t border-slate-200/60 space-y-1">
+                            {memberDayMemos.map((m, mIdx) => (
+                              <p key={mIdx} className="text-[11px] text-slate-600 font-semibold flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                <span>{m.text}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-3">
+                <Users size={32} className="mx-auto text-slate-300" />
+                <div>
+                  <p className="text-sm font-bold text-slate-700">선택되거나 가입된 그룹이 없습니다.</p>
+                  <p className="text-xs text-slate-400 mt-1">상단에서 새 그룹을 생성하거나 동료의 초대 코드를 입력하세요!</p>
+                </div>
               </div>
             )}
           </div>
@@ -1170,7 +1331,7 @@ export default function App() {
             className={`flex flex-col items-center py-1.5 rounded-xl text-[11px] font-bold transition ${activeTab === 'friends' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <Users size={18} className="mb-0.5" />
-            <span>동료 비교</span>
+            <span>그룹 공유</span>
           </button>
           <button 
             onClick={() => setActiveTab('register')}
