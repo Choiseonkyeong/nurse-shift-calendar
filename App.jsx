@@ -1,22 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Calendar, Users, Heart, Eye, EyeOff, FileSpreadsheet, Sparkles, 
-  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode, Calculator, Palmtree, Settings, RefreshCw, Smartphone, Lock, Unlock
+  Calendar, Users, Eye, EyeOff, FileSpreadsheet, 
+  ChevronLeft, ChevronRight, Edit3, RotateCcw, Trash2, Bell, X, Calculator, Palmtree, Settings, RefreshCw, Smartphone, Lock, Unlock
 } from 'lucide-react';
-
-const INVALID_NAMES = [
-  '근무시간', '근무사', '근무', '보고사항', '보고', '사항', '연차', '연채', '분당', '병동', 
-  '근무표', '합계', '구분', '직급', '성명', '이름', '월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M'
-];
-
-const DEFAULT_WARD_SHIFTS = {
-  '강인경': { '2026-08-01': 'D', '2026-08-02': 'OFF', '2026-08-03': 'D', '2026-08-04': 'D', '2026-08-05': 'D', '2026-08-06': 'D', '2026-08-07': 'OFF', '2026-08-08': 'OFF', '2026-08-09': 'D', '2026-08-10': 'D', '2026-08-28': 'OFF' },
-  '박혜영': { '2026-08-01': 'OFF', '2026-08-02': 'OFF', '2026-08-03': 'D', '2026-08-04': 'D', '2026-08-05': 'D', '2026-08-06': 'E', '2026-08-07': 'N', '2026-08-08': 'N', '2026-08-09': 'OFF', '2026-08-10': 'OFF', '2026-08-28': 'OFF' },
-  '김비나': { '2026-08-01': 'OFF', '2026-08-02': 'D', '2026-08-03': 'E', '2026-08-04': 'E', '2026-08-05': 'E', '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'D', '2026-08-09': 'E', '2026-08-10': 'E', '2026-08-28': 'OFF' },
-  '이경은': { '2026-08-01': 'OFF', '2026-08-02': 'OFF', '2026-08-03': 'D', '2026-08-04': 'D', '2026-08-05': 'E', '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'D', '2026-08-09': 'E', '2026-08-10': 'OFF', '2026-08-28': 'D' },
-  '홍숙언': { '2026-08-01': 'OFF', '2026-08-02': 'E', '2026-08-03': 'E', '2026-08-04': 'E', '2026-08-05': 'OFF', '2026-08-06': 'D', '2026-08-07': 'D', '2026-08-08': 'E', '2026-08-09': 'N', '2026-08-10': 'N', '2026-08-28': 'OFF' },
-  '남영주': { '2026-08-01': 'N', '2026-08-02': 'N', '2026-08-03': 'OFF', '2026-08-04': 'OFF', '2026-08-05': 'N', '2026-08-06': 'N', '2026-08-07': 'N', '2026-08-08': 'OFF', '2026-08-09': 'OFF', '2026-08-10': 'N', '2026-08-28': 'OFF' }
-};
 
 const getTodayDateObj = () => {
   const d = new Date();
@@ -36,17 +22,11 @@ export default function App() {
   const [currentMonth, setCurrentMonth] = useState(today.month);
   const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
-  const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '최수민');
+  // 사용자 정보 및 근무표 (초기 더미데이터 완전 제거)
+  const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '간호사');
   const [myShifts, setMyShifts] = useState(() => {
     const saved = localStorage.getItem('nurse_my_shifts');
-    return saved ? JSON.parse(saved) : {
-      '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
-      '2026-08-01': 'E', '2026-08-02': 'OFF', '2026-08-03': 'E', '2026-08-04': 'N', '2026-08-05': 'N',
-      '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'OFF', '2026-08-09': 'OFF', '2026-08-10': 'D',
-      '2026-08-11': 'D', '2026-08-12': 'D', '2026-08-13': 'D', '2026-08-14': 'E', '2026-08-15': 'E',
-      '2026-08-16': 'OFF', '2026-08-17': 'N', '2026-08-18': 'N', '2026-08-19': 'OFF', '2026-08-20': 'E',
-      '2026-08-21': 'E', '2026-08-22': 'OFF', '2026-08-23': 'OFF', '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-28': 'OFF'
-    };
+    return saved ? JSON.parse(saved) : {};
   });
 
   const [shiftConfigs, setShiftConfigs] = useState(() => {
@@ -72,20 +52,22 @@ export default function App() {
   const [eveningFixedAllowance, setEveningFixedAllowance] = useState(() => localStorage.getItem('nurse_eve_fixed') || '10000');
   const [hourlyWage, setHourlyWage] = useState(() => localStorage.getItem('nurse_hourly_wage') || '13000');
 
-  // 일정/메모 상태 관리
+  // 일정/메모 (초기 더미 데이터 완전 제거)
   const [memos, setMemos] = useState(() => {
     const saved = localStorage.getItem('nurse_memos');
-    return saved ? JSON.parse(saved) : {
-      [today.dateStr]: [
-        { id: 1, type: '인수인계', text: '오늘 스케줄 및 병동 상태 확인', isPrivate: false, checked: false }
-      ]
-    };
+    return saved ? JSON.parse(saved) : {};
   });
 
   // 일정 입력 폼 상태
   const [memoText, setMemoText] = useState('');
   const [memoCategory, setMemoCategory] = useState('개인일정');
   const [isPrivateMemo, setIsPrivateMemo] = useState(false);
+
+  // 동료 목록 (초기 더미 데이터 제거)
+  const [friends, setFriends] = useState(() => {
+    const saved = localStorage.getItem('nurse_friends');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   useEffect(() => { localStorage.setItem('nurse_user_name', userName); }, [userName]);
   useEffect(() => { localStorage.setItem('nurse_my_shifts', JSON.stringify(myShifts)); }, [myShifts]);
@@ -100,14 +82,22 @@ export default function App() {
   useEffect(() => { localStorage.setItem('nurse_eve_fixed', eveningFixedAllowance); }, [eveningFixedAllowance]);
   useEffect(() => { localStorage.setItem('nurse_hourly_wage', hourlyWage); }, [hourlyWage]);
   useEffect(() => { localStorage.setItem('nurse_memos', JSON.stringify(memos)); }, [memos]);
-
-  const [friends, setFriends] = useState(
-    Object.entries(DEFAULT_WARD_SHIFTS).map(([name, shifts]) => ({ name, shifts }))
-  );
+  useEffect(() => { localStorage.setItem('nurse_friends', JSON.stringify(friends)); }, [friends]);
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
 
-  // 개인 일정 등록 핸들러 (비공개 옵션 반영)
+  // 데이터 완전 초기화 기능 (테스트용)
+  const handleClearAllData = () => {
+    if (window.confirm('모든 근무 및 일정 데이터를 초기화하시겠습니까?')) {
+      localStorage.clear();
+      setMyShifts({});
+      setMemos({});
+      setFriends([]);
+      setManualUsedAnnual(null);
+      alert('모든 데이터가 깨끗하게 초기화되었습니다.');
+    }
+  };
+
   const handleAddMemo = () => {
     if (!memoText.trim()) return;
 
@@ -125,7 +115,6 @@ export default function App() {
     setIsPrivateMemo(false);
   };
 
-  // 휴대폰 캘린더(.ics 파일) 불러오기
   const handleIcsFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -168,7 +157,7 @@ export default function App() {
             id: Date.now() + Math.random(),
             type: '개인일정',
             text: `[폰 달력] ${summary}`,
-            isPrivate: true, // 가져온 폰 캘린더 일정은 기본 비공개(나만 보기)
+            isPrivate: true,
             checked: false
           });
 
@@ -272,13 +261,14 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 font-sans">
       <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-lg shadow-inner">
-            {privacyBlur ? '*' : userName[0]}
-          </div>
-          <div>
-            <h1 className="font-bold text-base leading-snug text-slate-900">{userName} 님의 근무표</h1>
-            <p className="text-xs text-slate-500">스마트 일정 & 수당 관리자</p>
-          </div>
+          <input 
+            type="text" 
+            value={userName} 
+            onChange={(e) => setUserName(e.target.value)}
+            className="w-20 font-bold text-base leading-snug text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-indigo-500 outline-none bg-transparent"
+            title="이름을 클릭하여 수정하세요"
+          />
+          <span className="text-xs text-slate-500">쌤의 근무표</span>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -407,7 +397,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 일정 추가 폼 (비공개 옵션 포함) */}
               <div className="pt-3 border-t space-y-2">
                 <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
                   <Bell size={14} className="text-indigo-600" />
@@ -441,7 +430,7 @@ export default function App() {
                     />
                     <span className="flex items-center gap-1">
                       {isPrivateMemo ? <Lock size={13} className="text-red-500" /> : <Unlock size={13} className="text-slate-400" />}
-                      🔒 비공개 일정 (공유 시 동료에게 안 보임)
+                      🔒 비공개 일정 (나만 보기)
                     </span>
                   </label>
                 </div>
@@ -488,7 +477,7 @@ export default function App() {
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
               <h2 className="font-bold text-base flex items-center gap-2 text-slate-900">
-                <Users size={18} className="text-indigo-600" /> 병동 동료 근무 및 공개 일정
+                <Users size={18} className="text-indigo-600" /> 병동 동료 근무 비교
               </h2>
               <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
                 {selectedDate} 기준
@@ -508,54 +497,51 @@ export default function App() {
                   {currentSelectedShiftCode || 'OFF'}
                 </span>
               </div>
-
-              {((memos[selectedDate] || []).filter(m => !m.isPrivate)).length > 0 && (
-                <div className="pt-2 border-t border-indigo-200/60 space-y-1">
-                  <p className="text-[10px] font-bold text-indigo-800">📢 동료에게 공유 중인 내 일정:</p>
-                  {(memos[selectedDate] || []).filter(m => !m.isPrivate).map(m => (
-                    <p key={m.id} className="text-[11px] text-slate-700 font-medium pl-1">· {m.text}</p>
-                  ))}
-                </div>
-              )}
             </div>
 
-            <p className="text-xs font-bold text-slate-600 pt-1">병동 동료 근무 현황 ({friends.length}명)</p>
+            <p className="text-xs font-bold text-slate-600 pt-1">동료 근무 목록 ({friends.length}명)</p>
 
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {friends.map((f, i) => {
-                const friendShiftCode = f.shifts[selectedDate] || 'OFF';
-                const info = shiftConfigs[friendShiftCode] || shiftConfigs.OFF;
-                const isSameOff = currentSelectedShiftCode === 'OFF' && friendShiftCode === 'OFF';
+            {friends.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center border-2 border-dashed rounded-xl">
+                등록된 동료가 없습니다.<br />등록 탭에서 동료 근무표를 추가하세요.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {friends.map((f, i) => {
+                  const friendShiftCode = f.shifts[selectedDate] || 'OFF';
+                  const info = shiftConfigs[friendShiftCode] || shiftConfigs.OFF;
+                  const isSameOff = currentSelectedShiftCode === 'OFF' && friendShiftCode === 'OFF';
 
-                return (
-                  <div 
-                    key={i} 
-                    className={`p-3 rounded-xl border flex justify-between items-center text-xs transition ${
-                      isSameOff ? 'bg-pink-50/60 border-pink-200 ring-1 ring-pink-300' : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-slate-800 text-sm">{privacyBlur ? '동료 ' + (i+1) : f.name} 쌤</span>
-                        {isSameOff && (
-                          <span className="text-[9px] bg-pink-500 text-white font-extrabold px-1.5 py-0.5 rounded-full">
-                            같이 휴무! 🎉
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-500">{info.time}</p>
-                    </div>
-
-                    <span 
-                      style={{ backgroundColor: info.color, color: info.textColor }}
-                      className="px-3 py-1.5 rounded-xl font-black text-xs border shadow-2xs"
+                  return (
+                    <div 
+                      key={i} 
+                      className={`p-3 rounded-xl border flex justify-between items-center text-xs transition ${
+                        isSameOff ? 'bg-pink-50/60 border-pink-200 ring-1 ring-pink-300' : 'bg-slate-50 border-slate-200'
+                      }`}
                     >
-                      {friendShiftCode}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-800 text-sm">{privacyBlur ? '동료 ' + (i+1) : f.name} 쌤</span>
+                          {isSameOff && (
+                            <span className="text-[9px] bg-pink-500 text-white font-extrabold px-1.5 py-0.5 rounded-full">
+                              같이 휴무! 🎉
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500">{info.time}</p>
+                      </div>
+
+                      <span 
+                        style={{ backgroundColor: info.color, color: info.textColor }}
+                        className="px-3 py-1.5 rounded-xl font-black text-xs border shadow-2xs"
+                      >
+                        {friendShiftCode}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -758,6 +744,16 @@ export default function App() {
                 폰 캘린더 파일(.ics) 선택
                 <input type="file" accept=".ics" onChange={handleIcsFileUpload} className="hidden" />
               </label>
+            </div>
+
+            <div className="pt-2 border-t flex justify-center">
+              <button 
+                onClick={handleClearAllData}
+                className="text-xs text-red-500 font-semibold hover:underline flex items-center gap-1 py-1"
+              >
+                <Trash2 size={13} />
+                <span>앱 저장 데이터 전체 초기화</span>
+              </button>
             </div>
           </div>
         )}
