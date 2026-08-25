@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, Eye, EyeOff, FileSpreadsheet, Sparkles, 
-  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode, Calculator, Palmtree, Settings, RefreshCw, Smartphone
+  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode, Calculator, Palmtree, Settings, RefreshCw, Smartphone, Lock, Unlock
 } from 'lucide-react';
 
 const INVALID_NAMES = [
@@ -77,10 +77,15 @@ export default function App() {
     const saved = localStorage.getItem('nurse_memos');
     return saved ? JSON.parse(saved) : {
       [today.dateStr]: [
-        { id: 1, type: '인수인계', time: '오전 08:00', text: '오늘 스케줄 및 병동 상태 확인', alertOffset: '0', alertText: '정시 알림', alertType: 'both', checked: false }
+        { id: 1, type: '인수인계', time: '오전 08:00', text: '오늘 스케줄 및 병동 상태 확인', alertOffset: '0', alertText: '정시 알림', alertType: 'both', checked: false, isPrivate: false }
       ]
     };
   });
+
+  // 일정 입력 폼 상태
+  const [memoText, setMemoText] = useState('');
+  const [memoCategory, setMemoCategory] = useState('개인일정');
+  const [isPrivateMemo, setIsPrivateMemo] = useState(false); // 비공개 일정 체크 여부
 
   useEffect(() => { localStorage.setItem('nurse_user_name', userName); }, [userName]);
   useEffect(() => { localStorage.setItem('nurse_my_shifts', JSON.stringify(myShifts)); }, [myShifts]);
@@ -101,6 +106,24 @@ export default function App() {
   );
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
+
+  // 개인 일정 등록 핸들러 (비공개 설정 포함)
+  const handleAddMemo = () => {
+    if (!memoText.trim()) return;
+
+    setMemos({
+      ...memos,
+      [selectedDate]: [...(memos[selectedDate] || []), {
+        id: Date.now(),
+        type: memoCategory,
+        text: memoText,
+        isPrivate: isPrivateMemo, // 비공개 여부
+        checked: false
+      }]
+    });
+    setMemoText('');
+    setIsPrivateMemo(false);
+  };
 
   // 휴대폰 캘린더(.ics 파일) 불러오기 처리
   const handleIcsFileUpload = (e) => {
@@ -144,11 +167,8 @@ export default function App() {
           newMemos[dateStr].push({
             id: Date.now() + Math.random(),
             type: '개인일정',
-            time: '종일 일정',
-            alertOffset: 'none',
-            alertText: '알림 없음',
-            alertType: 'silent',
             text: `[폰 달력] ${summary}`,
+            isPrivate: true, // 가져온 폰 달력 일정은 기본적으로 나만 보기(비공개) 처리
             checked: false
           });
 
@@ -159,9 +179,9 @@ export default function App() {
 
     if (importedCount > 0) {
       setMemos(newMemos);
-      alert(`🎉 휴대폰 캘린더에서 총 ${importedCount}개의 일정을 성공적으로 가져왔습니다!`);
+      alert(`🎉 휴대폰 캘린더에서 총 ${importedCount}개의 일정을 비공개(나만 보기)로 가져왔습니다!`);
     } else {
-      alert('가져올 일정을 찾지 못했습니다. .ics 파이프라인 형태를 확인해 주세요.');
+      alert('가져올 일정을 찾지 못했습니다.');
     }
   };
 
@@ -341,7 +361,7 @@ export default function App() {
                           {dayNum}
                         </span>
                         {dayMemos.length > 0 && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
                         )}
                       </div>
                       <span className="text-xs font-extrabold pb-0.5 text-center" style={{ color: info ? info.textColor : '#94A3B8' }}>
@@ -353,12 +373,12 @@ export default function App() {
               </div>
             </div>
 
-            {/* 선택 날짜의 일정이 표시되는 카드 */}
+            {/* 선택 날짜의 근무 및 개인 일정 등록 (비공개 기능 적용) */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center text-xs">
                 <span className="font-bold text-slate-800 flex items-center gap-1.5">
                   <Edit3 size={14} className="text-indigo-600" />
-                  <span>{selectedDate} 근무 등록 및 일정</span>
+                  <span>{selectedDate} 근무 지정</span>
                 </span>
                 <span className="text-[11px] font-semibold text-indigo-600">
                   {currentSelectedShiftCode ? `${shiftConfigs[currentSelectedShiftCode]?.name}` : '미등록'}
@@ -390,78 +410,120 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 일정 리스트 */}
-              <div className="pt-2 border-t space-y-1.5">
-                <p className="text-[11px] font-bold text-slate-600">등록된 일정 ({ (memos[selectedDate] || []).length }개)</p>
-                {(memos[selectedDate] || []).length === 0 ? (
-                  <p className="text-[11px] text-slate-400 py-1 text-center">등록된 개인 일정이나 휴대폰 달력 일정이 없습니다.</p>
-                ) : (
-                  memos[selectedDate].map((m) => (
-                    <div key={m.id} className="p-2 bg-slate-50 border rounded-xl text-xs flex justify-between items-center">
-                      <span className="font-semibold text-slate-700">{m.text}</span>
-                      <button 
-                        onClick={() => {
-                          setMemos({
-                            ...memos,
-                            [selectedDate]: memos[selectedDate].filter(item => item.id !== m.id)
-                          });
-                        }}
-                        className="text-slate-400 hover:text-red-500"
-                      >
-                        <X size={13} />
-                      </button>
-                    </div>
-                  ))
-                )}
+              {/* 일정 추가 폼 (비공개 체크박스 포함) */}
+              <div className="pt-3 border-t space-y-2">
+                <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                  <Bell size={14} className="text-indigo-600" />
+                  <span>일정 및 메모 등록</span>
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="예: 종합검진, 개인 약속" 
+                    value={memoText}
+                    onChange={(e) => setMemoText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddMemo()}
+                    className="flex-1 text-xs border rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  <button 
+                    onClick={handleAddMemo}
+                    className="bg-indigo-600 text-white font-bold px-3 py-2 rounded-xl text-xs hover:bg-indigo-700 transition"
+                  >
+                    등록
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-xs px-1 pt-0.5">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-600 font-semibold">
+                    <input 
+                      type="checkbox" 
+                      checked={isPrivateMemo} 
+                      onChange={(e) => setIsPrivateMemo(e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="flex items-center gap-1">
+                      {isPrivateMemo ? <Lock size={13} className="text-red-500" /> : <Unlock size={13} className="text-slate-400" />}
+                      🔒 비공개 일정 (공유 시 동료에게 안 보임)
+                    </span>
+                  </label>
+                </div>
+
+                {/* 등록된 일정 목록 (비공개 표시) */}
+                <div className="space-y-1.5 pt-2">
+                  {(memos[selectedDate] || []).length === 0 ? (
+                    <p className="text-[11px] text-slate-400 py-1 text-center">등록된 일정이 없습니다.</p>
+                  ) : (
+                    memos[selectedDate].map((m) => (
+                      <div key={m.id} className="p-2.5 bg-slate-50 border rounded-xl text-xs flex justify-between items-center shadow-2xs">
+                        <div className="flex items-center gap-2">
+                          {m.isPrivate ? (
+                            <span className="bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded text-[10px] font-extrabold flex items-center gap-0.5">
+                              <Lock size={10} /> 나만 보기
+                            </span>
+                          ) : (
+                            <span className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded text-[10px] font-extrabold">
+                              공개
+                            </span>
+                          )}
+                          <span className="font-semibold text-slate-800">{m.text}</span>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            setMemos({
+                              ...memos,
+                              [selectedDate]: memos[selectedDate].filter(item => item.id !== m.id)
+                            });
+                          }}
+                          className="text-slate-400 hover:text-red-500 p-1"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 등록 탭 (휴대폰 캘린더 가져오기 포함) */}
-        {activeTab === 'register' && (
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-            <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 & 캘린더 가져오기</h2>
-
-            {/* 📱 3. 휴대폰 기본 캘린더 동기화 영역 */}
-            <div className="border-2 border-dashed border-sky-200 bg-sky-50/50 p-4 rounded-2xl text-center space-y-2">
-              <div className="flex justify-center text-sky-600">
-                <Smartphone size={24} />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-sky-900">3. 휴대폰 기본 캘린더(.ics) 가져오기</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">삼성/구글/애플 달력에서 내보낸 .ics 일정 파일 연동</p>
-              </div>
-              <label className="inline-block cursor-pointer bg-sky-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-sky-700 shadow-sm transition">
-                폰 캘린더 파일(.ics) 선택
-                <input type="file" accept=".ics" onChange={handleIcsFileUpload} className="hidden" />
-              </label>
-            </div>
-          </div>
-        )}
-
+        {/* 동료 비교 탭 (공개 일정만 노출 / 비공개 일정은 완벽하게 숨김) */}
         {activeTab === 'friends' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
               <h2 className="font-bold text-base flex items-center gap-2 text-slate-900">
-                <Users size={18} className="text-indigo-600" /> 병동 동료 근무 비교
+                <Users size={18} className="text-indigo-600" /> 병동 동료 근무 및 공개 일정
               </h2>
               <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
                 {selectedDate} 기준
               </span>
             </div>
 
-            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl flex justify-between items-center text-xs">
-              <div>
-                <span className="font-extrabold text-indigo-950 text-sm">{privacyBlur ? '나' : userName} 쌤 (나)</span>
-                <p className="text-[10px] text-indigo-600 font-semibold">{shiftConfigs[currentSelectedShiftCode]?.time || '휴무'}</p>
+            {/* 내 근무 및 나의 공개 일정만 표시 */}
+            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="font-extrabold text-indigo-950 text-sm">{privacyBlur ? '나' : userName} 쌤 (나)</span>
+                  <p className="text-[10px] text-indigo-600 font-semibold">{shiftConfigs[currentSelectedShiftCode]?.time || '휴무'}</p>
+                </div>
+                <span 
+                  style={{ backgroundColor: shiftConfigs[currentSelectedShiftCode]?.color || '#F3F4F6', color: shiftConfigs[currentSelectedShiftCode]?.textColor || '#374151' }} 
+                  className="px-3 py-1.5 rounded-xl font-black text-xs shadow-2xs border"
+                >
+                  {currentSelectedShiftCode || 'OFF'}
+                </span>
               </div>
-              <span 
-                style={{ backgroundColor: shiftConfigs[currentSelectedShiftCode]?.color || '#F3F4F6', color: shiftConfigs[currentSelectedShiftCode]?.textColor || '#374151' }} 
-                className="px-3 py-1.5 rounded-xl font-black text-xs shadow-2xs border"
-              >
-                {currentSelectedShiftCode || 'OFF'}
-              </span>
+
+              {/* 동료들에게 공유되는 내 공개 일정 (비공개는 제외됨) */}
+              {((memos[selectedDate] || []).filter(m => !m.isPrivate)).length > 0 && (
+                <div className="pt-2 border-t border-indigo-200/60 space-y-1">
+                  <p className="text-[10px] font-bold text-indigo-800">📢 동료에게 공유 중인 내 일정:</p>
+                  {(memos[selectedDate] || []).filter(m => !m.isPrivate).map(m => (
+                    <p key={m.id} className="text-[11px] text-slate-700 font-medium pl-1">· {m.text}</p>
+                  ))}
+                </div>
+              )}
             </div>
 
             <p className="text-xs font-bold text-slate-600 pt-1">병동 동료 근무 현황 ({friends.length}명)</p>
@@ -504,6 +566,7 @@ export default function App() {
           </div>
         )}
 
+        {/* 연차 & 수당 관리 탭 */}
         {activeTab === 'allowance' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
@@ -683,6 +746,27 @@ export default function App() {
                   </span>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 등록 탭 */}
+        {activeTab === 'register' && (
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+            <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 & 캘린더 가져오기</h2>
+
+            <div className="border-2 border-dashed border-sky-200 bg-sky-50/50 p-4 rounded-2xl text-center space-y-2">
+              <div className="flex justify-center text-sky-600">
+                <Smartphone size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-sky-900">휴대폰 기본 캘린더(.ics) 가져오기</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">가져온 개인 일정은 기본적으로 🔒 비공개(나만 보기) 처리됩니다.</p>
+              </div>
+              <label className="inline-block cursor-pointer bg-sky-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-sky-700 shadow-sm transition">
+                폰 캘린더 파일(.ics) 선택
+                <input type="file" accept=".ics" onChange={handleIcsFileUpload} className="hidden" />
+              </label>
             </div>
           </div>
         )}
