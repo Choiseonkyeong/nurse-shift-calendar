@@ -1,13 +1,10 @@
 name: Build Android APK
-
 on:
   push:
     branches: [ master, main ]
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
@@ -50,6 +47,24 @@ jobs:
           npx cap add android
         fi
         npx cap sync android
+
+    - name: Fix Kotlin stdlib Duplicate Classes
+      run: |
+        cat >> android/build.gradle << 'EOF'
+
+        allprojects {
+            configurations.all {
+                resolutionStrategy {
+                    force "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
+                    force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24"
+                    force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24"
+                    force "org.jetbrains.kotlin:kotlin-stdlib-common:1.9.24"
+                }
+            }
+        }
+        EOF
+        echo "--- patched android/build.gradle ---"
+        tail -20 android/build.gradle
 
     - name: Build Android APK
       run: |
