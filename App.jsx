@@ -77,7 +77,7 @@ export default function App() {
     const saved = localStorage.getItem('nurse_memos');
     return saved ? JSON.parse(saved) : {
       [today.dateStr]: [
-        { id: 1, type: '인수인계', time: '오전 08:00', text: '오늘 스케줄 및 병동 상태 확인', alertOffset: '0', alertText: '정시 알림', alertType: 'both', checked: false, isPrivate: false }
+        { id: 1, type: '인수인계', text: '오늘 스케줄 및 병동 상태 확인', isPrivate: false, checked: false }
       ]
     };
   });
@@ -85,7 +85,7 @@ export default function App() {
   // 일정 입력 폼 상태
   const [memoText, setMemoText] = useState('');
   const [memoCategory, setMemoCategory] = useState('개인일정');
-  const [isPrivateMemo, setIsPrivateMemo] = useState(false); // 비공개 일정 체크 여부
+  const [isPrivateMemo, setIsPrivateMemo] = useState(false);
 
   useEffect(() => { localStorage.setItem('nurse_user_name', userName); }, [userName]);
   useEffect(() => { localStorage.setItem('nurse_my_shifts', JSON.stringify(myShifts)); }, [myShifts]);
@@ -107,7 +107,7 @@ export default function App() {
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
 
-  // 개인 일정 등록 핸들러 (비공개 설정 포함)
+  // 개인 일정 등록 핸들러 (비공개 옵션 반영)
   const handleAddMemo = () => {
     if (!memoText.trim()) return;
 
@@ -117,7 +117,7 @@ export default function App() {
         id: Date.now(),
         type: memoCategory,
         text: memoText,
-        isPrivate: isPrivateMemo, // 비공개 여부
+        isPrivate: isPrivateMemo,
         checked: false
       }]
     });
@@ -125,7 +125,7 @@ export default function App() {
     setIsPrivateMemo(false);
   };
 
-  // 휴대폰 캘린더(.ics 파일) 불러오기 처리
+  // 휴대폰 캘린더(.ics 파일) 불러오기
   const handleIcsFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -168,7 +168,7 @@ export default function App() {
             id: Date.now() + Math.random(),
             type: '개인일정',
             text: `[폰 달력] ${summary}`,
-            isPrivate: true, // 가져온 폰 달력 일정은 기본적으로 나만 보기(비공개) 처리
+            isPrivate: true, // 가져온 폰 캘린더 일정은 기본 비공개(나만 보기)
             checked: false
           });
 
@@ -185,7 +185,6 @@ export default function App() {
     }
   };
 
-  // 선택 달의 근무 집계
   const currentMonthShifts = Object.entries(myShifts).filter(([date]) => 
     date.startsWith(`${currentYear}-${String(currentMonth).padStart(2, '0')}`)
   );
@@ -197,7 +196,6 @@ export default function App() {
   const numTotalAnnual = Number(totalAnnualLeave) || 0;
   const remainingAnnualLeave = numTotalAnnual - usedAnnualLeaveCount;
 
-  // 수당 계산
   const numNightFixed = Number(String(nightFixedAllowance).replace(/[^0-9]/g, '')) || 0;
   const numEveFixed = Number(String(eveningFixedAllowance).replace(/[^0-9]/g, '')) || 0;
   const numHourlyWage = Number(String(hourlyWage).replace(/[^0-9]/g, '')) || 0;
@@ -373,7 +371,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 선택 날짜의 근무 및 개인 일정 등록 (비공개 기능 적용) */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center text-xs">
                 <span className="font-bold text-slate-800 flex items-center gap-1.5">
@@ -410,7 +407,7 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 일정 추가 폼 (비공개 체크박스 포함) */}
+              {/* 일정 추가 폼 (비공개 옵션 포함) */}
               <div className="pt-3 border-t space-y-2">
                 <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
                   <Bell size={14} className="text-indigo-600" />
@@ -449,7 +446,6 @@ export default function App() {
                   </label>
                 </div>
 
-                {/* 등록된 일정 목록 (비공개 표시) */}
                 <div className="space-y-1.5 pt-2">
                   {(memos[selectedDate] || []).length === 0 ? (
                     <p className="text-[11px] text-slate-400 py-1 text-center">등록된 일정이 없습니다.</p>
@@ -488,7 +484,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 동료 비교 탭 (공개 일정만 노출 / 비공개 일정은 완벽하게 숨김) */}
         {activeTab === 'friends' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
@@ -500,7 +495,6 @@ export default function App() {
               </span>
             </div>
 
-            {/* 내 근무 및 나의 공개 일정만 표시 */}
             <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2 text-xs">
               <div className="flex justify-between items-center">
                 <div>
@@ -515,7 +509,6 @@ export default function App() {
                 </span>
               </div>
 
-              {/* 동료들에게 공유되는 내 공개 일정 (비공개는 제외됨) */}
               {((memos[selectedDate] || []).filter(m => !m.isPrivate)).length > 0 && (
                 <div className="pt-2 border-t border-indigo-200/60 space-y-1">
                   <p className="text-[10px] font-bold text-indigo-800">📢 동료에게 공유 중인 내 일정:</p>
@@ -566,7 +559,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 연차 & 수당 관리 탭 */}
         {activeTab === 'allowance' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
@@ -750,7 +742,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 등록 탭 */}
         {activeTab === 'register' && (
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 & 캘린더 가져오기</h2>
