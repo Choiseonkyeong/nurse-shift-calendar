@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Heart, Eye, EyeOff, FileSpreadsheet, Sparkles, 
-  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode, Calculator, Palmtree, Settings, RefreshCw
+  ChevronLeft, ChevronRight, Camera, Image as ImageIcon, Edit3, RotateCcw, Trash2, Bell, Clock, Volume2, UserCheck, X, Plus, FileCode, Calculator, Palmtree, Settings, RefreshCw, Smartphone
 } from 'lucide-react';
 
 const INVALID_NAMES = [
@@ -36,7 +36,6 @@ export default function App() {
   const [currentMonth, setCurrentMonth] = useState(today.month);
   const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
-  // 로컬 스토리지 기반 개인 상태 불러오기
   const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '최수민');
   const [myShifts, setMyShifts] = useState(() => {
     const saved = localStorage.getItem('nurse_my_shifts');
@@ -73,7 +72,16 @@ export default function App() {
   const [eveningFixedAllowance, setEveningFixedAllowance] = useState(() => localStorage.getItem('nurse_eve_fixed') || '10000');
   const [hourlyWage, setHourlyWage] = useState(() => localStorage.getItem('nurse_hourly_wage') || '13000');
 
-  // 상태 변경 시 localStorage에 개별 자동 저장
+  // 일정/메모 상태 관리
+  const [memos, setMemos] = useState(() => {
+    const saved = localStorage.getItem('nurse_memos');
+    return saved ? JSON.parse(saved) : {
+      [today.dateStr]: [
+        { id: 1, type: '인수인계', time: '오전 08:00', text: '오늘 스케줄 및 병동 상태 확인', alertOffset: '0', alertText: '정시 알림', alertType: 'both', checked: false }
+      ]
+    };
+  });
+
   useEffect(() => { localStorage.setItem('nurse_user_name', userName); }, [userName]);
   useEffect(() => { localStorage.setItem('nurse_my_shifts', JSON.stringify(myShifts)); }, [myShifts]);
   useEffect(() => { localStorage.setItem('nurse_shift_configs', JSON.stringify(shiftConfigs)); }, [shiftConfigs]);
@@ -86,20 +94,76 @@ export default function App() {
   useEffect(() => { localStorage.setItem('nurse_night_fixed', nightFixedAllowance); }, [nightFixedAllowance]);
   useEffect(() => { localStorage.setItem('nurse_eve_fixed', eveningFixedAllowance); }, [eveningFixedAllowance]);
   useEffect(() => { localStorage.setItem('nurse_hourly_wage', hourlyWage); }, [hourlyWage]);
-
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState(0);
-
-  const [parsedWardData, setParsedWardData] = useState(DEFAULT_WARD_SHIFTS);
-  const [detectedNames, setDetectedNames] = useState(Object.keys(DEFAULT_WARD_SHIFTS));
-  const [customNameInput, setCustomNameInput] = useState('');
-  const [showNameModal, setShowNameModal] = useState(false);
+  useEffect(() => { localStorage.setItem('nurse_memos', JSON.stringify(memos)); }, [memos]);
 
   const [friends, setFriends] = useState(
     Object.entries(DEFAULT_WARD_SHIFTS).map(([name, shifts]) => ({ name, shifts }))
   );
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
+
+  // 휴대폰 캘린더(.ics 파일) 불러오기 처리
+  const handleIcsFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target.result;
+        parseIcsCalendar(text);
+      } catch (err) {
+        console.error(err);
+        alert('캘린더 파일을 해석하지 못했습니다.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const parseIcsCalendar = (icsContent) => {
+    const events = icsContent.split('BEGIN:VEVENT');
+    let importedCount = 0;
+    const newMemos = { ...memos };
+
+    events.slice(1).forEach((ev) => {
+      const summaryMatch = ev.match(/SUMMARY:(.*)/);
+      const dtstartMatch = ev.match(/DTSTART;?.*:(.*)/);
+
+      if (summaryMatch && dtstartMatch) {
+        const summary = summaryMatch[1].trim();
+        const rawDt = dtstartMatch[1].trim();
+        
+        if (rawDt.length >= 8) {
+          const yyyy = rawDt.substring(0, 4);
+          const mm = rawDt.substring(4, 6);
+          const dd = rawDt.substring(6, 8);
+          const dateStr = `${yyyy}-${mm}-${dd}`;
+
+          if (!newMemos[dateStr]) newMemos[dateStr] = [];
+
+          newMemos[dateStr].push({
+            id: Date.now() + Math.random(),
+            type: '개인일정',
+            time: '종일 일정',
+            alertOffset: 'none',
+            alertText: '알림 없음',
+            alertType: 'silent',
+            text: `[폰 달력] ${summary}`,
+            checked: false
+          });
+
+          importedCount++;
+        }
+      }
+    });
+
+    if (importedCount > 0) {
+      setMemos(newMemos);
+      alert(`🎉 휴대폰 캘린더에서 총 ${importedCount}개의 일정을 성공적으로 가져왔습니다!`);
+    } else {
+      alert('가져올 일정을 찾지 못했습니다. .ics 파이프라인 형태를 확인해 주세요.');
+    }
+  };
 
   // 선택 달의 근무 집계
   const currentMonthShifts = Object.entries(myShifts).filter(([date]) => 
@@ -255,6 +319,7 @@ export default function App() {
                   const info = shiftConfigs[code];
                   const isSelected = dateStr === selectedDate;
                   const isToday = dateStr === today.dateStr;
+                  const dayMemos = memos[dateStr] || [];
 
                   return (
                     <button
@@ -275,10 +340,8 @@ export default function App() {
                         <span className="text-[10px] font-bold opacity-80" style={{ color: info ? info.textColor : '#64748B' }}>
                           {dayNum}
                         </span>
-                        {isToday && (
-                          <span className="text-[8px] bg-amber-500 text-white font-extrabold px-1 rounded-xs">
-                            오늘
-                          </span>
+                        {dayMemos.length > 0 && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
                         )}
                       </div>
                       <span className="text-xs font-extrabold pb-0.5 text-center" style={{ color: info ? info.textColor : '#94A3B8' }}>
@@ -290,14 +353,15 @@ export default function App() {
               </div>
             </div>
 
+            {/* 선택 날짜의 일정이 표시되는 카드 */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center text-xs">
                 <span className="font-bold text-slate-800 flex items-center gap-1.5">
                   <Edit3 size={14} className="text-indigo-600" />
-                  <span>{selectedDate} 근무 등록</span>
+                  <span>{selectedDate} 근무 등록 및 일정</span>
                 </span>
                 <span className="text-[11px] font-semibold text-indigo-600">
-                  {currentSelectedShiftCode ? `${shiftConfigs[currentSelectedShiftCode]?.name} (${shiftConfigs[currentSelectedShiftCode]?.time})` : '미등록'}
+                  {currentSelectedShiftCode ? `${shiftConfigs[currentSelectedShiftCode]?.name}` : '미등록'}
                 </span>
               </div>
               
@@ -325,6 +389,53 @@ export default function App() {
                   <Trash2 size={12} />
                 </button>
               </div>
+
+              {/* 일정 리스트 */}
+              <div className="pt-2 border-t space-y-1.5">
+                <p className="text-[11px] font-bold text-slate-600">등록된 일정 ({ (memos[selectedDate] || []).length }개)</p>
+                {(memos[selectedDate] || []).length === 0 ? (
+                  <p className="text-[11px] text-slate-400 py-1 text-center">등록된 개인 일정이나 휴대폰 달력 일정이 없습니다.</p>
+                ) : (
+                  memos[selectedDate].map((m) => (
+                    <div key={m.id} className="p-2 bg-slate-50 border rounded-xl text-xs flex justify-between items-center">
+                      <span className="font-semibold text-slate-700">{m.text}</span>
+                      <button 
+                        onClick={() => {
+                          setMemos({
+                            ...memos,
+                            [selectedDate]: memos[selectedDate].filter(item => item.id !== m.id)
+                          });
+                        }}
+                        className="text-slate-400 hover:text-red-500"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 등록 탭 (휴대폰 캘린더 가져오기 포함) */}
+        {activeTab === 'register' && (
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+            <h2 className="font-bold text-base flex items-center gap-2 text-slate-900"><FileSpreadsheet size={18} className="text-indigo-600" /> 스마트 근무표 & 캘린더 가져오기</h2>
+
+            {/* 📱 3. 휴대폰 기본 캘린더 동기화 영역 */}
+            <div className="border-2 border-dashed border-sky-200 bg-sky-50/50 p-4 rounded-2xl text-center space-y-2">
+              <div className="flex justify-center text-sky-600">
+                <Smartphone size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-sky-900">3. 휴대폰 기본 캘린더(.ics) 가져오기</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">삼성/구글/애플 달력에서 내보낸 .ics 일정 파일 연동</p>
+              </div>
+              <label className="inline-block cursor-pointer bg-sky-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-sky-700 shadow-sm transition">
+                폰 캘린더 파일(.ics) 선택
+                <input type="file" accept=".ics" onChange={handleIcsFileUpload} className="hidden" />
+              </label>
             </div>
           </div>
         )}
