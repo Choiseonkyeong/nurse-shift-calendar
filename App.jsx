@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, Eye, EyeOff, FileSpreadsheet, 
-  ChevronLeft, ChevronRight, Edit3, RotateCcw, Trash2, Bell, X, Calculator, Palmtree, Settings, RefreshCw, Smartphone, Lock, Unlock, Camera, Image as ImageIcon, Sparkles
+  ChevronLeft, ChevronRight, Edit3, RotateCcw, Trash2, Bell, X, Calculator, Palmtree, Settings, RefreshCw, Smartphone, Lock, Unlock, Camera, Image as ImageIcon, LogIn, UserPlus, LogOut, Loader2
 } from 'lucide-react';
-
-const INVALID_NAMES = [
-  '근무시간', '근무사', '근무', '보고사항', '보고', '사항', '연차', '연채', '분당', '병동', 
-  '근무표', '합계', '구분', '직급', '성명', '이름', '월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M'
-];
 
 const getTodayDateObj = () => {
   const d = new Date();
@@ -22,12 +17,23 @@ const getTodayDateObj = () => {
 export default function App() {
   const today = getTodayDateObj();
 
+  // 인증 상태
+  const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem('nurse_is_logged_in') === 'true');
+  const [authMode, setAuthMode] = useState('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authWard, setAuthWard] = useState('');
+
   const [activeTab, setActiveTab] = useState('my-shift');
   const [currentYear, setCurrentYear] = useState(today.year);
   const [currentMonth, setCurrentMonth] = useState(today.month);
   const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
-  // 사용자 정보 및 근무표 (초기 더미데이터 완전 제거)
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
+
+  // 사용자 정보 및 근무표
   const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '간호사');
   const [myShifts, setMyShifts] = useState(() => {
     const saved = localStorage.getItem('nurse_my_shifts');
@@ -63,7 +69,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : {};
   });
 
-  // 일정 입력 폼 상태
   const [memoText, setMemoText] = useState('');
   const [memoCategory, setMemoCategory] = useState('개인일정');
   const [isPrivateMemo, setIsPrivateMemo] = useState(false);
@@ -74,6 +79,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  useEffect(() => { localStorage.setItem('nurse_is_logged_in', isLoggedIn); }, [isLoggedIn]);
   useEffect(() => { localStorage.setItem('nurse_user_name', userName); }, [userName]);
   useEffect(() => { localStorage.setItem('nurse_my_shifts', JSON.stringify(myShifts)); }, [myShifts]);
   useEffect(() => { localStorage.setItem('nurse_shift_configs', JSON.stringify(shiftConfigs)); }, [shiftConfigs]);
@@ -91,7 +97,39 @@ export default function App() {
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
 
-  // 데이터 완전 초기화 기능
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    if (!authEmail || !authPassword) {
+      alert('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+    setIsLoggedIn(true);
+    if (!userName || userName === '간호사') {
+      setUserName(authEmail.split('@')[0]);
+    }
+  };
+
+  const handleSignupSubmit = (e) => {
+    e.preventDefault();
+    if (!authEmail || !authPassword || !authName) {
+      alert('필수 정보를 모두 입력해주세요.');
+      return;
+    }
+    setUserName(authName);
+    setIsLoggedIn(true);
+    alert('회원가입이 완료되었습니다!');
+  };
+
+  const handleSocialLogin = (provider) => {
+    setIsLoggedIn(true);
+  };
+
+  const handleLogout = () => {
+    if (window.confirm('로그아웃 하시겠습니까?')) {
+      setIsLoggedIn(false);
+    }
+  };
+
   const handleClearAllData = () => {
     if (window.confirm('모든 근무 및 일정 데이터를 초기화하시겠습니까?')) {
       localStorage.clear();
@@ -99,7 +137,8 @@ export default function App() {
       setMemos({});
       setFriends([]);
       setManualUsedAnnual(null);
-      alert('모든 데이터가 깨끗하게 초기화되었습니다.');
+      setIsLoggedIn(false);
+      alert('모든 데이터가 초기화되었습니다.');
     }
   };
 
@@ -120,36 +159,169 @@ export default function App() {
     setIsPrivateMemo(false);
   };
 
-  // 1. 엑셀 파일 업로드 처리
+  // 📊 1. 실시간 엑셀 근무표 파싱 로직
   const handleExcelFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!window.XLSX) {
+      alert('엑셀 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    setIsParsingExcel(true);
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        // 간단한 엑셀/텍스트 형태 근무표 파싱 예시
-        alert('엑셀 근무표 파일 분석이 완료되었습니다!');
+        const data = new Uint8Array(evt.target.result);
+        const workbook = window.XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        let dateHeaderIdx = -1;
+        let dayToColMap = {};
+
+        for (let r = 0; r < Math.min(rows.length, 12); r++) {
+          const row = rows[r];
+          if (!Array.isArray(row)) continue;
+          let tempMap = {};
+          let matches = 0;
+
+          row.forEach((cell, colIdx) => {
+            const val = parseInt(String(cell).trim(), 10);
+            if (!isNaN(val) && val >= 1 && val <= 31) {
+              matches++;
+              tempMap[val] = colIdx;
+            }
+          });
+
+          if (matches >= 5) {
+            dateHeaderIdx = r;
+            dayToColMap = tempMap;
+            break;
+          }
+        }
+
+        if (dateHeaderIdx === -1) {
+          alert('엑셀 시트에서 날짜(1~31일) 행을 찾지 못했습니다. 근무표 형식을 확인해주세요.');
+          setIsParsingExcel(false);
+          return;
+        }
+
+        let targetRow = null;
+        for (let r = dateHeaderIdx + 1; r < rows.length; r++) {
+          const row = rows[r];
+          if (!Array.isArray(row) || row.length === 0) continue;
+          if (userName && row.join(' ').includes(userName)) {
+            targetRow = row;
+            break;
+          }
+        }
+
+        if (!targetRow) {
+          for (let r = dateHeaderIdx + 1; r < rows.length; r++) {
+            const row = rows[r];
+            if (Array.isArray(row) && row.length > 5) {
+              targetRow = row;
+              break;
+            }
+          }
+        }
+
+        if (!targetRow) {
+          alert('엑셀 파일 내에서 근무 데이터 행을 찾을 수 없습니다.');
+          setIsParsingExcel(false);
+          return;
+        }
+
+        const newShifts = { ...myShifts };
+        let count = 0;
+
+        Object.entries(dayToColMap).forEach(([dayNum, colIdx]) => {
+          const rawVal = String(targetRow[colIdx] || '').trim().toUpperCase();
+          if (!rawVal) return;
+
+          let code = '';
+          if (['D', 'DAY', '주', '낮'].includes(rawVal)) code = 'D';
+          else if (['E', 'EVE', 'EVENING', '이브', '저녁'].includes(rawVal)) code = 'E';
+          else if (['N', 'NIGHT', '나이트', '야'].includes(rawVal)) code = 'N';
+          else if (['M', 'MID', '미드'].includes(rawVal)) code = 'M';
+          else if (['OFF', 'O', '휴', '휴무'].includes(rawVal)) code = 'OFF';
+          else if (['연차', '연', '휴가'].includes(rawVal)) code = '연차';
+
+          if (code) {
+            const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+            newShifts[dateStr] = code;
+            count++;
+          }
+        });
+
+        setMyShifts(newShifts);
+        alert(`🎉 엑셀 근무표에서 총 ${count}일 치 근무를 성공적으로 파싱했습니다!`);
       } catch (err) {
         console.error(err);
-        alert('엑셀 파일을 읽는 중 오류가 발생했습니다.');
+        alert('엑셀 파싱 중 오류가 발생했습니다.');
+      } finally {
+        setIsParsingExcel(false);
       }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
-  // 2. 사진첩/카메라 근무표 이미지 업로드 처리
-  const handleImageFileUpload = (e) => {
+  // 📸 2. 실시간 사진 OCR(Tesseract.js) 근무표 인식 로직
+  const handleImageFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    alert('📸 근무표 이미지 인식 중... (인공지능 AI 분석이 시작됩니다)');
-    setTimeout(() => {
-      alert('근무표 이미지 분석 및 자동으로 내 근무 등록이 완료되었습니다!');
-    }, 1200);
+    if (!window.Tesseract) {
+      alert('OCR 글자 인식 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    setIsAnalyzingImage(true);
+    try {
+      const { data: { text } } = await window.Tesseract.recognize(file, 'kor+eng', {
+        logger: m => console.log(m)
+      });
+
+      const tokens = text.replace(/[^a-zA-Z0-9가-힣\s]/g, ' ').split(/\s+/);
+      const extractedCodes = [];
+
+      tokens.forEach(t => {
+        const upper = t.toUpperCase();
+        if (['D', 'E', 'N', 'M', 'OFF', 'O', '연차'].includes(upper)) {
+          if (upper === 'O') extractedCodes.push('OFF');
+          else extractedCodes.push(upper);
+        }
+      });
+
+      const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+      const limit = Math.min(extractedCodes.length, daysInMonth);
+      const newShifts = { ...myShifts };
+      let count = 0;
+
+      for (let i = 0; i < limit; i++) {
+        const dayNum = i + 1;
+        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+        newShifts[dateStr] = extractedCodes[i];
+        count++;
+      }
+
+      if (count > 0) {
+        setMyShifts(newShifts);
+        alert(`📸 이미지에서 ${count}일 분량의 근무 기호(D, E, N, OFF 등)를 인식하여 등록했습니다!`);
+      } else {
+        alert('이미지에서 근무 기호(D, E, N, OFF)를 찾지 못했습니다. 문자가 선명한 사진으로 다시 시도해주세요.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('이미지 글자 인식 중 오류가 발생했습니다.');
+    } finally {
+      setIsAnalyzingImage(false);
+    }
   };
 
-  // 3. 휴대폰 캘린더(.ics 파일) 가져오기
   const handleIcsFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -157,10 +329,8 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const text = evt.target.result;
-        parseIcsCalendar(text);
+        parseIcsCalendar(evt.target.result);
       } catch (err) {
-        console.error(err);
         alert('캘린더 파일을 해석하지 못했습니다.');
       }
     };
@@ -203,7 +373,7 @@ export default function App() {
 
     if (importedCount > 0) {
       setMemos(newMemos);
-      alert(`🎉 휴대폰 캘린더에서 총 ${importedCount}개의 일정을 비공개(나만 보기)로 가져왔습니다!`);
+      alert(`🎉 휴대폰 캘린더에서 총 ${importedCount}개의 일정을 비공개로 가져왔습니다!`);
     } else {
       alert('가져올 일정을 찾지 못했습니다.');
     }
@@ -292,6 +462,142 @@ export default function App() {
 
   const currentSelectedShiftCode = myShifts[selectedDate] || '';
 
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+        <div className="bg-white w-full max-w-sm rounded-3xl shadow-xl p-6 space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-flex p-3 bg-indigo-50 text-indigo-600 rounded-2xl mb-1">
+              <Calendar size={32} />
+            </div>
+            <h1 className="text-2xl font-black text-slate-900">간호 근무표 & 메이트</h1>
+            <p className="text-xs text-slate-500">동료와 스마트하게 함께 쓰는 3교대 근무표</p>
+          </div>
+
+          <div className="flex bg-slate-100 p-1 rounded-2xl text-xs font-bold">
+            <button 
+              onClick={() => setAuthMode('login')} 
+              className={`flex-1 py-2.5 rounded-xl transition ${authMode === 'login' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+            >
+              로그인
+            </button>
+            <button 
+              onClick={() => setAuthMode('signup')} 
+              className={`flex-1 py-2.5 rounded-xl transition ${authMode === 'signup' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+            >
+              회원가입
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <button 
+              onClick={() => handleSocialLogin('카카오')}
+              className="w-full bg-[#FEE500] hover:bg-[#fdd800] text-[#191919] font-extrabold text-xs py-3.5 rounded-2xl flex items-center justify-center gap-2 transition shadow-xs"
+            >
+              <span className="font-black text-sm">💬</span>
+              <span>카카오 1초 간편 로그인</span>
+            </button>
+            <button 
+              onClick={() => handleSocialLogin('Google')}
+              className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-extrabold text-xs py-3.5 rounded-2xl flex items-center justify-center gap-2 transition shadow-xs"
+            >
+              <span className="font-bold text-sm">G</span>
+              <span>Google 계정으로 로그인</span>
+            </button>
+          </div>
+
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-slate-200"></div>
+            <span className="flex-shrink mx-3 text-[10px] text-slate-400 font-semibold">또는 이메일 로그인</span>
+            <div className="flex-grow border-t border-slate-200"></div>
+          </div>
+
+          {authMode === 'login' ? (
+            <form onSubmit={handleLoginSubmit} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">이메일 주소</label>
+                <input 
+                  type="email" 
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="nurse@hospital.com" 
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">비밀번호</label>
+                <input 
+                  type="password" 
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="••••••••" 
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <button 
+                type="submit" 
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-3.5 rounded-2xl transition shadow-md flex items-center justify-center gap-1.5"
+              >
+                <LogIn size={16} />
+                <span>로그인하기</span>
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSignupSubmit} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">이름 (선생님 성함)</label>
+                <input 
+                  type="text" 
+                  value={authName}
+                  onChange={(e) => setAuthName(e.target.value)}
+                  placeholder="홍길동" 
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">병원 / 병동 (선택)</label>
+                <input 
+                  type="text" 
+                  value={authWard}
+                  onChange={(e) => setAuthWard(e.target.value)}
+                  placeholder="예: 서울대병원 81병동" 
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">이메일 주소</label>
+                <input 
+                  type="email" 
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="nurse@hospital.com" 
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 mb-1 block">비밀번호</label>
+                <input 
+                  type="password" 
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="6자리 이상 입력" 
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <button 
+                type="submit" 
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-3.5 rounded-2xl transition shadow-md flex items-center justify-center gap-1.5"
+              >
+                <UserPlus size={16} />
+                <span>회원가입 완료</span>
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 font-sans">
       <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between shadow-sm">
@@ -319,6 +625,13 @@ export default function App() {
           >
             {privacyBlur ? <EyeOff size={16} /> : <Eye size={16} />}
             <span>보안</span>
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="p-1.5 bg-slate-100 rounded-xl text-slate-500 hover:text-red-600 transition"
+            title="로그아웃"
+          >
+            <LogOut size={16} />
           </button>
         </div>
       </header>
@@ -778,9 +1091,10 @@ export default function App() {
                 <p className="text-xs font-bold text-emerald-900">엑셀 근무표 파일(.xlsx, .csv) 가져오기</p>
                 <p className="text-[10px] text-slate-500 mt-0.5">병원에서 받은 엑셀 근무표 파일을 올려주세요.</p>
               </div>
-              <label className="inline-block cursor-pointer bg-emerald-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-emerald-700 shadow-sm transition">
-                엑셀 파일 선택
-                <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelFileUpload} className="hidden" />
+              <label className="inline-flex items-center gap-1.5 cursor-pointer bg-emerald-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-emerald-700 shadow-sm transition">
+                {isParsingExcel ? <Loader2 size={14} className="animate-spin" /> : null}
+                <span>{isParsingExcel ? '엑셀 파싱 중...' : '엑셀 파일 선택'}</span>
+                <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelFileUpload} disabled={isParsingExcel} className="hidden" />
               </label>
             </div>
 
@@ -795,12 +1109,14 @@ export default function App() {
               </div>
               <div className="flex justify-center gap-2 pt-1">
                 <label className="cursor-pointer bg-indigo-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl hover:bg-indigo-700 shadow-sm transition flex items-center gap-1">
-                  <ImageIcon size={14} /> 사진첩 선택
-                  <input type="file" accept="image/*" onChange={handleImageFileUpload} className="hidden" />
+                  {isAnalyzingImage ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+                  <span>{isAnalyzingImage ? '글자 분석 중...' : '사진첩 선택'}</span>
+                  <input type="file" accept="image/*" onChange={handleImageFileUpload} disabled={isAnalyzingImage} className="hidden" />
                 </label>
                 <label className="cursor-pointer bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl hover:bg-slate-900 shadow-sm transition flex items-center gap-1">
-                  <Camera size={14} /> 촬영하기
-                  <input type="file" accept="image/*" capture="environment" onChange={handleImageFileUpload} className="hidden" />
+                  {isAnalyzingImage ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                  <span>{isAnalyzingImage ? '촬영 분석 중...' : '촬영하기'}</span>
+                  <input type="file" accept="image/*" capture="environment" onChange={handleImageFileUpload} disabled={isAnalyzingImage} className="hidden" />
                 </label>
               </div>
             </div>
@@ -826,7 +1142,7 @@ export default function App() {
                 className="text-xs text-red-500 font-semibold hover:underline flex items-center gap-1 py-1"
               >
                 <Trash2 size={13} />
-                <span>앱 저장 데이터 전체 초기화</span>
+                <span>앱 저장 데이터 전체 초기화 및 로그아웃</span>
               </button>
             </div>
           </div>
