@@ -9,6 +9,15 @@ const INVALID_NAMES = [
   '근무표', '합계', '구분', '직급', '성명', '이름', '월', '화', '수', '목', '금', '토', '일', 'OFF', 'D', 'E', 'N', 'M'
 ];
 
+const DEFAULT_WARD_SHIFTS = {
+  '강인경': { '2026-08-01': 'D', '2026-08-02': 'OFF', '2026-08-03': 'D', '2026-08-04': 'D', '2026-08-05': 'D', '2026-08-06': 'D', '2026-08-07': 'OFF', '2026-08-08': 'OFF', '2026-08-09': 'D', '2026-08-10': 'D', '2026-08-28': 'OFF' },
+  '박혜영': { '2026-08-01': 'OFF', '2026-08-02': 'OFF', '2026-08-03': 'D', '2026-08-04': 'D', '2026-08-05': 'D', '2026-08-06': 'E', '2026-08-07': 'N', '2026-08-08': 'N', '2026-08-09': 'OFF', '2026-08-10': 'OFF', '2026-08-28': 'OFF' },
+  '김비나': { '2026-08-01': 'OFF', '2026-08-02': 'D', '2026-08-03': 'E', '2026-08-04': 'E', '2026-08-05': 'E', '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'D', '2026-08-09': 'E', '2026-08-10': 'E', '2026-08-28': 'OFF' },
+  '이경은': { '2026-08-01': 'OFF', '2026-08-02': 'OFF', '2026-08-03': 'D', '2026-08-04': 'D', '2026-08-05': 'E', '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'D', '2026-08-09': 'E', '2026-08-10': 'OFF', '2026-08-28': 'D' },
+  '홍숙언': { '2026-08-01': 'OFF', '2026-08-02': 'E', '2026-08-03': 'E', '2026-08-04': 'E', '2026-08-05': 'OFF', '2026-08-06': 'D', '2026-08-07': 'D', '2026-08-08': 'E', '2026-08-09': 'N', '2026-08-10': 'N', '2026-08-28': 'OFF' },
+  '남영주': { '2026-08-01': 'N', '2026-08-02': 'N', '2026-08-03': 'OFF', '2026-08-04': 'OFF', '2026-08-05': 'N', '2026-08-06': 'N', '2026-08-07': 'N', '2026-08-08': 'OFF', '2026-08-09': 'OFF', '2026-08-10': 'N', '2026-08-28': 'OFF' }
+};
+
 const getTodayDateObj = () => {
   const d = new Date();
   return {
@@ -27,64 +36,68 @@ export default function App() {
   const [currentMonth, setCurrentMonth] = useState(today.month);
   const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
-  const [userName, setUserName] = useState('최수민');
+  // 로컬 스토리지 기반 개인 상태 불러오기
+  const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '최수민');
+  const [myShifts, setMyShifts] = useState(() => {
+    const saved = localStorage.getItem('nurse_my_shifts');
+    return saved ? JSON.parse(saved) : {
+      '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
+      '2026-08-01': 'E', '2026-08-02': 'OFF', '2026-08-03': 'E', '2026-08-04': 'N', '2026-08-05': 'N',
+      '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'OFF', '2026-08-09': 'OFF', '2026-08-10': 'D',
+      '2026-08-11': 'D', '2026-08-12': 'D', '2026-08-13': 'D', '2026-08-14': 'E', '2026-08-15': 'E',
+      '2026-08-16': 'OFF', '2026-08-17': 'N', '2026-08-18': 'N', '2026-08-19': 'OFF', '2026-08-20': 'E',
+      '2026-08-21': 'E', '2026-08-22': 'OFF', '2026-08-23': 'OFF', '2026-08-24': 'D', '2026-08-25': 'D', '2026-08-28': 'OFF'
+    };
+  });
+
+  const [shiftConfigs, setShiftConfigs] = useState(() => {
+    const saved = localStorage.getItem('nurse_shift_configs');
+    return saved ? JSON.parse(saved) : {
+      D: { name: 'Day', time: '07:30 - 15:30', nightHours: 0, color: '#FEF08A', textColor: '#854D0E' },
+      E: { name: 'Evening', time: '14:30 - 22:30', nightHours: 0.5, color: '#FED7AA', textColor: '#9A3412' },
+      N: { name: 'Night', time: '21:30 - 08:00', nightHours: 8, color: '#E0F2FE', textColor: '#075985' },
+      M: { name: 'Mid', time: '10:00 - 18:00', nightHours: 0, color: '#E9D5FF', textColor: '#6B21A8' },
+      OFF: { name: 'Off', time: '휴무', nightHours: 0, color: '#F3F4F6', textColor: '#374151' },
+      연차: { name: 'Annual', time: '연차 휴가', nightHours: 0, color: '#FBCFE8', textColor: '#9D174D' }
+    };
+  });
+
+  const [totalAnnualLeave, setTotalAnnualLeave] = useState(() => localStorage.getItem('nurse_total_annual') || '15');
+  const [manualUsedAnnual, setManualUsedAnnual] = useState(() => {
+    const saved = localStorage.getItem('nurse_manual_annual');
+    return saved !== null ? saved : null;
+  });
+
+  const [calcMode, setCalcMode] = useState(() => localStorage.getItem('nurse_calc_mode') || 'fixed');
+  const [nightFixedAllowance, setNightFixedAllowance] = useState(() => localStorage.getItem('nurse_night_fixed') || '50000');
+  const [eveningFixedAllowance, setEveningFixedAllowance] = useState(() => localStorage.getItem('nurse_eve_fixed') || '10000');
+  const [hourlyWage, setHourlyWage] = useState(() => localStorage.getItem('nurse_hourly_wage') || '13000');
+
+  // 상태 변경 시 localStorage에 개별 자동 저장
+  useEffect(() => { localStorage.setItem('nurse_user_name', userName); }, [userName]);
+  useEffect(() => { localStorage.setItem('nurse_my_shifts', JSON.stringify(myShifts)); }, [myShifts]);
+  useEffect(() => { localStorage.setItem('nurse_shift_configs', JSON.stringify(shiftConfigs)); }, [shiftConfigs]);
+  useEffect(() => { localStorage.setItem('nurse_total_annual', totalAnnualLeave); }, [totalAnnualLeave]);
+  useEffect(() => { 
+    if (manualUsedAnnual !== null) localStorage.setItem('nurse_manual_annual', manualUsedAnnual);
+    else localStorage.removeItem('nurse_manual_annual');
+  }, [manualUsedAnnual]);
+  useEffect(() => { localStorage.setItem('nurse_calc_mode', calcMode); }, [calcMode]);
+  useEffect(() => { localStorage.setItem('nurse_night_fixed', nightFixedAllowance); }, [nightFixedAllowance]);
+  useEffect(() => { localStorage.setItem('nurse_eve_fixed', eveningFixedAllowance); }, [eveningFixedAllowance]);
+  useEffect(() => { localStorage.setItem('nurse_hourly_wage', hourlyWage); }, [hourlyWage]);
+
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
 
-  const [parsedWardData, setParsedWardData] = useState(null);
-  const [detectedNames, setDetectedNames] = useState([]);
+  const [parsedWardData, setParsedWardData] = useState(DEFAULT_WARD_SHIFTS);
+  const [detectedNames, setDetectedNames] = useState(Object.keys(DEFAULT_WARD_SHIFTS));
   const [customNameInput, setCustomNameInput] = useState('');
   const [showNameModal, setShowNameModal] = useState(false);
 
-  // 병원별 근무시간 설정
-  const [shiftConfigs, setShiftConfigs] = useState({
-    D: { name: 'Day', time: '07:30 - 15:30', nightHours: 0, color: '#FEF08A', textColor: '#854D0E' },
-    E: { name: 'Evening', time: '14:30 - 22:30', nightHours: 0.5, color: '#FED7AA', textColor: '#9A3412' },
-    N: { name: 'Night', time: '21:30 - 08:00', nightHours: 8, color: '#E0F2FE', textColor: '#075985' },
-    M: { name: 'Mid', time: '10:00 - 18:00', nightHours: 0, color: '#E9D5FF', textColor: '#6B21A8' },
-    OFF: { name: 'Off', time: '휴무', nightHours: 0, color: '#F3F4F6', textColor: '#374151' },
-    연차: { name: 'Annual', time: '연차 휴가', nightHours: 0, color: '#FBCFE8', textColor: '#9D174D' }
-  });
-
-  // 1. 총 부여 연차
-  const [totalAnnualLeave, setTotalAnnualLeave] = useState('15');
-  // 2. 수동 수정용 사용 연차 (null이면 캘린더 자동 집계)
-  const [manualUsedAnnual, setManualUsedAnnual] = useState(null);
-
-  // 수당 계산 방식 선택 ('fixed': 회당 고정수당, 'hourly': 통상시급 기준)
-  const [calcMode, setCalcMode] = useState('fixed');
-  
-  // 고정 수당 입력값 (회당 원)
-  const [nightFixedAllowance, setNightFixedAllowance] = useState('50000');
-  const [eveningFixedAllowance, setEveningFixedAllowance] = useState('10000');
-
-  // 시급 입력값
-  const [hourlyWage, setHourlyWage] = useState('13000');
-
-  const [myShifts, setMyShifts] = useState({
-    '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
-    '2026-08-01': 'E', '2026-08-02': 'OFF', '2026-08-03': 'E', '2026-08-04': 'N', '2026-08-05': 'N',
-    '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'OFF', '2026-08-09': 'OFF', '2026-08-10': 'D',
-    '2026-08-11': 'D', '2026-08-12': 'D', '2026-08-13': 'D', '2026-08-14': 'E', '2026-08-15': 'E',
-    '2026-08-16': 'OFF', '2026-08-17': 'N', '2026-08-18': 'N', '2026-08-19': 'OFF', '2026-08-20': 'E',
-    '2026-08-21': 'E', '2026-08-22': 'OFF', '2026-08-23': 'OFF', '2026-08-24': 'D', '2026-08-25': 'D'
-  });
-
-  const [friends, setFriends] = useState([]);
-
-  const [memos, setMemos] = useState({
-    [today.dateStr]: [
-      { id: 1, type: '인수인계', time: '오전 08:00', text: '오늘 스케줄 및 병동 상태 확인', alertOffset: '0', alertText: '정시 알림', alertType: 'both', checked: false }
-    ]
-  });
-
-  const [memoText, setMemoText] = useState('');
-  const [memoCategory, setMemoCategory] = useState('인수인계');
-  const [ampm, setAmpm] = useState('오전');
-  const [hour, setHour] = useState('09');
-  const [minute, setMinute] = useState('00');
-  const [alertOffset, setAlertOffset] = useState('10');
-  const [alertType, setAlertType] = useState('both');
+  const [friends, setFriends] = useState(
+    Object.entries(DEFAULT_WARD_SHIFTS).map(([name, shifts]) => ({ name, shifts }))
+  );
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
 
@@ -95,17 +108,12 @@ export default function App() {
 
   const nightShiftCount = currentMonthShifts.filter(([_, code]) => code === 'N').length;
   const eveningShiftCount = currentMonthShifts.filter(([_, code]) => code === 'E').length;
-  
-  // 캘린더 상의 자동 집계 연차
   const autoAnnualLeaveCount = Object.values(myShifts).filter(code => code === '연차').length;
-  
-  // 수동 수정값 적용 (수정값 존재 시 수동값, 없으면 자동 집계)
   const usedAnnualLeaveCount = manualUsedAnnual !== null ? Number(manualUsedAnnual) : autoAnnualLeaveCount;
-  
   const numTotalAnnual = Number(totalAnnualLeave) || 0;
   const remainingAnnualLeave = numTotalAnnual - usedAnnualLeaveCount;
 
-  // 수당 계산 분기
+  // 수당 계산
   const numNightFixed = Number(String(nightFixedAllowance).replace(/[^0-9]/g, '')) || 0;
   const numEveFixed = Number(String(eveningFixedAllowance).replace(/[^0-9]/g, '')) || 0;
   const numHourlyWage = Number(String(hourlyWage).replace(/[^0-9]/g, '')) || 0;
@@ -321,9 +329,72 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'friends' && (
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h2 className="font-bold text-base flex items-center gap-2 text-slate-900">
+                <Users size={18} className="text-indigo-600" /> 병동 동료 근무 비교
+              </h2>
+              <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                {selectedDate} 기준
+              </span>
+            </div>
+
+            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl flex justify-between items-center text-xs">
+              <div>
+                <span className="font-extrabold text-indigo-950 text-sm">{privacyBlur ? '나' : userName} 쌤 (나)</span>
+                <p className="text-[10px] text-indigo-600 font-semibold">{shiftConfigs[currentSelectedShiftCode]?.time || '휴무'}</p>
+              </div>
+              <span 
+                style={{ backgroundColor: shiftConfigs[currentSelectedShiftCode]?.color || '#F3F4F6', color: shiftConfigs[currentSelectedShiftCode]?.textColor || '#374151' }} 
+                className="px-3 py-1.5 rounded-xl font-black text-xs shadow-2xs border"
+              >
+                {currentSelectedShiftCode || 'OFF'}
+              </span>
+            </div>
+
+            <p className="text-xs font-bold text-slate-600 pt-1">병동 동료 근무 현황 ({friends.length}명)</p>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {friends.map((f, i) => {
+                const friendShiftCode = f.shifts[selectedDate] || 'OFF';
+                const info = shiftConfigs[friendShiftCode] || shiftConfigs.OFF;
+                const isSameOff = currentSelectedShiftCode === 'OFF' && friendShiftCode === 'OFF';
+
+                return (
+                  <div 
+                    key={i} 
+                    className={`p-3 rounded-xl border flex justify-between items-center text-xs transition ${
+                      isSameOff ? 'bg-pink-50/60 border-pink-200 ring-1 ring-pink-300' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-800 text-sm">{privacyBlur ? '동료 ' + (i+1) : f.name} 쌤</span>
+                        {isSameOff && (
+                          <span className="text-[9px] bg-pink-500 text-white font-extrabold px-1.5 py-0.5 rounded-full">
+                            같이 휴무! 🎉
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500">{info.time}</p>
+                    </div>
+
+                    <span 
+                      style={{ backgroundColor: info.color, color: info.textColor }}
+                      className="px-3 py-1.5 rounded-xl font-black text-xs border shadow-2xs"
+                    >
+                      {friendShiftCode}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'allowance' && (
           <div className="space-y-4">
-            {/* 1. 병원 근무시간 설정 */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-700">
                 <Settings size={18} /> 내 병원 3교대 근무시간 설정
@@ -358,7 +429,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 2. 연차 현황 (사용연차 직접 수정 가능) */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center">
                 <h2 className="font-extrabold text-base flex items-center gap-2 text-pink-700">
@@ -368,7 +438,6 @@ export default function App() {
                   <button 
                     onClick={() => setManualUsedAnnual(null)}
                     className="flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition"
-                    title="캘린더 자동 집계로 복원"
                   >
                     <RefreshCw size={11} />
                     <span>자동 집계 복원</span>
@@ -416,7 +485,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 3. 근무 수당 계산기 */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
               <div className="flex justify-between items-center">
                 <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-700">
