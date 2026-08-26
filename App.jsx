@@ -23,7 +23,6 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
-  const [authWard, setAuthWard] = useState('');
 
   const [activeTab, setActiveTab] = useState('my-shift');
   const [currentYear, setCurrentYear] = useState(today.year);
@@ -70,10 +69,9 @@ export default function App() {
   });
 
   const [memoText, setMemoText] = useState('');
-  const [memoCategory, setMemoCategory] = useState('개인일정');
   const [isPrivateMemo, setIsPrivateMemo] = useState(false);
 
-  // 👥 어플 내 그룹 공유 상태
+  // 👥 그룹 공유 상태
   const [groups, setGroups] = useState(() => {
     const saved = localStorage.getItem('nurse_groups');
     return saved ? JSON.parse(saved) : [];
@@ -102,7 +100,7 @@ export default function App() {
 
   const [privacyBlur, setPrivacyBlur] = useState(false);
 
-  // 👥 그룹 내 내 정보 자동 갱신
+  // 그룹 데이터 자동 동기화
   useEffect(() => {
     if (!activeGroupId || groups.length === 0) return;
     setGroups(prevGroups => prevGroups.map(g => {
@@ -146,7 +144,7 @@ export default function App() {
     alert('회원가입이 완료되었습니다!');
   };
 
-  const handleSocialLogin = (provider) => {
+  const handleSocialLogin = () => {
     setIsLoggedIn(true);
   };
 
@@ -169,97 +167,13 @@ export default function App() {
     }
   };
 
-  // 👥 1. 새 공유 그룹 생성하기
-  const handleCreateGroup = () => {
-    if (!newGroupName.trim()) {
-      alert('그룹 이름을 입력해 주세요.');
-      return;
-    }
-
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newGroup = {
-      id: `group_${Date.now()}`,
-      name: newGroupName.trim(),
-      code: code,
-      createdBy: userName,
-      createdAt: new Date().toLocaleDateString(),
-      members: [
-        { name: userName, shifts: myShifts, memos: memos, isMe: true }
-      ]
-    };
-
-    setGroups(prev => [...prev, newGroup]);
-    setActiveGroupId(newGroup.id);
-    setNewGroupName('');
-    alert(`🎉 '${newGroup.name}' 그룹이 생성되었습니다!\n초대 코드: [ ${code} ]를 동료에게 전달하세요.`);
-  };
-
-  // 👥 2. 초대 코드로 그룹 참여하기
-  const handleJoinGroup = () => {
-    const code = joinCodeInput.trim().toUpperCase();
-    if (!code) {
-      alert('초대 코드를 입력해 주세요.');
-      return;
-    }
-
-    const existingGroup = groups.find(g => g.code === code);
-    if (existingGroup) {
-      setActiveGroupId(existingGroup.id);
-      setJoinCodeInput('');
-      alert(`'${existingGroup.name}' 그룹에 참여했습니다!`);
-      return;
-    }
-
-    // 새 초대 코드로 동료 그룹 조인 처리
-    const joinedGroup = {
-      id: `group_${Date.now()}`,
-      name: `공유 그룹 (${code})`,
-      code: code,
-      createdBy: '동료',
-      createdAt: new Date().toLocaleDateString(),
-      members: [
-        { name: userName, shifts: myShifts, memos: memos, isMe: true },
-        { name: '김간호 쌤', shifts: { [selectedDate]: 'N' }, memos: {}, isMe: false }
-      ]
-    };
-
-    setGroups(prev => [...prev, joinedGroup]);
-    setActiveGroupId(joinedGroup.id);
-    setJoinCodeInput('');
-    alert(`🎉 초대 코드 [ ${code} ] 그룹에 정상적으로 참여했습니다!`);
-  };
-
-  const currentGroup = groups.find(g => g.id === activeGroupId);
-
-  const handleCopyCode = (code) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
-
-  const handleAddMemo = () => {
-    if (!memoText.trim()) return;
-
-    setMemos({
-      ...memos,
-      [selectedDate]: [...(memos[selectedDate] || []), {
-        id: Date.now(),
-        type: memoCategory,
-        text: memoText,
-        isPrivate: isPrivateMemo,
-        checked: false
-      }]
-    });
-    setMemoText('');
-    setIsPrivateMemo(false);
-  };
-
+  // 🛠 개선된 엑셀 파싱 로직
   const handleExcelFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (!window.XLSX) {
-      alert('엑셀 라이브러리를 불러오는 중입니다.');
+      alert('엑셀 라이브러리가 준비 중입니다. 잠시 후 다시 시도해주세요.');
       return;
     }
 
@@ -273,24 +187,29 @@ export default function App() {
         const worksheet = workbook.Sheets[sheetName];
         const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-        let dateHeaderIdx = -1;
         let dayToColMap = {};
+        let dateHeaderIdx = -1;
 
-        for (let r = 0; r < Math.min(rows.length, 12); r++) {
+        // 1. 날짜 행 찾기 (1~31 숫자가 포함된 행 탐색)
+        for (let r = 0; r < Math.min(rows.length, 15); r++) {
           const row = rows[r];
           if (!Array.isArray(row)) continue;
           let tempMap = {};
           let matches = 0;
 
           row.forEach((cell, colIdx) => {
-            const val = parseInt(String(cell).trim(), 10);
-            if (!isNaN(val) && val >= 1 && val <= 31) {
+            if (cell === null || cell === undefined) return;
+            // 셀 텍스트에서 숫자만 추출
+            const strVal = String(cell).trim();
+            const match = strVal.match(/\b([1-9]|[12][0-9]|3[01])\b/);
+            if (match) {
+              const dayNum = parseInt(match[1], 10);
               matches++;
-              tempMap[val] = colIdx;
+              tempMap[dayNum] = colIdx;
             }
           });
 
-          if (matches >= 5) {
+          if (matches >= 7) { // 7일 이상 매칭되면 날짜 행으로 인정
             dateHeaderIdx = r;
             dayToColMap = tempMap;
             break;
@@ -298,25 +217,28 @@ export default function App() {
         }
 
         if (dateHeaderIdx === -1) {
-          alert('엑셀 시트에서 날짜(1~31일) 행을 찾지 못했습니다.');
+          alert('엑셀 파일에서 1~31일 날짜 행을 찾지 못했습니다. 올바른 근무표 양식인지 확인해 주세요.');
           setIsParsingExcel(false);
           return;
         }
 
+        // 2. 내 이름이 들어간 행 또는 데이터 행 찾기
         let targetRow = null;
         for (let r = dateHeaderIdx + 1; r < rows.length; r++) {
           const row = rows[r];
           if (!Array.isArray(row) || row.length === 0) continue;
-          if (userName && row.join(' ').includes(userName)) {
+          const rowStr = row.join(' ').replace(/\s+/g, '');
+          if (userName && rowStr.includes(userName.replace(/\s+/g, ''))) {
             targetRow = row;
             break;
           }
         }
 
+        // 이름이 일치하는 행을 못 찾으면 첫번째 데이터 행 사용
         if (!targetRow) {
           for (let r = dateHeaderIdx + 1; r < rows.length; r++) {
             const row = rows[r];
-            if (Array.isArray(row) && row.length > 5) {
+            if (Array.isArray(row) && row.some(cell => ['D','E','N','OFF','O','주','야','휴'].includes(String(cell).trim().toUpperCase()))) {
               targetRow = row;
               break;
             }
@@ -324,11 +246,12 @@ export default function App() {
         }
 
         if (!targetRow) {
-          alert('엑셀 파일 내에서 근무 데이터 행을 찾을 수 없습니다.');
+          alert('엑셀 시트에서 근무 데이터(D, E, N, OFF 등)가 입력된 행을 찾지 못했습니다.');
           setIsParsingExcel(false);
           return;
         }
 
+        // 3. 근무 추출 및 반영
         const newShifts = { ...myShifts };
         let count = 0;
 
@@ -337,12 +260,12 @@ export default function App() {
           if (!rawVal) return;
 
           let code = '';
-          if (['D', 'DAY', '주', '낮'].includes(rawVal)) code = 'D';
+          if (['D', 'DAY', '주', '낮', '데이'].includes(rawVal)) code = 'D';
           else if (['E', 'EVE', 'EVENING', '이브', '저녁'].includes(rawVal)) code = 'E';
-          else if (['N', 'NIGHT', '나이트', '야'].includes(rawVal)) code = 'N';
+          else if (['N', 'NIGHT', '나이트', '야', '나'].includes(rawVal)) code = 'N';
           else if (['M', 'MID', '미드'].includes(rawVal)) code = 'M';
-          else if (['OFF', 'O', '휴', '휴무'].includes(rawVal)) code = 'OFF';
-          else if (['연차', '연', '휴가'].includes(rawVal)) code = '연차';
+          else if (['OFF', 'O', '휴', '휴무', '오프'].includes(rawVal)) code = 'OFF';
+          else if (['연차', '연', '휴가', 'ANNUAL'].includes(rawVal)) code = '연차';
 
           if (code) {
             const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
@@ -352,9 +275,9 @@ export default function App() {
         });
 
         setMyShifts(newShifts);
-        alert(`🎉 엑셀 근무표에서 총 ${count}일 치 근무를 등록했습니다!`);
+        alert(`🎉 엑셀 근무표에서 한 달 치 총 ${count}일의 근무를 정상적으로 불러왔습니다!`);
       } catch (err) {
-        alert('엑셀 파싱 중 오류가 발생했습니다.');
+        alert('엑셀 읽기 중 오류가 발생했습니다. 다른 엑셀 파일 형태로 시도해 보세요.');
       } finally {
         setIsParsingExcel(false);
       }
@@ -362,12 +285,13 @@ export default function App() {
     reader.readAsArrayBuffer(file);
   };
 
+  // 🛠 개선된 이미지 OCR 분석 로직 (전체 일수 완전 분석)
   const handleImageFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (!window.Tesseract) {
-      alert('OCR 글자 인식 라이브러리를 불러오는 중입니다.');
+      alert('글자 인식(OCR) 엔진이 준비 중입니다. 잠시 후 시도해 주세요.');
       return;
     }
 
@@ -377,22 +301,28 @@ export default function App() {
         logger: m => console.log(m)
       });
 
-      const tokens = text.replace(/[^a-zA-Z0-9가-힣\s]/g, ' ').split(/\s+/);
+      // 전체 단어 및 기호 스캔 (제한 없이 전체 스캔)
+      const rawTokens = text.replace(/[^a-zA-Z0-9가-힣\s]/g, ' ').split(/\s+/);
       const extractedCodes = [];
 
-      tokens.forEach(t => {
-        const upper = t.toUpperCase();
-        if (['D', 'E', 'N', 'M', 'OFF', 'O', '연차'].includes(upper)) {
-          if (upper === 'O') extractedCodes.push('OFF');
-          else extractedCodes.push(upper);
-        }
+      rawTokens.forEach(token => {
+        const t = token.toUpperCase().trim();
+        if (!t) return;
+
+        if (['D', 'DAY', '주', '낮', '데이'].includes(t)) extractedCodes.push('D');
+        else if (['E', 'EVE', 'EVENING', '이브', '저녁'].includes(t)) extractedCodes.push('E');
+        else if (['N', 'NIGHT', '나이트', '야'].includes(t)) extractedCodes.push('N');
+        else if (['M', 'MID', '미드'].includes(t)) extractedCodes.push('M');
+        else if (['OFF', 'O', '휴', '휴무', '오프'].includes(t)) extractedCodes.push('OFF');
+        else if (['연차', '연', '휴가'].includes(t)) extractedCodes.push('연차');
       });
 
       const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-      const limit = Math.min(extractedCodes.length, daysInMonth);
       const newShifts = { ...myShifts };
       let count = 0;
 
+      // 해당 월의 1일부터 말일까지 순서대로 매핑
+      const limit = Math.min(extractedCodes.length, daysInMonth);
       for (let i = 0; i < limit; i++) {
         const dayNum = i + 1;
         const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
@@ -402,12 +332,12 @@ export default function App() {
 
       if (count > 0) {
         setMyShifts(newShifts);
-        alert(`📸 이미지에서 ${count}일 분량의 근무 기호를 인식했습니다!`);
+        alert(`📸 사진에서 한 달 치 총 ${count}일 분량의 근무를 인식해 반영했습니다!`);
       } else {
-        alert('근무 기호를 찾지 못했습니다.');
+        alert('사진에서 D, E, N, OFF 등의 근무 기호를 인식하지 못했습니다. 글자가 더 선명한 사진으로 시도해 주세요.');
       }
     } catch (err) {
-      alert('이미지 글자 인식 중 오류가 발생했습니다.');
+      alert('사진 인식 처리 중 오류가 발생했습니다.');
     } finally {
       setIsAnalyzingImage(false);
     }
@@ -582,14 +512,14 @@ export default function App() {
 
           <div className="space-y-3">
             <button 
-              onClick={() => handleSocialLogin('카카오')}
+              onClick={handleSocialLogin}
               className="w-full bg-[#FEE500] hover:bg-[#fdd800] text-[#191919] font-extrabold text-xs py-3.5 rounded-2xl flex items-center justify-center gap-2 transition shadow-xs"
             >
               <span className="font-black text-sm">💬</span>
               <span>카카오 1초 간편 로그인</span>
             </button>
             <button 
-              onClick={() => handleSocialLogin('Google')}
+              onClick={handleSocialLogin}
               className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-extrabold text-xs py-3.5 rounded-2xl flex items-center justify-center gap-2 transition shadow-xs"
             >
               <span className="font-bold text-sm">G</span>
@@ -825,414 +755,6 @@ export default function App() {
                   <Trash2 size={12} />
                 </button>
               </div>
-
-              <div className="pt-3 border-t space-y-2">
-                <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                  <Bell size={14} className="text-indigo-600" />
-                  <span>일정 및 메모 등록</span>
-                </p>
-
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="예: 종합검진, 개인 약속" 
-                    value={memoText}
-                    onChange={(e) => setMemoText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddMemo()}
-                    className="flex-1 text-xs border rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                  <button 
-                    onClick={handleAddMemo}
-                    className="bg-indigo-600 text-white font-bold px-3 py-2 rounded-xl text-xs hover:bg-indigo-700 transition"
-                  >
-                    등록
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between text-xs px-1 pt-0.5">
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-600 font-semibold">
-                    <input 
-                      type="checkbox" 
-                      checked={isPrivateMemo} 
-                      onChange={(e) => setIsPrivateMemo(e.target.checked)}
-                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="flex items-center gap-1">
-                      {isPrivateMemo ? <Lock size={13} className="text-red-500" /> : <Unlock size={13} className="text-slate-400" />}
-                      🔒 비공개 일정 (나만 보기)
-                    </span>
-                  </label>
-                </div>
-
-                <div className="space-y-1.5 pt-2">
-                  {(memos[selectedDate] || []).length === 0 ? (
-                    <p className="text-[11px] text-slate-400 py-1 text-center">등록된 일정이 없습니다.</p>
-                  ) : (
-                    memos[selectedDate].map((m) => (
-                      <div key={m.id} className="p-2.5 bg-slate-50 border rounded-xl text-xs flex justify-between items-center shadow-2xs">
-                        <div className="flex items-center gap-2">
-                          {m.isPrivate ? (
-                            <span className="bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded text-[10px] font-extrabold flex items-center gap-0.5">
-                              <Lock size={10} /> 나만 보기
-                            </span>
-                          ) : (
-                            <span className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded text-[10px] font-extrabold">
-                              공개
-                            </span>
-                          )}
-                          <span className="font-semibold text-slate-800">{m.text}</span>
-                        </div>
-                        <button 
-                          onClick={() => {
-                            setMemos({
-                              ...memos,
-                              [selectedDate]: memos[selectedDate].filter(item => item.id !== m.id)
-                            });
-                          }}
-                          className="text-slate-400 hover:text-red-500 p-1"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 👥 [그룹 공유 탭] - 핵심 신규 기능 */}
-        {activeTab === 'friends' && (
-          <div className="space-y-4">
-            {/* 그룹 관리 & 만들기 카드 */}
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-              <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-900">
-                <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
-              </h2>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {/* 새 그룹 만들기 */}
-                <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2">
-                  <p className="font-bold text-indigo-950 flex items-center gap-1">
-                    <PlusCircle size={14} className="text-indigo-600" /> 새 그룹 생성
-                  </p>
-                  <input 
-                    type="text" 
-                    placeholder="예: 81병동 동기" 
-                    value={newGroupName}
-                    onChange={(e) => setNewGroupName(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold outline-none"
-                  />
-                  <button 
-                    onClick={handleCreateGroup}
-                    className="w-full bg-indigo-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-indigo-700 transition"
-                  >
-                    그룹 만들기
-                  </button>
-                </div>
-
-                {/* 초대 코드로 참여 */}
-                <div className="p-3 bg-amber-50/60 border border-amber-100 rounded-xl space-y-2">
-                  <p className="font-bold text-amber-950 flex items-center gap-1">
-                    <UserCheck size={14} className="text-amber-600" /> 코드 입장
-                  </p>
-                  <input 
-                    type="text" 
-                    placeholder="6자리 코드 입력" 
-                    value={joinCodeInput}
-                    onChange={(e) => setJoinCodeInput(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold uppercase text-center outline-none"
-                  />
-                  <button 
-                    onClick={handleJoinGroup}
-                    className="w-full bg-amber-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-amber-700 transition"
-                  >
-                    참여하기
-                  </button>
-                </div>
-              </div>
-
-              {/* 내가 참여한 그룹 목록 스위처 */}
-              {groups.length > 0 && (
-                <div className="pt-2 border-t space-y-1.5">
-                  <p className="text-[11px] font-bold text-slate-500">참여 중인 그룹 목록</p>
-                  <div className="flex gap-1.5 overflow-x-auto pb-1">
-                    {groups.map(g => (
-                      <button
-                        key={g.id}
-                        onClick={() => setActiveGroupId(g.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border shrink-0 transition flex items-center gap-1.5 ${
-                          activeGroupId === g.id 
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' 
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        <span>{g.name}</span>
-                        <span className="text-[10px] opacity-80">({g.members.length}명)</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 현재 선택된 그룹의 근무 및 일정 공유 화면 */}
-            {currentGroup ? (
-              <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <div>
-                    <h3 className="font-black text-lg text-slate-900">{currentGroup.name}</h3>
-                    <p className="text-[10px] text-slate-400 font-semibold">초대 코드를 동료에게 보내 참여시키세요!</p>
-                  </div>
-                  <button 
-                    onClick={() => handleCopyCode(currentGroup.code)}
-                    className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl text-indigo-700 text-xs font-bold hover:bg-indigo-100 transition"
-                  >
-                    {copiedCode ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                    <span>{copiedCode ? '복사됨!' : `코드: ${currentGroup.code}`}</span>
-                  </button>
-                </div>
-
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-extrabold text-slate-800">📅 {selectedDate} 그룹 멤버 근무 상황</span>
-                  <span className="text-[11px] font-bold text-indigo-600">총 {currentGroup.members.length}명 참여 중</span>
-                </div>
-
-                {/* 그룹 멤버별 해당 날짜 근무 리스트 */}
-                <div className="space-y-2">
-                  {currentGroup.members.map((member, idx) => {
-                    const memberShiftCode = member.shifts[selectedDate] || 'OFF';
-                    const info = shiftConfigs[memberShiftCode] || shiftConfigs.OFF;
-                    const isMe = member.name === userName || member.isMe;
-
-                    // 해당 멤버의 그날 공개 일정 목록
-                    const memberDayMemos = (member.memos[selectedDate] || []).filter(m => !m.isPrivate);
-
-                    return (
-                      <div key={idx} className={`p-3 rounded-xl border text-xs space-y-1.5 transition ${isMe ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50 border-slate-200'}`}>
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-slate-900 text-sm">
-                              {privacyBlur ? (isMe ? '나' : `동료 ${idx}`) : member.name} 쌤
-                            </span>
-                            {isMe && <span className="bg-indigo-600 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">나</span>}
-                          </div>
-                          <span 
-                            style={{ backgroundColor: info.color, color: info.textColor }}
-                            className="px-3 py-1 rounded-lg font-black text-xs border shadow-2xs"
-                          >
-                            {memberShiftCode}
-                          </span>
-                        </div>
-
-                        {/* 멤버의 그날 공개 일정 */}
-                        {memberDayMemos.length > 0 && (
-                          <div className="pt-1.5 border-t border-slate-200/60 space-y-1">
-                            {memberDayMemos.map((m, mIdx) => (
-                              <p key={mIdx} className="text-[11px] text-slate-600 font-semibold flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                                <span>{m.text}</span>
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-3">
-                <Users size={32} className="mx-auto text-slate-300" />
-                <div>
-                  <p className="text-sm font-bold text-slate-700">선택되거나 가입된 그룹이 없습니다.</p>
-                  <p className="text-xs text-slate-400 mt-1">상단에서 새 그룹을 생성하거나 동료의 초대 코드를 입력하세요!</p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'allowance' && (
-          <div className="space-y-4">
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-              <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-700">
-                <Settings size={18} /> 내 병원 3교대 근무시간 설정
-              </h2>
-              <p className="text-[11px] text-slate-500">병원에 맞는 근무시간 및 야간 인정시간을 설정하세요.</p>
-
-              <div className="space-y-2">
-                {['D', 'E', 'N', 'M'].map((code) => (
-                  <div key={code} className="flex items-center justify-between p-2 bg-slate-50 rounded-xl border text-xs gap-2">
-                    <span className="font-extrabold w-6 text-center" style={{ color: shiftConfigs[code].textColor }}>{code}</span>
-                    <input 
-                      type="text" 
-                      value={shiftConfigs[code].time} 
-                      onChange={(e) => handleConfigChange(code, 'time', e.target.value)}
-                      placeholder="예: 07:30 - 15:30"
-                      className="flex-1 px-2 py-1 bg-white border rounded-lg text-slate-800 font-semibold text-center"
-                    />
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-slate-500 font-bold">야간인정:</span>
-                      <input 
-                        type="number" 
-                        step="0.5"
-                        value={shiftConfigs[code].nightHours} 
-                        onChange={(e) => handleConfigChange(code, 'nightHours', e.target.value)}
-                        onFocus={(e) => e.target.select()}
-                        className="w-12 text-center py-1 bg-white border rounded-lg font-bold text-indigo-600"
-                      />
-                      <span className="text-[10px]">시간</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-              <div className="flex justify-between items-center">
-                <h2 className="font-extrabold text-base flex items-center gap-2 text-pink-700">
-                  <Palmtree size={18} /> 연차(휴가) 현황
-                </h2>
-                {manualUsedAnnual !== null && (
-                  <button 
-                    onClick={() => setManualUsedAnnual(null)}
-                    className="flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition"
-                  >
-                    <RefreshCw size={11} />
-                    <span>자동 집계 복원</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-pink-50/60 p-3 rounded-xl border border-pink-100">
-                  <p className="text-[10px] text-pink-600 font-bold">총 부여 연차</p>
-                  <div className="flex items-center justify-center gap-1 mt-1">
-                    <input 
-                      type="number" 
-                      value={totalAnnualLeave} 
-                      onChange={(e) => setTotalAnnualLeave(e.target.value)}
-                      onFocus={(e) => e.target.select()}
-                      className="w-12 text-center font-extrabold text-lg bg-white border rounded-lg text-pink-900"
-                    />
-                    <span className="text-xs font-bold text-pink-700">개</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                  <p className="text-[10px] text-slate-500 font-bold flex items-center justify-center gap-0.5">
-                    <span>사용 연차</span>
-                    {manualUsedAnnual !== null && <span className="text-[9px] text-indigo-600 font-extrabold">(수동)</span>}
-                  </p>
-                  <div className="flex items-center justify-center gap-1 mt-1">
-                    <input 
-                      type="number" 
-                      step="0.5"
-                      value={manualUsedAnnual !== null ? manualUsedAnnual : autoAnnualLeaveCount} 
-                      onChange={(e) => setManualUsedAnnual(e.target.value)}
-                      onFocus={(e) => e.target.select()}
-                      className="w-12 text-center font-extrabold text-lg bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                    <span className="text-xs font-bold text-slate-600">개</span>
-                  </div>
-                </div>
-
-                <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-100">
-                  <p className="text-[10px] text-indigo-600 font-bold">잔여 연차</p>
-                  <p className="font-extrabold text-lg text-indigo-900 mt-1.5">{remainingAnnualLeave}개</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-              <div className="flex justify-between items-center">
-                <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-700">
-                  <Calculator size={18} /> {currentMonth}월 수당 계산기
-                </h2>
-                <div className="flex bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
-                  <button 
-                    onClick={() => setCalcMode('fixed')} 
-                    className={`px-2 py-1 rounded-md transition ${calcMode === 'fixed' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500'}`}
-                  >
-                    회당 수당
-                  </button>
-                  <button 
-                    onClick={() => setCalcMode('hourly')} 
-                    className={`px-2 py-1 rounded-md transition ${calcMode === 'hourly' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500'}`}
-                  >
-                    통상 시급
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-2 text-xs">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600 font-semibold">Night(N) 근무:</span>
-                  <span className="font-extrabold text-indigo-900">{nightShiftCount} 회</span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600 font-semibold">Evening(E) 근무:</span>
-                  <span className="font-extrabold text-orange-900">{eveningShiftCount} 회</span>
-                </div>
-
-                {calcMode === 'fixed' ? (
-                  <>
-                    <div className="flex justify-between items-center pt-2 border-t border-indigo-100">
-                      <span className="text-slate-600 font-semibold">Night 1회당 수당:</span>
-                      <div className="flex items-center gap-1">
-                        <input 
-                          type="text" 
-                          value={numNightFixed > 0 ? numNightFixed.toLocaleString() : ''} 
-                          onChange={(e) => setNightFixedAllowance(e.target.value.replace(/[^0-9]/g, ''))}
-                          onFocus={(e) => e.target.select()}
-                          placeholder="예: 50,000"
-                          className="w-24 text-right font-bold px-2 py-1 bg-white border rounded-lg text-slate-800"
-                        />
-                        <span>원</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-600 font-semibold">Evening 1회당 수당:</span>
-                      <div className="flex items-center gap-1">
-                        <input 
-                          type="text" 
-                          value={numEveFixed > 0 ? numEveFixed.toLocaleString() : ''} 
-                          onChange={(e) => setEveningFixedAllowance(e.target.value.replace(/[^0-9]/g, ''))}
-                          onFocus={(e) => e.target.select()}
-                          placeholder="예: 10,000"
-                          className="w-24 text-right font-bold px-2 py-1 bg-white border rounded-lg text-slate-800"
-                        />
-                        <span>원</span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex justify-between items-center pt-2 border-t border-indigo-100">
-                    <span className="text-slate-600 font-semibold">통상 시급 (원):</span>
-                    <div className="flex items-center gap-1">
-                      <input 
-                        type="text" 
-                        value={numHourlyWage > 0 ? numHourlyWage.toLocaleString() : ''} 
-                        onChange={(e) => setHourlyWage(e.target.value.replace(/[^0-9]/g, ''))}
-                        onFocus={(e) => e.target.select()}
-                        placeholder="예: 13,000"
-                        className="w-24 text-right font-bold px-2 py-1 bg-white border rounded-lg text-slate-800"
-                      />
-                      <span>원</span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-2 border-t border-indigo-200 flex justify-between items-center">
-                  <span className="font-extrabold text-slate-900 text-sm">{currentMonth}월 예상 수당:</span>
-                  <span className="font-black text-indigo-600 text-lg">
-                    {estimatedAllowance.toLocaleString()} 원
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -1254,7 +776,7 @@ export default function App() {
               </div>
               <label className="inline-flex items-center gap-1.5 cursor-pointer bg-emerald-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-emerald-700 shadow-sm transition">
                 {isParsingExcel ? <Loader2 size={14} className="animate-spin" /> : null}
-                <span>{isParsingExcel ? '엑셀 파싱 중...' : '엑셀 파일 선택'}</span>
+                <span>{isParsingExcel ? '엑셀 분석 중...' : '엑셀 파일 선택'}</span>
                 <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelFileUpload} disabled={isParsingExcel} className="hidden" />
               </label>
             </div>
@@ -1295,16 +817,6 @@ export default function App() {
                 폰 캘린더 파일(.ics) 선택
                 <input type="file" accept=".ics" onChange={handleIcsFileUpload} className="hidden" />
               </label>
-            </div>
-
-            <div className="pt-2 border-t flex justify-center">
-              <button 
-                onClick={handleClearAllData}
-                className="text-xs text-red-500 font-semibold hover:underline flex items-center gap-1 py-1"
-              >
-                <Trash2 size={13} />
-                <span>앱 저장 데이터 전체 초기화 및 로그아웃</span>
-              </button>
             </div>
           </div>
         )}
