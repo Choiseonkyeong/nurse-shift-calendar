@@ -40,7 +40,7 @@ export default function GroupShareTab({
 
   const activeThemeObj = THEME_COLORS.find(t => t.id === currentTheme) || THEME_COLORS[0];
 
-  // 1. Supabase DB와 완벽 동기화 (내 근무 저장 + 그룹원 전체 조회)
+  // 1. Supabase DB 동기화 및 그룹 선택 보장
   const syncWithSupabase = async (targetCode, targetName = '공유 그룹') => {
     const cleanCode = targetCode?.trim().toUpperCase();
     if (!cleanCode || !userName) return;
@@ -48,8 +48,8 @@ export default function GroupShareTab({
 
     try {
       if (supabase) {
-        // [A] 내 근무 데이터를 DB에 저장 (UPSERT)
-        const { error: upsertErr } = await supabase
+        // [A] 내 근무 데이터 업서트
+        await supabase
           .from('group_shifts')
           .upsert(
             {
@@ -62,9 +62,7 @@ export default function GroupShareTab({
             { onConflict: 'group_code, user_name' }
           );
 
-        if (upsertErr) console.error('UPSERT Error:', upsertErr);
-
-        // [B] DB에서 해당 그룹 코드를 가진 모든 동료 조회
+        // [B] 해당 그룹 코드의 전체 멤버 조회
         const { data, error: selectErr } = await supabase
           .from('group_shifts')
           .select('*')
@@ -80,9 +78,13 @@ export default function GroupShareTab({
             isMe: item.user_name === userName
           }));
 
+          // 로컬 groups State에 저장하고 해당 ID로 activeGroupId 고정
+          let targetGroupId = null;
+
           setGroups(prevGroups => {
             const existingGroup = prevGroups.find(g => g.code === cleanCode);
             if (existingGroup) {
+              targetGroupId = existingGroup.id;
               return prevGroups.map(g => 
                 g.code === cleanCode 
                   ? { ...g, members: dbMembers } 
@@ -96,11 +98,15 @@ export default function GroupShareTab({
                 color: 'indigo',
                 members: dbMembers
               };
-              // 새로 추가된 그룹으로 자동 선택
-              setActiveGroupId(newG.id);
+              targetGroupId = newG.id;
               return [...prevGroups, newG];
             }
           });
+
+          // activeGroupId를 활성화하여 "가입된 그룹이 없습니다" 방지
+          if (targetGroupId) {
+            setActiveGroupId(targetGroupId);
+          }
         }
       }
     } catch (err) {
@@ -110,7 +116,7 @@ export default function GroupShareTab({
     }
   };
 
-  // 그룹 변경 및 실시간 수신 구독
+  // 그룹 변경 시 실시간 동기화
   useEffect(() => {
     if (currentCode) {
       syncWithSupabase(currentCode, currentName);
@@ -143,9 +149,10 @@ export default function GroupShareTab({
 
     const generatedCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     const groupNameText = newGroupName.trim();
+    const newId = `group_${Date.now()}`;
 
     const newGroup = {
-      id: `group_${Date.now()}`,
+      id: newId,
       name: groupNameText,
       code: generatedCode,
       color: 'indigo',
@@ -153,14 +160,14 @@ export default function GroupShareTab({
     };
 
     setGroups(prev => [...prev, newGroup]);
-    setActiveGroupId(newGroup.id);
+    setActiveGroupId(newId);
     setNewGroupName('');
 
     await syncWithSupabase(generatedCode, groupNameText);
     alert(`🎉 그룹 '${groupNameText}' 생성 완료!\n초대 코드: [ ${generatedCode} ]`);
   };
 
-  // 3. 초대 코드로 참여
+  // 3. 초대 코드로 참여 (가입 후 해당 그룹 ID로 선택 강제 고정)
   const handleJoinGroupAction = async () => {
     const code = joinCodeInput.trim().toUpperCase();
     if (!code) {
@@ -169,13 +176,14 @@ export default function GroupShareTab({
     }
 
     setJoinCodeInput('');
-    
-    // 이미 존재하는 로컬 그룹이면 해당 그룹 선택
+
+    // 기존에 참여했던 그룹이면 바로 선택
     const existing = groups.find(g => g.code === code);
     if (existing) {
       setActiveGroupId(existing.id);
     }
 
+    // DB 동기화 및 새 그룹 ID로 활성화
     await syncWithSupabase(code, '공유 그룹');
     alert(`🎉 초대 코드 [ ${code} ] 그룹에 연결되었습니다!`);
   };
@@ -235,7 +243,7 @@ export default function GroupShareTab({
 
   return (
     <div className="space-y-4">
-      {/* 공유 그룹 관리 영역 */}
+      {/* 어플 내 공유 그룹 관리 카테고리 */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
         <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-900">
           <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
