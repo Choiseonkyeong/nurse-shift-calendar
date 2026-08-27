@@ -70,20 +70,20 @@ export default function App() {
   const [memoText, setMemoText] = useState('');
   const [isPrivateMemo, setIsPrivateMemo] = useState(false);
 
-  onst [groups, setGroups] = useState(() => {
-  const saved = localStorage.getItem('nurse_groups');
-  return saved ? JSON.parse(saved) : [
-    { 
-      id: 'g1', 
-      name: '5병동 동기들', 
-      code: 'W5ALL1', 
-      members: [
-        { name: userName, shifts: myShifts, memos: memos, isMe: true }
-        
-      ] 
-    }
-  ];
-});
+  // onst -> const 오타 수정
+  const [groups, setGroups] = useState(() => {
+    const saved = localStorage.getItem('nurse_groups');
+    return saved ? JSON.parse(saved) : [
+      { 
+        id: 'g1', 
+        name: '5병동 동기들', 
+        code: 'W5ALL1', 
+        members: [
+          { name: userName, shifts: myShifts, memos: memos, isMe: true }
+        ] 
+      }
+    ];
+  });
   const [activeGroupId, setActiveGroupId] = useState(() => localStorage.getItem('nurse_active_group_id') || 'g1');
   const [newGroupName, setNewGroupName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
@@ -172,8 +172,7 @@ export default function App() {
         name: `공유 그룹 (${code})`,
         code: code,
         members: [
-          { name: userName, shifts: myShifts, memos: memos, isMe: true },
-          { name: '동료 쌤', shifts: { [selectedDate]: 'N' }, memos: {}, isMe: false }
+          { name: userName, shifts: myShifts, memos: memos, isMe: true }
         ]
       };
       setGroups(prev => [...prev, joined]);
@@ -299,22 +298,12 @@ export default function App() {
 
         {activeTab === 'groupShare' && (
           <GroupShareTab
-            newGroupName={newGroupName}
-            setNewGroupName={setNewGroupName}
-            handleCreateGroup={handleCreateGroup}
-            joinCodeInput={joinCodeInput}
-            setJoinCodeInput={setJoinCodeInput}
-            handleJoinGroup={handleJoinGroup}
-            groups={groups}
-            activeGroupId={activeGroupId}
-            setActiveGroupId={setActiveGroupId}
-            currentGroup={currentGroup}
-            handleCopyCode={handleCopyCode}
-            copiedCode={copiedCode}
             selectedDate={selectedDate}
             shiftConfigs={shiftConfigs}
             userName={userName}
-            privacyBlur={privacyBlur}
+            myShifts={myShifts}
+            groups={groups}
+            setGroups={setGroups}
           />
         )}
 
