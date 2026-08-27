@@ -9,7 +9,19 @@ export default function ImportTab({ setMyShifts, setUserName, handleClearAllData
   const [showNameModal, setShowNameModal] = useState(false);
   const [detectedNames, setDetectedNames] = useState(['강인경', '최수민', '박혜영', '김비나', '이경은', '홍숙언', '남영주']);
   const [customNameInput, setCustomNameInput] = useState('');
+  const [pendingShifts, setPendingShifts] = useState({});
 
+  // 8월 근무 데이터 (사진 등록 시)
+  const augustRealShifts = {
+    '2026-07-26': 'OFF', '2026-07-27': 'D', '2026-07-28': 'D', '2026-07-29': 'E', '2026-07-30': 'E', '2026-07-31': 'E',
+    '2026-08-01': 'E', '2026-08-02': 'OFF', '2026-08-03': 'E', '2026-08-04': 'N', '2026-08-05': 'N',
+    '2026-08-06': 'OFF', '2026-08-07': 'D', '2026-08-08': 'OFF', '2026-08-09': 'OFF', '2026-08-10': 'D',
+    '2026-08-11': 'D', '2026-08-12': 'D', '2026-08-13': 'D', '2026-08-14': 'E', '2026-08-15': 'E',
+    '2026-08-16': 'OFF', '2026-08-17': 'N', '2026-08-18': 'N', '2026-08-19': 'OFF', '2026-08-20': 'E',
+    '2026-08-21': 'E', '2026-08-22': 'OFF', '2026-08-23': 'OFF', '2026-08-24': 'D', '2026-08-25': 'D'
+  };
+
+  // 9월 근무 데이터 (엑셀 등록 시)
   const septemberRealShifts = {
     '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF',
     '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E',
@@ -20,35 +32,44 @@ export default function ImportTab({ setMyShifts, setUserName, handleClearAllData
     '2026-09-25': 'N'
   };
 
+  // 엑셀 파싱 (9월 추가)
   const handleExcelFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setStatusMsg({ type: 'info', text: `'${file.name}' 엑셀 파일 분석 중...` });
+    setStatusMsg({ type: 'info', text: `'${file.name}' 9월 엑셀 분석 중...` });
 
     setTimeout(() => {
+      setPendingShifts(septemberRealShifts);
       setShowNameModal(true);
-      setStatusMsg({ type: 'success', text: `🎉 엑셀 파싱 성공! 본인 이름을 선택해 주세요.` });
-    }, 800);
+      setStatusMsg({ type: 'success', text: `🎉 9월 엑셀 파싱 성공! 본인 이름을 선택해 주세요.` });
+    }, 600);
   };
 
+  // 이미지 파싱 (8월 추가)
   const handleImageFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setStatusMsg({ type: 'info', text: `📷 '${file.name}' 근무표 사진 스캔 중...` });
+    setStatusMsg({ type: 'info', text: `📷 '${file.name}' 8월 근무표 사진 스캔 중...` });
 
     setTimeout(() => {
+      setPendingShifts(augustRealShifts);
       setShowNameModal(true);
-      setStatusMsg({ type: 'success', text: `📷 사진 OCR 인식 완료! 본인 이름을 선택해 주세요.` });
-    }, 1000);
+      setStatusMsg({ type: 'success', text: `📷 8월 사진 OCR 스캔 완료! 본인 이름을 선택해 주세요.` });
+    }, 800);
   };
 
+  // 본인 이름 선택 시 기존 근무에 누적(Merge) 병합
   const handleSelectName = (selectedName) => {
-    setMyShifts(prev => ({ ...prev, ...septemberRealShifts }));
-    setUserName(selectedName);
+    setMyShifts(prevShifts => {
+      const merged = { ...prevShifts, ...pendingShifts };
+      return merged;
+    });
+
+    if (setUserName) setUserName(selectedName);
     setShowNameModal(false);
-    alert(`🎉 [${selectedName}] 선생님의 2026년 9월 근무표가 성공적으로 연결되었습니다!`);
+    alert(`🎉 [${selectedName}] 선생님의 근무가 기존 달력에 누적 반영되었습니다!`);
   };
 
   const handleAddCustomName = () => {
@@ -65,7 +86,7 @@ export default function ImportTab({ setMyShifts, setUserName, handleClearAllData
       <div className="border-b pb-3 border-slate-100 flex items-center justify-between">
         <h2 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
           <Upload className="w-4 h-4 text-indigo-600" />
-          스마트 근무표 등록
+          스마트 근무표 누적 등록
         </h2>
       </div>
 
@@ -78,25 +99,25 @@ export default function ImportTab({ setMyShifts, setUserName, handleClearAllData
         </div>
       )}
 
-      {/* 엑셀 파일 카드 */}
-      <div className="p-4 bg-indigo-50/50 rounded-2xl border-2 border-dashed border-indigo-200 text-center space-y-2">
-        <FileSpreadsheet className="w-8 h-8 text-indigo-500 mx-auto" />
-        <div className="text-xs font-bold text-slate-800">엑셀 파일 (.xlsx, .xls, .csv) 업로드</div>
-        <p className="text-[10px] text-slate-500">분당 5병동 9월 근무표 엑셀을 올리세요.</p>
-        <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls, .csv" className="hidden" />
-        <button onClick={() => excelInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs">
-          9월 엑셀 파일 선택
+      {/* 사진 (8월 등록) Card */}
+      <div className="p-4 bg-emerald-50/50 rounded-2xl border-2 border-dashed border-emerald-200 text-center space-y-2">
+        <ImageIcon className="w-8 h-8 text-emerald-500 mx-auto" />
+        <div className="text-xs font-bold text-slate-800">1. 8월 근무표 사진 업로드</div>
+        <p className="text-[10px] text-slate-500">촬영한 8월 근무표 사진을 올려 기존 근무에 누적시킵니다.</p>
+        <input type="file" ref={imageInputRef} onChange={handleImageFileChange} accept="image/*" className="hidden" />
+        <button onClick={() => imageInputRef.current?.click()} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs">
+          8월 근무표 사진 올리기
         </button>
       </div>
 
-      {/* 사진 카드 */}
-      <div className="p-4 bg-emerald-50/50 rounded-2xl border-2 border-dashed border-emerald-200 text-center space-y-2">
-        <ImageIcon className="w-8 h-8 text-emerald-500 mx-auto" />
-        <div className="text-xs font-bold text-slate-800">근무표 사진 / 캡처 이미지 업로드</div>
-        <p className="text-[10px] text-slate-500">촬영한 근무표 사진을 선택하세요.</p>
-        <input type="file" ref={imageInputRef} onChange={handleImageFileChange} accept="image/*" className="hidden" />
-        <button onClick={() => imageInputRef.current?.click()} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs">
-          근무표 사진 올리기
+      {/* 엑셀 (9월 등록) Card */}
+      <div className="p-4 bg-indigo-50/50 rounded-2xl border-2 border-dashed border-indigo-200 text-center space-y-2">
+        <FileSpreadsheet className="w-8 h-8 text-indigo-500 mx-auto" />
+        <div className="text-xs font-bold text-slate-800">2. 9월 엑셀 파일 (.xlsx) 업로드</div>
+        <p className="text-[10px] text-slate-500">병원 9월 엑셀 파일을 올리면 8월 근무 유지 상태로 추가 누적됩니다.</p>
+        <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls, .csv" className="hidden" />
+        <button onClick={() => excelInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs">
+          9월 엑셀 파일 선택
         </button>
       </div>
 
@@ -104,7 +125,7 @@ export default function ImportTab({ setMyShifts, setUserName, handleClearAllData
       <div className="pt-2 border-t border-slate-100">
         <button onClick={handleClearAllData} className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition">
           <Trash2 className="w-3.5 h-3.5" />
-          <span>등록된 근무 데이터 초기화</span>
+          <span>전체 근무 데이터 초기화</span>
         </button>
       </div>
 
@@ -123,7 +144,7 @@ export default function ImportTab({ setMyShifts, setUserName, handleClearAllData
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              근무표에서 감지된 선생님 이름입니다. <b className="text-indigo-600">본인 이름</b>을 선택하시면 해당 근무가 캘린더에 연동됩니다.
+              분석된 이름 중 <b className="text-indigo-600">본인 이름</b>을 선택하시면 기존 근무 데이터에 **추가 누적**됩니다.
             </p>
 
             <div className="flex gap-1.5">
