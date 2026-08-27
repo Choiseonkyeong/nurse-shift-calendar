@@ -70,7 +70,6 @@ export default function App() {
   const [memoText, setMemoText] = useState('');
   const [isPrivateMemo, setIsPrivateMemo] = useState(false);
 
-  // onst -> const 오타 수정
   const [groups, setGroups] = useState(() => {
     const saved = localStorage.getItem('nurse_groups');
     return saved ? JSON.parse(saved) : [
@@ -143,51 +142,6 @@ export default function App() {
     setIsPrivateMemo(false);
   };
 
-  const handleCreateGroup = () => {
-    if (!newGroupName.trim()) { alert('그룹 이름을 입력해 주세요.'); return; }
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newGroup = {
-      id: `group_${Date.now()}`,
-      name: newGroupName.trim(),
-      code: code,
-      members: [{ name: userName, shifts: myShifts, memos: memos, isMe: true }]
-    };
-    setGroups(prev => [...prev, newGroup]);
-    setActiveGroupId(newGroup.id);
-    setNewGroupName('');
-    alert(`🎉 그룹 '${newGroup.name}' 생성 완료!\n초대 코드: [ ${code} ]`);
-  };
-
-  const handleJoinGroup = () => {
-    const code = joinCodeInput.trim().toUpperCase();
-    if (!code) { alert('초대 코드를 입력해 주세요.'); return; }
-    const existing = groups.find(g => g.code === code);
-    if (existing) {
-      setActiveGroupId(existing.id);
-      setJoinCodeInput('');
-      alert(`'${existing.name}' 그룹에 참여했습니다.`);
-    } else {
-      const joined = {
-        id: `group_${Date.now()}`,
-        name: `공유 그룹 (${code})`,
-        code: code,
-        members: [
-          { name: userName, shifts: myShifts, memos: memos, isMe: true }
-        ]
-      };
-      setGroups(prev => [...prev, joined]);
-      setActiveGroupId(joined.id);
-      setJoinCodeInput('');
-      alert(`🎉 초대 코드 [ ${code} ] 그룹에 정상적으로 참여했습니다!`);
-    }
-  };
-
-  const handleCopyCode = (code) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
-
   const handleExecuteShiftSwap = () => {
     const myCode = myShifts[swapTargetDate] || 'OFF';
     const partnerCode = 'E';
@@ -212,7 +166,7 @@ export default function App() {
     ? (nightShiftCount * numNightFixed) + (eveningShiftCount * numEveFixed)
     : Math.round(totalNightHours * numHourlyWage * 0.5);
 
-  const currentGroup = groups.find(g => g.id === activeGroupId);
+  const currentGroup = groups.find(g => g.id === activeGroupId) || groups[0];
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col max-w-md mx-auto shadow-2xl relative font-sans text-slate-800 pb-20">
@@ -296,14 +250,24 @@ export default function App() {
           />
         )}
 
+        {/* GroupShareTab에 필수 Props 연동 추가 */}
         {activeTab === 'groupShare' && (
           <GroupShareTab
+            newGroupName={newGroupName}
+            setNewGroupName={setNewGroupName}
+            joinCodeInput={joinCodeInput}
+            setJoinCodeInput={setJoinCodeInput}
+            groups={groups}
+            setGroups={setGroups}
+            activeGroupId={activeGroupId}
+            setActiveGroupId={setActiveGroupId}
+            currentGroup={currentGroup}
             selectedDate={selectedDate}
             shiftConfigs={shiftConfigs}
             userName={userName}
             myShifts={myShifts}
-            groups={groups}
-            setGroups={setGroups}
+            memos={memos}
+            privacyBlur={privacyBlur}
           />
         )}
 
