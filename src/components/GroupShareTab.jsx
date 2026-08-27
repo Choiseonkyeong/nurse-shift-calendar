@@ -181,7 +181,7 @@ export default function GroupShareTab({
             />
             <button 
               onClick={handleCreateGroupAction}
-              className="w-full bg-indigo-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-indigo-700 transition"
+              className="w-full bg-indigo-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-indigo-700 transition cursor-pointer"
             >
               그룹 만들기
             </button>
@@ -202,7 +202,7 @@ export default function GroupShareTab({
             />
             <button 
               onClick={handleJoinGroupAction}
-              className="w-full bg-amber-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-amber-700 transition"
+              className="w-full bg-amber-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-amber-700 transition cursor-pointer"
             >
               참여하기
             </button>
@@ -257,7 +257,7 @@ export default function GroupShareTab({
             <span className="font-extrabold text-slate-800">📅 {selectedDate} 그룹 멤버 근무 상황</span>
             <button 
               onClick={() => syncWithSupabase(currentCode)}
-              className="text-[11px] font-bold text-indigo-600 flex items-center gap-1 hover:underline"
+              className="text-[11px] font-bold text-indigo-600 flex items-center gap-1 hover:underline cursor-pointer"
             >
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
               <span>총 {currentGroup.members ? currentGroup.members.length : 1}명 참여 중</span>
