@@ -1,16 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Calendar, 
-  Users, 
-  Calculator, 
-  Upload, 
-  Eye, 
-  EyeOff, 
-  BellRing, 
-  Smartphone,
-  ArrowLeftRight,
-  PartyPopper,
-  X 
+  Calendar, Users, Calculator, Upload, Eye, EyeOff, ArrowLeftRight, X 
 } from 'lucide-react';
 
 import MyShiftTab from './components/MyShiftTab';
@@ -31,21 +21,25 @@ const getTodayDateObj = () => {
 export default function App() {
   const today = getTodayDateObj();
 
-  // 메인 탭 (myShift, allowance, groupShare, import)
   const [activeTab, setActiveTab] = useState('myShift');
-
-  // 날짜 및 근무 상태
-  const [currentYear, setCurrentYear] = useState(today.year);
-  const [currentMonth, setCurrentMonth] = useState(today.month);
-  const [selectedDate, setSelectedDate] = useState(today.dateStr);
+  const [currentYear, setCurrentYear] = useState(2026);
+  const [currentMonth, setCurrentMonth] = useState(9);
+  const [selectedDate, setSelectedDate] = useState('2026-09-01');
 
   const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '최수민');
   const [myShifts, setMyShifts] = useState(() => {
     const saved = localStorage.getItem('nurse_my_shifts');
-    return saved ? JSON.parse(saved) : {};
+    return saved ? JSON.parse(saved) : {
+      '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF',
+      '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E',
+      '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N',
+      '2026-09-10': 'N', '2026-09-11': 'OFF', '2026-09-12': 'OFF', '2026-09-13': 'D', '2026-09-14': 'D',
+      '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'E', '2026-09-18': 'OFF', '2026-09-19': 'OFF',
+      '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N',
+      '2026-09-25': 'N'
+    };
   });
 
-  // 근무 유형 기본 설정
   const [shiftConfigs, setShiftConfigs] = useState(() => {
     const saved = localStorage.getItem('nurse_shift_configs');
     return saved ? JSON.parse(saved) : {
@@ -58,7 +52,6 @@ export default function App() {
     };
   });
 
-  // 연차 및 수당 상태
   const [totalAnnualLeave, setTotalAnnualLeave] = useState(() => localStorage.getItem('nurse_total_annual') || '15');
   const [manualUsedAnnual, setManualUsedAnnual] = useState(() => {
     const saved = localStorage.getItem('nurse_manual_annual');
@@ -70,7 +63,6 @@ export default function App() {
   const [eveningFixedAllowance, setEveningFixedAllowance] = useState(() => localStorage.getItem('nurse_eve_fixed') || '5000');
   const [hourlyWage, setHourlyWage] = useState(() => localStorage.getItem('nurse_hourly_wage') || '13000');
 
-  // 메모 및 그룹 상태
   const [memos, setMemos] = useState(() => {
     const saved = localStorage.getItem('nurse_memos');
     return saved ? JSON.parse(saved) : {};
@@ -98,16 +90,10 @@ export default function App() {
   const [copiedCode, setCopiedCode] = useState(false);
   const [privacyBlur, setPrivacyBlur] = useState(false);
 
-  // 맞교대 시뮬레이터 모달 상태
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [swapPartner, setSwapPartner] = useState('김민지');
   const [swapTargetDate, setSwapTargetDate] = useState(selectedDate);
 
-  // 로딩 상태
-  const [isParsingExcel, setIsParsingExcel] = useState(false);
-  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
-
-  // 로컬 스토리지 데이터 동기화
   useEffect(() => { localStorage.setItem('nurse_user_name', userName); }, [userName]);
   useEffect(() => { localStorage.setItem('nurse_my_shifts', JSON.stringify(myShifts)); }, [myShifts]);
   useEffect(() => { localStorage.setItem('nurse_shift_configs', JSON.stringify(shiftConfigs)); }, [shiftConfigs]);
@@ -124,7 +110,6 @@ export default function App() {
   useEffect(() => { localStorage.setItem('nurse_groups', JSON.stringify(groups)); }, [groups]);
   useEffect(() => { localStorage.setItem('nurse_active_group_id', activeGroupId); }, [activeGroupId]);
 
-  // 달 및 근무 변경
   const handlePrevMonth = () => {
     if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); }
     else setCurrentMonth(currentMonth - 1);
@@ -158,7 +143,6 @@ export default function App() {
     setIsPrivateMemo(false);
   };
 
-  // 그룹 생성/참여/복사
   const handleCreateGroup = () => {
     if (!newGroupName.trim()) { alert('그룹 이름을 입력해 주세요.'); return; }
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -205,16 +189,14 @@ export default function App() {
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  // 근무 맞교대(스왑) 실행
   const handleExecuteShiftSwap = () => {
     const myCode = myShifts[swapTargetDate] || 'OFF';
-    const partnerCode = 'E'; // 기본 시뮬레이션 코드
+    const partnerCode = 'E';
     setMyShifts(prev => ({ ...prev, [swapTargetDate]: partnerCode }));
     setIsSwapModalOpen(false);
     alert(`🔄 ${swapTargetDate} ${swapPartner} 선생님과의 근무 교대(${myCode} ⇄ ${partnerCode})가 완료되었습니다.`);
   };
 
-  // 연차 & 수당 계산 연산
   const currentMonthShifts = Object.entries(myShifts).filter(([date]) => date.startsWith(`${currentYear}-${String(currentMonth).padStart(2, '0')}`));
   const nightShiftCount = currentMonthShifts.filter(([_, code]) => code === 'N').length;
   const eveningShiftCount = currentMonthShifts.filter(([_, code]) => code === 'E').length;
@@ -235,14 +217,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col max-w-md mx-auto shadow-2xl relative font-sans text-slate-800 pb-20">
-      {/* 상단 헤더 */}
       <header className="bg-white px-4 py-3 border-b border-slate-200 sticky top-0 z-30 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-md">
             N
           </div>
           <div>
-            <h1 className="text-xs font-black text-slate-900 leading-none">간호 근무표 & 메이트</h1>
+            <h1 className="text-xs font-black text-slate-900 leading-none">{privacyBlur ? '***' : userName} 님의 근무표</h1>
             <span className="text-[9px] font-bold text-slate-400">3교대 수당/연차/그룹 공유</span>
           </div>
         </div>
@@ -268,7 +249,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* 메인 콘텐츠 바디 */}
       <main className="p-3.5 space-y-3.5 flex-1 overflow-y-auto">
         {activeTab === 'myShift' && (
           <MyShiftTab
@@ -340,11 +320,8 @@ export default function App() {
 
         {activeTab === 'import' && (
           <ImportTab
-            isParsingExcel={isParsingExcel}
-            handleExcelFileUpload={() => {}}
-            isAnalyzingImage={isAnalyzingImage}
-            handleImageFileUpload={() => {}}
-            handleIcsFileUpload={() => {}}
+            setMyShifts={setMyShifts}
+            setUserName={setUserName}
             handleClearAllData={() => {
               if (window.confirm('모든 근무 및 일정 데이터를 초기화하시겠습니까?')) {
                 localStorage.clear();
@@ -355,7 +332,6 @@ export default function App() {
         )}
       </main>
 
-      {/* 맞교대 시뮬레이터 팝업 모달 */}
       {isSwapModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-4">
@@ -413,7 +389,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 하단 탭 네비게이션 */}
       <nav className="bg-white/95 backdrop-blur-md border-t border-slate-200 fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 flex justify-around py-2 px-1">
         <button
           onClick={() => setActiveTab('myShift')}
