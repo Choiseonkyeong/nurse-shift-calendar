@@ -34,26 +34,26 @@ export default function GroupShareTab({
   const [isEditingName, setIsEditingName] = useState(false);
   const [customNameInput, setCustomNameInput] = useState('');
 
-  const currentCode = currentGroup?.code || 'W5ALL1';
+  const currentCode = currentGroup?.code || '';
   const currentName = currentGroup?.name || '공유 그룹';
   const currentTheme = currentGroup?.color || 'indigo';
 
-  // Active 테마 객체 가져오기
   const activeThemeObj = THEME_COLORS.find(t => t.id === currentTheme) || THEME_COLORS[0];
 
-  // 1. Supabase DB 동기화
-  const syncWithSupabase = async (targetCode = currentCode, targetName = currentName) => {
-    if (!targetCode || !userName) return;
+  // 1. Supabase DB와 완벽 동기화 (내 근무 저장 + 그룹원 전체 조회)
+  const syncWithSupabase = async (targetCode, targetName = '공유 그룹') => {
+    const cleanCode = targetCode?.trim().toUpperCase();
+    if (!cleanCode || !userName) return;
     setLoading(true);
 
     try {
       if (supabase) {
-        // [A] 내 근무 데이터 업서트
-        await supabase
+        // [A] 내 근무 데이터를 DB에 저장 (UPSERT)
+        const { error: upsertErr } = await supabase
           .from('group_shifts')
           .upsert(
             {
-              group_code: targetCode,
+              group_code: cleanCode,
               group_name: targetName,
               user_name: userName,
               shifts: myShifts,
@@ -62,13 +62,17 @@ export default function GroupShareTab({
             { onConflict: 'group_code, user_name' }
           );
 
-        // [B] 해당 그룹 전체 멤버 조회
-        const { data, error } = await supabase
+        if (upsertErr) console.error('UPSERT Error:', upsertErr);
+
+        // [B] DB에서 해당 그룹 코드를 가진 모든 동료 조회
+        const { data, error: selectErr } = await supabase
           .from('group_shifts')
           .select('*')
-          .eq('group_code', targetCode);
+          .eq('group_code', cleanCode);
 
-        if (!error && data && data.length > 0) {
+        if (!selectErr && data && data.length > 0) {
+          const dbGroupName = data[0].group_name || targetName;
+
           const dbMembers = data.map(item => ({
             name: item.user_name,
             shifts: item.shifts || {},
@@ -77,18 +81,24 @@ export default function GroupShareTab({
           }));
 
           setGroups(prevGroups => {
-            const exists = prevGroups.some(g => g.code === targetCode);
-            if (exists) {
+            const existingGroup = prevGroups.find(g => g.code === cleanCode);
+            if (existingGroup) {
               return prevGroups.map(g => 
-                g.code === targetCode 
+                g.code === cleanCode 
                   ? { ...g, members: dbMembers } 
                   : g
               );
             } else {
-              return [
-                ...prevGroups,
-                { id: `group_${Date.now()}`, name: targetName, code: targetCode, color: 'indigo', members: dbMembers }
-              ];
+              const newG = {
+                id: `group_${Date.now()}`,
+                name: dbGroupName,
+                code: cleanCode,
+                color: 'indigo',
+                members: dbMembers
+              };
+              // 새로 추가된 그룹으로 자동 선택
+              setActiveGroupId(newG.id);
+              return [...prevGroups, newG];
             }
           });
         }
@@ -100,26 +110,29 @@ export default function GroupShareTab({
     }
   };
 
+  // 그룹 변경 및 실시간 수신 구독
   useEffect(() => {
-    syncWithSupabase(currentCode, currentName);
+    if (currentCode) {
+      syncWithSupabase(currentCode, currentName);
 
-    if (supabase) {
-      const channel = supabase
-        .channel(`group-${currentCode}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'group_shifts', filter: `group_code=eq.${currentCode}` },
-          () => {
-            syncWithSupabase(currentCode, currentName);
-          }
-        )
-        .subscribe();
+      if (supabase) {
+        const channel = supabase
+          .channel(`group-${currentCode}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'group_shifts', filter: `group_code=eq.${currentCode}` },
+            () => {
+              syncWithSupabase(currentCode, currentName);
+            }
+          )
+          .subscribe();
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      }
     }
-  }, [currentCode, currentName, myShifts, userName]);
+  }, [currentCode, myShifts, userName]);
 
   // 2. 새 그룹 생성
   const handleCreateGroupAction = async () => {
@@ -156,11 +169,18 @@ export default function GroupShareTab({
     }
 
     setJoinCodeInput('');
+    
+    // 이미 존재하는 로컬 그룹이면 해당 그룹 선택
+    const existing = groups.find(g => g.code === code);
+    if (existing) {
+      setActiveGroupId(existing.id);
+    }
+
     await syncWithSupabase(code, '공유 그룹');
     alert(`🎉 초대 코드 [ ${code} ] 그룹에 연결되었습니다!`);
   };
 
-  // 4. 그룹 나가기 (내 레코드 삭제 및 로컬 제거)
+  // 4. 그룹 나가기
   const handleLeaveGroup = async () => {
     if (!currentGroup) return;
     if (window.confirm(`'${currentGroup.name}' 그룹에서 나가시겠습니까?`)) {
@@ -174,19 +194,15 @@ export default function GroupShareTab({
 
       const updatedGroups = groups.filter(g => g.id !== currentGroup.id);
       setGroups(updatedGroups);
-      if (updatedGroups.length > 0) {
-        setActiveGroupId(updatedGroups[0].id);
-      } else {
-        setActiveGroupId(null);
-      }
+      setActiveGroupId(updatedGroups.length > 0 ? updatedGroups[0].id : null);
       alert('그룹에서 나왔습니다.');
     }
   };
 
-  // 5. 그룹 전체 삭제 (DB 및 로컬 삭제)
+  // 5. 그룹 삭제
   const handleDeleteGroup = async () => {
     if (!currentGroup) return;
-    if (window.confirm(`⚠️ '${currentGroup.name}' 그룹을 완전히 삭제하시겠습니까?\n(모든 멤버의 그룹 참여가 해제됩니다.)`)) {
+    if (window.confirm(`⚠️ '${currentGroup.name}' 그룹을 완전히 삭제하시겠습니까?`)) {
       if (supabase) {
         await supabase
           .from('group_shifts')
@@ -196,23 +212,17 @@ export default function GroupShareTab({
 
       const updatedGroups = groups.filter(g => g.id !== currentGroup.id);
       setGroups(updatedGroups);
-      if (updatedGroups.length > 0) {
-        setActiveGroupId(updatedGroups[0].id);
-      } else {
-        setActiveGroupId(null);
-      }
-      alert('그룹이 완전 삭제되었습니다.');
+      setActiveGroupId(updatedGroups.length > 0 ? updatedGroups[0].id : null);
+      alert('그룹이 삭제되었습니다.');
     }
   };
 
-  // 6. 나만의 그룹 이름 변경
   const handleSaveCustomGroupName = () => {
     if (!customNameInput.trim()) return;
     setGroups(prev => prev.map(g => g.id === currentGroup.id ? { ...g, name: customNameInput.trim() } : g));
     setIsEditingName(false);
   };
 
-  // 7. 그룹 테마 색상 변경
   const handleChangeGroupColor = (colorId) => {
     setGroups(prev => prev.map(g => g.id === currentGroup.id ? { ...g, color: colorId } : g));
   };
@@ -225,7 +235,7 @@ export default function GroupShareTab({
 
   return (
     <div className="space-y-4">
-      {/* 어플 내 공유 그룹 관리 카테고리 */}
+      {/* 공유 그룹 관리 영역 */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
         <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-900">
           <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
@@ -305,10 +315,9 @@ export default function GroupShareTab({
         )}
       </div>
 
-      {/* 선택된 그룹 세부 관리 및 멤버 근무 리스트 */}
+      {/* 선택된 그룹 세부 정보 */}
       {currentGroup ? (
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-          {/* 그룹 헤더 및 이름/색상/삭제 버튼 */}
           <div className="border-b pb-3 space-y-2">
             <div className="flex justify-between items-start">
               <div>
@@ -342,7 +351,6 @@ export default function GroupShareTab({
               </button>
             </div>
 
-            {/* 그룹 관리 서브 바 (색상 변경, 나가기, 삭제) */}
             <div className="flex justify-between items-center pt-2">
               <div className="flex items-center gap-1.5">
                 <Palette size={13} className="text-slate-400" />
@@ -368,7 +376,7 @@ export default function GroupShareTab({
             </div>
           </div>
 
-          {/* 📅 선택 날짜별 그룹원 근무 요약 캘린더 피드 (요청 기능) */}
+          {/* 일별 그룹 근무 현황판 */}
           <div className={`${activeThemeObj.lightBg} p-3 rounded-xl border ${activeThemeObj.border} space-y-2`}>
             <div className="flex justify-between items-center text-xs">
               <span className={`font-extrabold ${activeThemeObj.text} flex items-center gap-1`}>
@@ -379,11 +387,10 @@ export default function GroupShareTab({
                 className="text-[11px] font-bold text-slate-500 flex items-center gap-1 hover:underline cursor-pointer"
               >
                 <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-                <span>실시간 동기화</span>
+                <span>동기화 ({currentGroup.members ? currentGroup.members.length : 1}명)</span>
               </button>
             </div>
 
-            {/* 요약 피드 예시: A쌤 D / B쌤 OFF / C쌤 E */}
             <div className="flex flex-wrap gap-2 pt-1">
               {(currentGroup.members || []).map((m, idx) => {
                 const shiftCode = (m.shifts && m.shifts[selectedDate]) || 'OFF';
