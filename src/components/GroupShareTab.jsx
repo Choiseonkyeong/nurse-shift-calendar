@@ -23,20 +23,22 @@ export default function GroupShareTab({
   const [loading, setLoading] = useState(false);
 
   const currentCode = currentGroup?.code || 'W5ALL1';
+  const currentName = currentGroup?.name || '공유 그룹';
 
-  // Supabase DB 동기화
-  const syncWithSupabase = async (targetCode = currentCode) => {
+  // 1. Supabase DB와 완벽 동기화 (내 근무 저장 + 그룹원 전체 조회)
+  const syncWithSupabase = async (targetCode = currentCode, targetName = currentName) => {
     if (!targetCode || !userName) return;
     setLoading(true);
 
     try {
       if (supabase) {
-        // 1. 내 근무 데이터를 DB에 저장
+        // [A] 내 근무 데이터와 그룹명을 DB에 UPSERT
         await supabase
           .from('group_shifts')
           .upsert(
             {
               group_code: targetCode,
+              group_name: targetName,
               user_name: userName,
               shifts: myShifts,
               updated_at: new Date()
@@ -44,13 +46,16 @@ export default function GroupShareTab({
             { onConflict: 'group_code, user_name' }
           );
 
-        // 2. DB에서 그룹 멤버 전체 데이터 조회
+        // [B] DB에서 해당 그룹 코드를 가진 '모든 멤버' 조회
         const { data, error } = await supabase
           .from('group_shifts')
           .select('*')
           .eq('group_code', targetCode);
 
         if (!error && data && data.length > 0) {
+          // DB에서 가져온 실제 그룹 이름 사용
+          const dbGroupName = data[0].group_name || targetName;
+
           const dbMembers = data.map(item => ({
             name: item.user_name,
             shifts: item.shifts || {},
@@ -58,14 +63,19 @@ export default function GroupShareTab({
             isMe: item.user_name === userName
           }));
 
+          // React State 갱신 (상대방 포함 전체 멤버 반영)
           setGroups(prevGroups => {
             const exists = prevGroups.some(g => g.code === targetCode);
             if (exists) {
-              return prevGroups.map(g => g.code === targetCode ? { ...g, members: dbMembers } : g);
+              return prevGroups.map(g => 
+                g.code === targetCode 
+                  ? { ...g, name: dbGroupName, members: dbMembers } 
+                  : g
+              );
             } else {
               return [
                 ...prevGroups,
-                { id: `group_${Date.now()}`, name: `공유 그룹 (${targetCode})`, code: targetCode, members: dbMembers }
+                { id: `group_${Date.now()}`, name: dbGroupName, code: targetCode, members: dbMembers }
               ];
             }
           });
@@ -78,9 +88,9 @@ export default function GroupShareTab({
     }
   };
 
-  // 그룹 변경 및 실시간 수신
+  // 2. 그룹 변경 시 및 실시간(Realtime) 동기화 구독
   useEffect(() => {
-    syncWithSupabase(currentCode);
+    syncWithSupabase(currentCode, currentName);
 
     if (supabase) {
       const channel = supabase
@@ -89,7 +99,7 @@ export default function GroupShareTab({
           'postgres_changes',
           { event: '*', schema: 'public', table: 'group_shifts', filter: `group_code=eq.${currentCode}` },
           () => {
-            syncWithSupabase(currentCode);
+            syncWithSupabase(currentCode, currentName);
           }
         )
         .subscribe();
@@ -98,9 +108,9 @@ export default function GroupShareTab({
         supabase.removeChannel(channel);
       };
     }
-  }, [currentCode, myShifts, userName]);
+  }, [currentCode, currentName, myShifts, userName]);
 
-  // 새 그룹 생성
+  // 3. 새 그룹 생성
   const handleCreateGroupAction = async () => {
     if (!newGroupName.trim()) {
       alert('생성할 그룹 이름을 입력해 주세요.');
@@ -108,9 +118,11 @@ export default function GroupShareTab({
     }
 
     const generatedCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const groupNameText = newGroupName.trim();
+
     const newGroup = {
       id: `group_${Date.now()}`,
-      name: newGroupName.trim(),
+      name: groupNameText,
       code: generatedCode,
       members: [{ name: userName, shifts: myShifts, memos: memos || {}, isMe: true }]
     };
@@ -119,11 +131,11 @@ export default function GroupShareTab({
     setActiveGroupId(newGroup.id);
     setNewGroupName('');
 
-    await syncWithSupabase(generatedCode);
-    alert(`🎉 그룹 '${newGroup.name}' 생성 완료!\n초대 코드: [ ${generatedCode} ]`);
+    await syncWithSupabase(generatedCode, groupNameText);
+    alert(`🎉 그룹 '${groupNameText}' 생성 완료!\n초대 코드: [ ${generatedCode} ]`);
   };
 
-  // 초대 코드 입장
+  // 4. 초대 코드로 참여
   const handleJoinGroupAction = async () => {
     const code = joinCodeInput.trim().toUpperCase();
     if (!code) {
@@ -131,26 +143,12 @@ export default function GroupShareTab({
       return;
     }
 
-    const existingGroup = groups.find(g => g.code === code);
-    if (existingGroup) {
-      setActiveGroupId(existingGroup.id);
-    } else {
-      const joinedGroup = {
-        id: `group_${Date.now()}`,
-        name: `공유 그룹 (${code})`,
-        code: code,
-        members: [{ name: userName, shifts: myShifts, memos: memos || {}, isMe: true }]
-      };
-      setGroups(prev => [...prev, joinedGroup]);
-      setActiveGroupId(joinedGroup.id);
-    }
-
     setJoinCodeInput('');
-    await syncWithSupabase(code);
+    await syncWithSupabase(code, '공유 그룹');
     alert(`🎉 초대 코드 [ ${code} ] 그룹에 연결되었습니다!`);
   };
 
-  // 코드 복사
+  // 5. 코드 복사
   const handleCopyCodeAction = (code) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(true);
@@ -219,7 +217,7 @@ export default function GroupShareTab({
                   key={g.id}
                   onClick={() => {
                     setActiveGroupId(g.id);
-                    syncWithSupabase(g.code);
+                    syncWithSupabase(g.code, g.name);
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border shrink-0 transition flex items-center gap-1.5 ${
                     activeGroupId === g.id 
@@ -256,7 +254,7 @@ export default function GroupShareTab({
           <div className="flex justify-between items-center text-xs">
             <span className="font-extrabold text-slate-800">📅 {selectedDate} 그룹 멤버 근무 상황</span>
             <button 
-              onClick={() => syncWithSupabase(currentCode)}
+              onClick={() => syncWithSupabase(currentCode, currentName)}
               className="text-[11px] font-bold text-indigo-600 flex items-center gap-1 hover:underline cursor-pointer"
             >
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
