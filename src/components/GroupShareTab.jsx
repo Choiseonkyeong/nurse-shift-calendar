@@ -41,14 +41,14 @@ export default function GroupShareTab({
   const activeThemeObj = THEME_COLORS.find(t => t.id === currentTheme) || THEME_COLORS[0];
 
   // 1. Supabase DB 교신 및 모바일/PC 간 데이터 동기화
-  const syncWithSupabase = async (targetCode, targetName = '공유 그룹') => {
+  const syncWithSupabase = async (targetCode, targetName = '공유 그룹', isJoining = false) => {
     const cleanCode = targetCode?.trim().toUpperCase();
-    if (!cleanCode || !userName) return;
+    if (!cleanCode || !userName) return false;
     setLoading(true);
 
     try {
       if (supabase) {
-        // [A] 내 근무 데이터를 DB에 업서트(UPSERT)
+        // [A] 내 근무 데이터 DB 저장 (UPSERT)
         const { error: upsertErr } = await supabase
           .from('group_shifts')
           .upsert(
@@ -56,7 +56,7 @@ export default function GroupShareTab({
               group_code: cleanCode,
               group_name: targetName,
               user_name: userName,
-              shifts: myShifts,
+              shifts: myShifts || {},
               updated_at: new Date().toISOString()
             },
             { onConflict: 'group_code, user_name' }
@@ -64,15 +64,23 @@ export default function GroupShareTab({
 
         if (upsertErr) {
           console.error('UPSERT Error:', upsertErr);
+          alert(`DB 저장 실패: ${upsertErr.message}`);
+          return false;
         }
 
-        // [B] 해당 코드로 가입된 PC + 모바일 전체 멤버 조회
+        // [B] 해당 그룹 코드 전체 멤버 조회
         const { data, error: selectErr } = await supabase
           .from('group_shifts')
           .select('*')
           .eq('group_code', cleanCode);
 
-        if (!selectErr && data && data.length > 0) {
+        if (selectErr) {
+          console.error('SELECT Error:', selectErr);
+          alert(`그룹 조회 실패: ${selectErr.message}`);
+          return false;
+        }
+
+        if (data && data.length > 0) {
           const dbGroupName = data[0].group_name || targetName;
 
           const dbMembers = data.map(item => ({
@@ -82,12 +90,12 @@ export default function GroupShareTab({
             isMe: item.user_name === userName
           }));
 
-          let targetGroupId = null;
+          let resolvedGroupId = null;
 
           setGroups(prevGroups => {
             const existingGroup = prevGroups.find(g => g.code === cleanCode);
             if (existingGroup) {
-              targetGroupId = existingGroup.id;
+              resolvedGroupId = existingGroup.id;
               return prevGroups.map(g => 
                 g.code === cleanCode 
                   ? { ...g, name: existingGroup.name || dbGroupName, members: dbMembers } 
@@ -101,30 +109,35 @@ export default function GroupShareTab({
                 color: 'indigo',
                 members: dbMembers
               };
-              targetGroupId = newG.id;
+              resolvedGroupId = newG.id;
               return [...prevGroups, newG];
             }
           });
 
-          // 즉시 해당 그룹 ID 활성화
-          if (targetGroupId) {
-            setActiveGroupId(targetGroupId);
+          if (resolvedGroupId) {
+            setActiveGroupId(resolvedGroupId);
           }
+          return true;
         } else {
-          alert(`⚠️ 초대 코드 [ ${cleanCode} ] 에 해당하는 그룹을 찾을 수 없습니다.\n코드를 다시 확인해 주세요.`);
+          if (isJoining) {
+            alert(`⚠️ 초대 코드 [ ${cleanCode} ] 에 해당하는 그룹을 찾을 수 없습니다.\n코드를 다시 확인해 주세요.`);
+          }
+          return false;
         }
       }
     } catch (err) {
       console.error('Group sync error:', err);
+      alert(`오류 발생: ${err.message}`);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  // 실시간 구독 (Realtime)
+  // 실시간 구독 (Realtime) - 무한 루프 방지를 위해 의존성 배열 최적화
   useEffect(() => {
     if (currentCode) {
-      syncWithSupabase(currentCode, currentName);
+      syncWithSupabase(currentCode, currentName, false);
 
       if (supabase) {
         const channel = supabase
@@ -133,7 +146,7 @@ export default function GroupShareTab({
             'postgres_changes',
             { event: '*', schema: 'public', table: 'group_shifts', filter: `group_code=eq.${currentCode}` },
             () => {
-              syncWithSupabase(currentCode, currentName);
+              syncWithSupabase(currentCode, currentName, false);
             }
           )
           .subscribe();
@@ -143,7 +156,7 @@ export default function GroupShareTab({
         };
       }
     }
-  }, [currentCode, myShifts, userName]);
+  }, [currentCode, userName]);
 
   // 2. 새 그룹 생성
   const handleCreateGroupAction = async () => {
@@ -154,22 +167,13 @@ export default function GroupShareTab({
 
     const generatedCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     const groupNameText = newGroupName.trim();
-    const newId = `group_${Date.now()}`;
 
-    const newGroup = {
-      id: newId,
-      name: groupNameText,
-      code: generatedCode,
-      color: 'indigo',
-      members: [{ name: userName, shifts: myShifts, memos: memos || {}, isMe: true }]
-    };
-
-    setGroups(prev => [...prev, newGroup]);
-    setActiveGroupId(newId);
     setNewGroupName('');
 
-    await syncWithSupabase(generatedCode, groupNameText);
-    alert(`🎉 그룹 '${groupNameText}' 생성 완료!\n초대 코드: [ ${generatedCode} ]`);
+    const success = await syncWithSupabase(generatedCode, groupNameText, false);
+    if (success) {
+      alert(`🎉 그룹 '${groupNameText}' 생성 완료!\n초대 코드: [ ${generatedCode} ]`);
+    }
   };
 
   // 3. 초대 코드로 참여
@@ -187,7 +191,10 @@ export default function GroupShareTab({
       setActiveGroupId(existing.id);
     }
 
-    await syncWithSupabase(code, '공유 그룹');
+    const success = await syncWithSupabase(code, '공유 그룹', true);
+    if (success) {
+      alert(`🎉 초대 코드 [ ${code} ] 그룹에 연결되었습니다!`);
+    }
   };
 
   // 4. 그룹 나가기
@@ -307,7 +314,7 @@ export default function GroupShareTab({
                     key={g.id}
                     onClick={() => {
                       setActiveGroupId(g.id);
-                      syncWithSupabase(g.code, g.name);
+                      syncWithSupabase(g.code, g.name, false);
                     }}
                     className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
                       activeGroupId === g.id 
@@ -393,7 +400,7 @@ export default function GroupShareTab({
                 <Calendar size={14} /> 📅 {selectedDate} 그룹 근무 현황판
               </span>
               <button 
-                onClick={() => syncWithSupabase(currentCode, currentName)}
+                onClick={() => syncWithSupabase(currentCode, currentName, false)}
                 className="text-[11px] font-bold text-slate-500 flex items-center gap-1 hover:underline cursor-pointer"
               >
                 <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
