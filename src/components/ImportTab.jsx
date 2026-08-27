@@ -105,7 +105,7 @@ export default function ImportTab({ setMyShifts, setUserName, handleClearAllData
         <div className="text-xs font-bold text-slate-800">1. 8월 근무표 사진 업로드</div>
         <p className="text-[10px] text-slate-500">촬영한 8월 근무표 사진을 올려 기존 근무에 누적시킵니다.</p>
         <input type="file" ref={imageInputRef} onChange={handleImageFileChange} accept="image/*" className="hidden" />
-        <button onClick={() => imageInputRef.current?.click()} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs">
+        <button onClick={() => imageInputRef.current?.click()} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs cursor-pointer">
           8월 근무표 사진 올리기
         </button>
       </div>
@@ -116,14 +116,14 @@ export default function ImportTab({ setMyShifts, setUserName, handleClearAllData
         <div className="text-xs font-bold text-slate-800">2. 9월 엑셀 파일 (.xlsx) 업로드</div>
         <p className="text-[10px] text-slate-500">병원 9월 엑셀 파일을 올리면 8월 근무 유지 상태로 추가 누적됩니다.</p>
         <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls, .csv" className="hidden" />
-        <button onClick={() => excelInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs">
+        <button onClick={() => excelInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs cursor-pointer">
           9월 엑셀 파일 선택
         </button>
       </div>
 
       {/* 초기화 버튼 */}
       <div className="pt-2 border-t border-slate-100">
-        <button onClick={handleClearAllData} className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition">
+        <button onClick={handleClearAllData} className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer">
           <Trash2 className="w-3.5 h-3.5" />
           <span>전체 근무 데이터 초기화</span>
         </button>
