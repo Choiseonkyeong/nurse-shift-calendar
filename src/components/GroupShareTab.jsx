@@ -40,7 +40,7 @@ export default function GroupShareTab({
 
   const activeThemeObj = THEME_COLORS.find(t => t.id === currentTheme) || THEME_COLORS[0];
 
-  // 1. Supabase DB 동기화 및 그룹 선택 보장
+  // 1. Supabase DB 동기화
   const syncWithSupabase = async (targetCode, targetName = '공유 그룹') => {
     const cleanCode = targetCode?.trim().toUpperCase();
     if (!cleanCode || !userName) return;
@@ -48,7 +48,7 @@ export default function GroupShareTab({
 
     try {
       if (supabase) {
-        // [A] 내 근무 데이터 업서트
+        // [A] 내 근무 데이터 DB 저장
         await supabase
           .from('group_shifts')
           .upsert(
@@ -62,7 +62,7 @@ export default function GroupShareTab({
             { onConflict: 'group_code, user_name' }
           );
 
-        // [B] 해당 그룹 코드의 전체 멤버 조회
+        // [B] 해당 그룹 코드 전체 멤버 조회
         const { data, error: selectErr } = await supabase
           .from('group_shifts')
           .select('*')
@@ -78,34 +78,33 @@ export default function GroupShareTab({
             isMe: item.user_name === userName
           }));
 
-          // 로컬 groups State에 저장하고 해당 ID로 activeGroupId 고정
-          let targetGroupId = null;
+          let resolvedGroupId = null;
 
           setGroups(prevGroups => {
             const existingGroup = prevGroups.find(g => g.code === cleanCode);
             if (existingGroup) {
-              targetGroupId = existingGroup.id;
+              resolvedGroupId = existingGroup.id;
               return prevGroups.map(g => 
                 g.code === cleanCode 
-                  ? { ...g, members: dbMembers } 
+                  ? { ...g, name: existingGroup.name || dbGroupName, members: dbMembers } 
                   : g
               );
             } else {
               const newG = {
-                id: `group_${Date.now()}`,
+                id: `group_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
                 name: dbGroupName,
                 code: cleanCode,
                 color: 'indigo',
                 members: dbMembers
               };
-              targetGroupId = newG.id;
+              resolvedGroupId = newG.id;
               return [...prevGroups, newG];
             }
           });
 
-          // activeGroupId를 활성화하여 "가입된 그룹이 없습니다" 방지
-          if (targetGroupId) {
-            setActiveGroupId(targetGroupId);
+          // 즉시 해당 그룹 ID를 활성화
+          if (resolvedGroupId) {
+            setActiveGroupId(resolvedGroupId);
           }
         }
       }
@@ -116,7 +115,7 @@ export default function GroupShareTab({
     }
   };
 
-  // 그룹 변경 시 실시간 동기화
+  // 실시간 구독
   useEffect(() => {
     if (currentCode) {
       syncWithSupabase(currentCode, currentName);
@@ -167,7 +166,7 @@ export default function GroupShareTab({
     alert(`🎉 그룹 '${groupNameText}' 생성 완료!\n초대 코드: [ ${generatedCode} ]`);
   };
 
-  // 3. 초대 코드로 참여 (가입 후 해당 그룹 ID로 선택 강제 고정)
+  // 3. 초대 코드로 참여
   const handleJoinGroupAction = async () => {
     const code = joinCodeInput.trim().toUpperCase();
     if (!code) {
@@ -177,13 +176,11 @@ export default function GroupShareTab({
 
     setJoinCodeInput('');
 
-    // 기존에 참여했던 그룹이면 바로 선택
     const existing = groups.find(g => g.code === code);
     if (existing) {
       setActiveGroupId(existing.id);
     }
 
-    // DB 동기화 및 새 그룹 ID로 활성화
     await syncWithSupabase(code, '공유 그룹');
     alert(`🎉 초대 코드 [ ${code} ] 그룹에 연결되었습니다!`);
   };
@@ -243,7 +240,7 @@ export default function GroupShareTab({
 
   return (
     <div className="space-y-4">
-      {/* 어플 내 공유 그룹 관리 카테고리 */}
+      {/* 공유 그룹 관리 영역 */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
         <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-900">
           <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
@@ -307,7 +304,7 @@ export default function GroupShareTab({
                       setActiveGroupId(g.id);
                       syncWithSupabase(g.code, g.name);
                     }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border shrink-0 transition flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
                       activeGroupId === g.id 
                         ? `${theme.bg} text-white ${theme.border} shadow-xs` 
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -352,7 +349,7 @@ export default function GroupShareTab({
 
               <button 
                 onClick={() => handleCopyCodeAction(currentGroup.code)}
-                className={`flex items-center gap-1.5 ${activeThemeObj.lightBg} border ${activeThemeObj.border} px-3 py-1.5 rounded-xl ${activeThemeObj.text} text-xs font-bold hover:opacity-80 transition`}
+                className={`flex items-center gap-1.5 ${activeThemeObj.lightBg} border ${activeThemeObj.border} px-3 py-1.5 rounded-xl ${activeThemeObj.text} text-xs font-bold hover:opacity-80 transition cursor-pointer`}
               >
                 {copiedCode ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                 <span>{copiedCode ? '복사됨!' : `코드: ${currentGroup.code}`}</span>
@@ -367,17 +364,17 @@ export default function GroupShareTab({
                     <button
                       key={c.id}
                       onClick={() => handleChangeGroupColor(c.id)}
-                      className={`w-4 h-4 rounded-full ${c.bg} ${currentTheme === c.id ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' : 'opacity-60'} transition`}
+                      className={`w-4 h-4 rounded-full ${c.bg} ${currentTheme === c.id ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' : 'opacity-60'} transition cursor-pointer`}
                     />
                   ))}
                 </div>
               </div>
 
               <div className="flex items-center gap-1">
-                <button onClick={handleLeaveGroup} className="text-[11px] font-bold text-slate-500 hover:text-amber-600 border border-slate-200 px-2 py-1 rounded-lg flex items-center gap-1">
+                <button onClick={handleLeaveGroup} className="text-[11px] font-bold text-slate-500 hover:text-amber-600 border border-slate-200 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer">
                   <LogOut size={12} /> 나가기
                 </button>
-                <button onClick={handleDeleteGroup} className="text-[11px] font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg flex items-center gap-1">
+                <button onClick={handleDeleteGroup} className="text-[11px] font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer">
                   <Trash2 size={12} /> 그룹 삭제
                 </button>
               </div>
