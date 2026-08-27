@@ -70,20 +70,20 @@ export default function App() {
   const [memoText, setMemoText] = useState('');
   const [isPrivateMemo, setIsPrivateMemo] = useState(false);
 
-  const [groups, setGroups] = useState(() => {
-    const saved = localStorage.getItem('nurse_groups');
-    return saved ? JSON.parse(saved) : [
-      { 
-        id: 'g1', 
-        name: '5병동 동기들', 
-        code: 'W5ALL1', 
-        members: [
-          { name: '최수민', shifts: {}, memos: {}, isMe: true },
-         
-        ] 
-      }
-    ];
-  });
+  onst [groups, setGroups] = useState(() => {
+  const saved = localStorage.getItem('nurse_groups');
+  return saved ? JSON.parse(saved) : [
+    { 
+      id: 'g1', 
+      name: '5병동 동기들', 
+      code: 'W5ALL1', 
+      members: [
+        { name: userName, shifts: myShifts, memos: memos, isMe: true }
+        
+      ] 
+    }
+  ];
+});
   const [activeGroupId, setActiveGroupId] = useState(() => localStorage.getItem('nurse_active_group_id') || 'g1');
   const [newGroupName, setNewGroupName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
