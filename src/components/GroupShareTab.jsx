@@ -8,6 +8,7 @@ export default function GroupShareTab({
   joinCodeInput,
   setJoinCodeInput,
   groups,
+  setGroups,
   activeGroupId,
   setActiveGroupId,
   currentGroup,
@@ -16,71 +17,70 @@ export default function GroupShareTab({
   userName,
   myShifts,
   memos,
-  privacyBlur,
-  setGroups
+  privacyBlur
 }) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // 현재 활성화된 그룹의 초대 코드
   const currentCode = currentGroup?.code || 'W5ALL1';
 
-  // 1. Supabase DB와 그룹 멤버 데이터 실시간 동기화 (UPSERT 및 FETCH)
-  const syncGroupDataWithDB = async (targetCode = currentCode) => {
-    if (!targetCode || !userName || !supabase) return;
+  // Supabase DB 동기화
+  const syncWithSupabase = async (targetCode = currentCode) => {
+    if (!targetCode || !userName) return;
     setLoading(true);
 
     try {
-      // 내 근무 및 공유 메모 데이터를 DB에 등록/업데이트
-      await supabase
-        .from('group_shifts')
-        .upsert(
-          {
-            group_code: targetCode,
-            user_name: userName,
-            shifts: myShifts,
-            updated_at: new Date()
-          },
-          { onConflict: 'group_code, user_name' }
-        );
+      if (supabase) {
+        // 1. 내 근무 데이터를 DB에 저장
+        await supabase
+          .from('group_shifts')
+          .upsert(
+            {
+              group_code: targetCode,
+              user_name: userName,
+              shifts: myShifts,
+              updated_at: new Date()
+            },
+            { onConflict: 'group_code, user_name' }
+          );
 
-      // DB에서 해당 그룹에 속한 전체 멤버 조회
-      const { data, error } = await supabase
-        .from('group_shifts')
-        .select('*')
-        .eq('group_code', targetCode);
+        // 2. DB에서 그룹 멤버 전체 데이터 조회
+        const { data, error } = await supabase
+          .from('group_shifts')
+          .select('*')
+          .eq('group_code', targetCode);
 
-      if (!error && data && data.length > 0) {
-        // DB에서 불러온 멤버 데이터를 App 상태값과 동기화
-        const dbMembers = data.map(item => ({
-          name: item.user_name,
-          shifts: item.shifts || {},
-          memos: {},
-          isMe: item.user_name === userName
-        }));
+        if (!error && data && data.length > 0) {
+          const dbMembers = data.map(item => ({
+            name: item.user_name,
+            shifts: item.shifts || {},
+            memos: {},
+            isMe: item.user_name === userName
+          }));
 
-        setGroups(prevGroups => {
-          const exists = prevGroups.some(g => g.code === targetCode);
-          if (exists) {
-            return prevGroups.map(g => g.code === targetCode ? { ...g, members: dbMembers } : g);
-          } else {
-            return [
-              ...prevGroups,
-              { id: `group_${Date.now()}`, name: `공유 그룹 (${targetCode})`, code: targetCode, members: dbMembers }
-            ];
-          }
-        });
+          setGroups(prevGroups => {
+            const exists = prevGroups.some(g => g.code === targetCode);
+            if (exists) {
+              return prevGroups.map(g => g.code === targetCode ? { ...g, members: dbMembers } : g);
+            } else {
+              return [
+                ...prevGroups,
+                { id: `group_${Date.now()}`, name: `공유 그룹 (${targetCode})`, code: targetCode, members: dbMembers }
+              ];
+            }
+          });
+        }
       }
     } catch (err) {
-      console.error('Supabase Sync Error:', err);
+      console.error('Group sync error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. 그룹 변경 및 실시간 데이터 구독(Realtime Listener)
+  // 그룹 변경 및 실시간 수신
   useEffect(() => {
-    syncGroupDataWithDB(currentCode);
+    syncWithSupabase(currentCode);
 
     if (supabase) {
       const channel = supabase
@@ -89,7 +89,7 @@ export default function GroupShareTab({
           'postgres_changes',
           { event: '*', schema: 'public', table: 'group_shifts', filter: `group_code=eq.${currentCode}` },
           () => {
-            syncGroupDataWithDB(currentCode);
+            syncWithSupabase(currentCode);
           }
         )
         .subscribe();
@@ -100,31 +100,31 @@ export default function GroupShareTab({
     }
   }, [currentCode, myShifts, userName]);
 
-  // 3. 새 그룹 생성 핸들러 (Supabase DB 연동)
-  const handleCreateGroupInternal = async () => {
+  // 새 그룹 생성
+  const handleCreateGroupAction = async () => {
     if (!newGroupName.trim()) {
       alert('생성할 그룹 이름을 입력해 주세요.');
       return;
     }
 
     const generatedCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newGroupObj = {
+    const newGroup = {
       id: `group_${Date.now()}`,
       name: newGroupName.trim(),
       code: generatedCode,
       members: [{ name: userName, shifts: myShifts, memos: memos || {}, isMe: true }]
     };
 
-    setGroups(prev => [...prev, newGroupObj]);
-    setActiveGroupId(newGroupObj.id);
+    setGroups(prev => [...prev, newGroup]);
+    setActiveGroupId(newGroup.id);
     setNewGroupName('');
 
-    await syncGroupDataWithDB(generatedCode);
-    alert(`🎉 그룹 '${newGroupObj.name}' 생성 완료!\n동료 초대 코드: [ ${generatedCode} ]`);
+    await syncWithSupabase(generatedCode);
+    alert(`🎉 그룹 '${newGroup.name}' 생성 완료!\n초대 코드: [ ${generatedCode} ]`);
   };
 
-  // 4. 초대 코드로 참여 핸들러 (Supabase DB 연동)
-  const handleJoinGroupInternal = async () => {
+  // 초대 코드 입장
+  const handleJoinGroupAction = async () => {
     const code = joinCodeInput.trim().toUpperCase();
     if (!code) {
       alert('초대 코드를 입력해 주세요.');
@@ -146,12 +146,12 @@ export default function GroupShareTab({
     }
 
     setJoinCodeInput('');
-    await syncGroupDataWithDB(code);
-    alert(`🎉 초대 코드 [ ${code} ] 그룹으로 연결되었습니다!`);
+    await syncWithSupabase(code);
+    alert(`🎉 초대 코드 [ ${code} ] 그룹에 연결되었습니다!`);
   };
 
-  // 5. 코드 복사 핸들러
-  const handleCopyCodeInternal = (code) => {
+  // 코드 복사
+  const handleCopyCodeAction = (code) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
@@ -159,7 +159,7 @@ export default function GroupShareTab({
 
   return (
     <div className="space-y-4">
-      {/* 어플 내 공유 그룹 관리 카드 */}
+      {/* 어플 내 공유 그룹 관리 카테고리 */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
         <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-900">
           <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
@@ -176,11 +176,11 @@ export default function GroupShareTab({
               placeholder="예: 81병동 동기" 
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateGroupInternal()}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateGroupAction()}
               className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold outline-none"
             />
             <button 
-              onClick={handleCreateGroupInternal}
+              onClick={handleCreateGroupAction}
               className="w-full bg-indigo-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-indigo-700 transition"
             >
               그룹 만들기
@@ -197,11 +197,11 @@ export default function GroupShareTab({
               placeholder="6자리 코드 입력" 
               value={joinCodeInput}
               onChange={(e) => setJoinCodeInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleJoinGroupInternal()}
+              onKeyDown={(e) => e.key === 'Enter' && handleJoinGroupAction()}
               className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold uppercase text-center outline-none"
             />
             <button 
-              onClick={handleJoinGroupInternal}
+              onClick={handleJoinGroupAction}
               className="w-full bg-amber-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-amber-700 transition"
             >
               참여하기
@@ -209,7 +209,7 @@ export default function GroupShareTab({
           </div>
         </div>
 
-        {/* 참여 중인 그룹 목록 스크롤 탭 */}
+        {/* 참여 중인 그룹 목록 탭 */}
         {groups.length > 0 && (
           <div className="pt-2 border-t space-y-1.5">
             <p className="text-[11px] font-bold text-slate-500">참여 중인 그룹 목록</p>
@@ -219,7 +219,7 @@ export default function GroupShareTab({
                   key={g.id}
                   onClick={() => {
                     setActiveGroupId(g.id);
-                    syncGroupDataWithDB(g.code);
+                    syncWithSupabase(g.code);
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border shrink-0 transition flex items-center gap-1.5 ${
                     activeGroupId === g.id 
@@ -228,7 +228,7 @@ export default function GroupShareTab({
                   }`}
                 >
                   <span>{g.name}</span>
-                  <span className="text-[10px] opacity-80">({g.members.length}명)</span>
+                  <span className="text-[10px] opacity-80">({g.members ? g.members.length : 1}명)</span>
                 </button>
               ))}
             </div>
@@ -236,7 +236,7 @@ export default function GroupShareTab({
         )}
       </div>
 
-      {/* 현재 선택된 그룹 및 멤버 근무 리스트 */}
+      {/* 선택된 그룹 멤버 리스트 */}
       {currentGroup ? (
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
           <div className="flex justify-between items-center border-b pb-3">
@@ -245,7 +245,7 @@ export default function GroupShareTab({
               <p className="text-[10px] text-slate-400 font-semibold">초대 코드를 동료에게 전달해 그룹에 참여시키세요!</p>
             </div>
             <button 
-              onClick={() => handleCopyCodeInternal(currentGroup.code)}
+              onClick={() => handleCopyCodeAction(currentGroup.code)}
               className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl text-indigo-700 text-xs font-bold hover:bg-indigo-100 transition"
             >
               {copiedCode ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
@@ -256,20 +256,19 @@ export default function GroupShareTab({
           <div className="flex justify-between items-center text-xs">
             <span className="font-extrabold text-slate-800">📅 {selectedDate} 그룹 멤버 근무 상황</span>
             <button 
-              onClick={() => syncGroupDataWithDB(currentCode)}
+              onClick={() => syncWithSupabase(currentCode)}
               className="text-[11px] font-bold text-indigo-600 flex items-center gap-1 hover:underline"
             >
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-              <span>총 {currentGroup.members.length}명 참여 중</span>
+              <span>총 {currentGroup.members ? currentGroup.members.length : 1}명 참여 중</span>
             </button>
           </div>
 
           <div className="space-y-2">
-            {currentGroup.members.map((member, idx) => {
-              const memberShiftCode = member.shifts[selectedDate] || 'OFF';
-              const info = shiftConfigs[memberShiftCode] || shiftConfigs.OFF;
+            {(currentGroup.members || []).map((member, idx) => {
+              const memberShiftCode = (member.shifts && member.shifts[selectedDate]) || 'OFF';
+              const info = shiftConfigs[memberShiftCode] || shiftConfigs.OFF || { name: 'Off', color: '#F3F4F6', textColor: '#374151' };
               const isMe = member.name === userName || member.isMe;
-              const memberDayMemos = ((member.memos && member.memos[selectedDate]) || []).filter(m => !m.isPrivate);
 
               return (
                 <div key={idx} className={`p-3 rounded-xl border text-xs space-y-1.5 transition ${isMe ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50 border-slate-200'}`}>
@@ -287,17 +286,6 @@ export default function GroupShareTab({
                       {memberShiftCode}
                     </span>
                   </div>
-
-                  {memberDayMemos.length > 0 && (
-                    <div className="pt-1.5 border-t border-slate-200/60 space-y-1">
-                      {memberDayMemos.map((m, mIdx) => (
-                        <p key={mIdx} className="text-[11px] text-slate-600 font-semibold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                          <span>{m.text}</span>
-                        </p>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}
