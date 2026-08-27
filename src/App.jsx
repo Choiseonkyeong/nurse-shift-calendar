@@ -109,6 +109,33 @@ export default function App() {
   useEffect(() => { localStorage.setItem('nurse_groups', JSON.stringify(groups)); }, [groups]);
   useEffect(() => { localStorage.setItem('nurse_active_group_id', activeGroupId); }, [activeGroupId]);
 
+  // 완벽한 근무 및 일정 데이터 초기화 핸들러
+  const handleClearAllData = () => {
+    if (window.confirm('모든 근무 및 일정 데이터를 초기화하시겠습니까?\n(등록된 모든 근무와 메모가 깨끗하게 비워집니다.)')) {
+      localStorage.clear();
+      setMyShifts({});
+      setMemos({});
+      setManualUsedAnnual(null);
+      
+      const defaultGroup = [
+        { 
+          id: 'g1', 
+          name: '5병동 동기들', 
+          code: 'W5ALL1', 
+          members: [{ name: userName, shifts: {}, memos: {}, isMe: true }] 
+        }
+      ];
+      setGroups(defaultGroup);
+      setActiveGroupId('g1');
+
+      localStorage.setItem('nurse_my_shifts', JSON.stringify({}));
+      localStorage.setItem('nurse_memos', JSON.stringify({}));
+      localStorage.setItem('nurse_groups', JSON.stringify(defaultGroup));
+
+      alert('🎉 모든 근무 데이터가 깨끗하게 초기화되었습니다.');
+    }
+  };
+
   const handlePrevMonth = () => {
     if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); }
     else setCurrentMonth(currentMonth - 1);
@@ -250,7 +277,6 @@ export default function App() {
           />
         )}
 
-        {/* GroupShareTab에 필수 Props 연동 추가 */}
         {activeTab === 'groupShare' && (
           <GroupShareTab
             newGroupName={newGroupName}
@@ -275,12 +301,7 @@ export default function App() {
           <ImportTab
             setMyShifts={setMyShifts}
             setUserName={setUserName}
-            handleClearAllData={() => {
-              if (window.confirm('모든 근무 및 일정 데이터를 초기화하시겠습니까?')) {
-                localStorage.clear();
-                window.location.reload();
-              }
-            }}
+            handleClearAllData={handleClearAllData}
           />
         )}
       </main>
