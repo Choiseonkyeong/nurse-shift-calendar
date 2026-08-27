@@ -40,7 +40,7 @@ export default function GroupShareTab({
 
   const activeThemeObj = THEME_COLORS.find(t => t.id === currentTheme) || THEME_COLORS[0];
 
-  // 1. Supabase DB 동기화
+  // 1. Supabase DB 교신 및 모바일/PC 간 데이터 동기화
   const syncWithSupabase = async (targetCode, targetName = '공유 그룹') => {
     const cleanCode = targetCode?.trim().toUpperCase();
     if (!cleanCode || !userName) return;
@@ -48,8 +48,8 @@ export default function GroupShareTab({
 
     try {
       if (supabase) {
-        // [A] 내 근무 데이터 DB 저장
-        await supabase
+        // [A] 내 근무 데이터를 DB에 업서트(UPSERT)
+        const { error: upsertErr } = await supabase
           .from('group_shifts')
           .upsert(
             {
@@ -57,12 +57,16 @@ export default function GroupShareTab({
               group_name: targetName,
               user_name: userName,
               shifts: myShifts,
-              updated_at: new Date()
+              updated_at: new Date().toISOString()
             },
             { onConflict: 'group_code, user_name' }
           );
 
-        // [B] 해당 그룹 코드 전체 멤버 조회
+        if (upsertErr) {
+          console.error('UPSERT Error:', upsertErr);
+        }
+
+        // [B] 해당 코드로 가입된 PC + 모바일 전체 멤버 조회
         const { data, error: selectErr } = await supabase
           .from('group_shifts')
           .select('*')
@@ -78,12 +82,12 @@ export default function GroupShareTab({
             isMe: item.user_name === userName
           }));
 
-          let resolvedGroupId = null;
+          let targetGroupId = null;
 
           setGroups(prevGroups => {
             const existingGroup = prevGroups.find(g => g.code === cleanCode);
             if (existingGroup) {
-              resolvedGroupId = existingGroup.id;
+              targetGroupId = existingGroup.id;
               return prevGroups.map(g => 
                 g.code === cleanCode 
                   ? { ...g, name: existingGroup.name || dbGroupName, members: dbMembers } 
@@ -97,15 +101,17 @@ export default function GroupShareTab({
                 color: 'indigo',
                 members: dbMembers
               };
-              resolvedGroupId = newG.id;
+              targetGroupId = newG.id;
               return [...prevGroups, newG];
             }
           });
 
-          // 즉시 해당 그룹 ID를 활성화
-          if (resolvedGroupId) {
-            setActiveGroupId(resolvedGroupId);
+          // 즉시 해당 그룹 ID 활성화
+          if (targetGroupId) {
+            setActiveGroupId(targetGroupId);
           }
+        } else {
+          alert(`⚠️ 초대 코드 [ ${cleanCode} ] 에 해당하는 그룹을 찾을 수 없습니다.\n코드를 다시 확인해 주세요.`);
         }
       }
     } catch (err) {
@@ -115,7 +121,7 @@ export default function GroupShareTab({
     }
   };
 
-  // 실시간 구독
+  // 실시간 구독 (Realtime)
   useEffect(() => {
     if (currentCode) {
       syncWithSupabase(currentCode, currentName);
@@ -182,7 +188,6 @@ export default function GroupShareTab({
     }
 
     await syncWithSupabase(code, '공유 그룹');
-    alert(`🎉 초대 코드 [ ${code} ] 그룹에 연결되었습니다!`);
   };
 
   // 4. 그룹 나가기
