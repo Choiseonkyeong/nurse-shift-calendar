@@ -79,7 +79,7 @@ export default function App() {
         code: 'W5ALL1', 
         members: [
           { name: '최수민', shifts: {}, memos: {}, isMe: true },
-          { name: '김민지', shifts: { [`${today.year}-${String(today.month).padStart(2, '0')}-15`]: 'E' }, memos: {}, isMe: false }
+         
         ] 
       }
     ];
