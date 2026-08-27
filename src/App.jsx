@@ -86,7 +86,6 @@ export default function App() {
   const [activeGroupId, setActiveGroupId] = useState(() => localStorage.getItem('nurse_active_group_id') || 'g1');
   const [newGroupName, setNewGroupName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
-  const [copiedCode, setCopiedCode] = useState(false);
   const [privacyBlur, setPrivacyBlur] = useState(false);
 
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
@@ -109,9 +108,8 @@ export default function App() {
   useEffect(() => { localStorage.setItem('nurse_groups', JSON.stringify(groups)); }, [groups]);
   useEffect(() => { localStorage.setItem('nurse_active_group_id', activeGroupId); }, [activeGroupId]);
 
-  // 완벽한 근무 및 일정 데이터 초기화 핸들러
   const handleClearAllData = () => {
-    if (window.confirm('모든 근무 및 일정 데이터를 초기화하시겠습니까?\n(등록된 모든 근무와 메모가 깨끗하게 비워집니다.)')) {
+    if (window.confirm('모든 근무 및 일정 데이터를 초기화하시겠습니까?')) {
       localStorage.clear();
       setMyShifts({});
       setMemos({});
@@ -132,7 +130,7 @@ export default function App() {
       localStorage.setItem('nurse_memos', JSON.stringify({}));
       localStorage.setItem('nurse_groups', JSON.stringify(defaultGroup));
 
-      alert('🎉 모든 근무 데이터가 깨끗하게 초기화되었습니다.');
+      alert('🎉 모든 근무 데이터가 초기화되었습니다.');
     }
   };
 
@@ -193,7 +191,8 @@ export default function App() {
     ? (nightShiftCount * numNightFixed) + (eveningShiftCount * numEveFixed)
     : Math.round(totalNightHours * numHourlyWage * 0.5);
 
-  const currentGroup = groups.find(g => g.id === activeGroupId) || groups[0];
+  // 현재 활성화된 그룹 안전하게 탐색
+  const currentGroup = groups.find(g => g.id === activeGroupId) || (groups.length > 0 ? groups[0] : null);
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col max-w-md mx-auto shadow-2xl relative font-sans text-slate-800 pb-20">
