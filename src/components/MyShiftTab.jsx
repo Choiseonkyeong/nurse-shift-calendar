@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Edit3, Trash2, Bell, Clock, Volume2, Check, Lock } from 'lucide-react';
 
 export default function MyShiftTab({
@@ -19,13 +19,100 @@ export default function MyShiftTab({
   setIsPrivateMemo,
   setMemos
 }) {
-  // 알림 상세 설정 상태 (기본값: 오전 11시, 5분 전 알림, 소리+진동)
   const [memoCategory, setMemoCategory] = useState('인수인계');
   const [ampm, setAmpm] = useState('오전');
   const [hour, setHour] = useState('11');
   const [minute, setMinute] = useState('00');
   const [alertOffset, setAlertOffset] = useState('5'); // 5분 전
-  const [alertType, setAlertType] = useState('both'); // 소리 + 진동
+  const [alertType, setAlertType] = useState('both'); // 소리+진동
+
+  // Web Audio API를 이용한 오디오 생성 (외부 파일 로드 에러 방지)
+  const playBeepSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 톤
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.5);
+    } catch (e) {
+      console.log('Audio playback prevented:', e);
+    }
+  };
+
+  // 진동 및 소리 실행 함수
+  const triggerAlarmAlert = (type) => {
+    if (type === 'both' || type === 'sound') {
+      playBeepSound();
+    }
+    if ((type === 'both' || type === 'vibrate') && 'vibrate' in navigator) {
+      navigator.vibrate([300, 150, 300, 150, 300]);
+    }
+  };
+
+  // 브라우저 알림 권한 요청 및 타이머 주기적 체크 (1분 간격)
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    const interval = setInterval(() => {
+      checkAndTriggerMemos();
+    }, 30000); // 30초마다 확인
+
+    return () => clearInterval(interval);
+  }, [memos]);
+
+  // 알림 시간 매칭 정밀 계산 로직
+  const checkAndTriggerMemos = () => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const curDay = String(now.getDate()).padStart(2, '0');
+    const dateKey = `${curYear}-${curMonth}-${curDay}`;
+
+    const todayMemos = memos[dateKey] || [];
+
+    todayMemos.forEach((m) => {
+      if (!m.alertOffset || m.alertOffset === 'none' || m.triggered) return;
+
+      // 시간 파싱 (오전/오후 11:00 -> Date 객체)
+      let [ap, timeStr] = m.time.split(' ');
+      let [h, min] = timeStr.split(':').map(Number);
+      if (ap === '오후' && h < 12) h += 12;
+      if (ap === '오전' && h === 12) h = 0;
+
+      const targetTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, min, 0);
+      const alertTime = new Date(targetTime.getTime() - parseInt(m.alertOffset, 10) * 60000);
+
+      // 현재 시간이 사전 알림 시각 범위 내에 들어왔을 때 실행
+      if (now >= alertTime && now < new Date(targetTime.getTime() + 60000)) {
+        // 알림 중복 트리거 방지 플래그
+        setMemos(prev => ({
+          ...prev,
+          [dateKey]: prev[dateKey].map(item => item.id === m.id ? { ...item, triggered: true } : item)
+        }));
+
+        triggerAlarmAlert(m.alertType || 'both');
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`⏰ [간호 근무 알림] ${m.type}`, {
+            body: `${m.text}\n시간: ${m.time} (${m.alertText})`,
+            icon: '/favicon.ico'
+          });
+        } else {
+          alert(`⏰ [알림] ${m.type}\n내용: ${m.text}\n시간: ${m.time} (${m.alertText})`);
+        }
+      }
+    });
+  };
 
   const generateCalendarDays = () => {
     const firstDay = new Date(currentYear, currentMonth - 1, 1);
@@ -55,9 +142,13 @@ export default function MyShiftTab({
     return days;
   };
 
-  // 기존 handleAddMemo의 모든 데이터(비공개 여부, 개인일정 카테고리 등)를 포함하여 시간/사전알림 추가
   const handleAddMemoInternal = () => {
     if (!memoText.trim()) return;
+
+    // 사용자 알림 권한 미리 승인 유도
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
 
     const alertTextMap = {
       'none': '알림 없음',
@@ -80,7 +171,8 @@ export default function MyShiftTab({
       alertType: alertType,
       text: memoText,
       isPrivate: isPrivateMemo,
-      checked: false
+      checked: false,
+      triggered: false
     };
 
     setMemos(prev => ({
@@ -96,7 +188,7 @@ export default function MyShiftTab({
 
   return (
     <div className="space-y-3.5">
-      {/* 1. 상단 달 변경 및 근무 유형 요약 배지 */}
+      {/* 1. 상단 달 변경 및 근무 요약 배지 */}
       <div className="bg-white p-3.5 rounded-2xl shadow-xs border border-slate-200 space-y-3">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
@@ -169,9 +261,9 @@ export default function MyShiftTab({
         </div>
       </div>
 
-      {/* 3. 선택 날짜 근무 등록 및 상세 시간/사전알림 설정 */}
+      {/* 3. 근무 빠른 등록 및 상세 사전 알림 설정 */}
       <div className="bg-white p-3.5 rounded-2xl shadow-xs border border-slate-200 space-y-3">
-        {/* 근무 코드 탭 클릭 변경 */}
+        {/* 근무 수동 선택 */}
         <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-2">
           <div className="flex justify-between items-center text-xs font-extrabold text-slate-800">
             <span className="flex items-center gap-1">
@@ -215,7 +307,7 @@ export default function MyShiftTab({
           </span>
 
           <div className="space-y-2 bg-indigo-50/40 p-3 rounded-2xl border border-indigo-100">
-            {/* 카테고리 เลือก */}
+            {/* 카테고리 태그 */}
             <div className="flex gap-1.5 text-xs">
               {['인수인계', '중요/공지', '개인일정'].map((cat) => (
                 <button
@@ -230,7 +322,7 @@ export default function MyShiftTab({
               ))}
             </div>
 
-            {/* 오전/오후 + 시/분 선택 & 사전 알림 분(Minute) 선택 */}
+            {/* 오전/오후 시간 + 사전 알림 선택 */}
             <div className="grid grid-cols-2 gap-1.5 text-xs">
               <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-xl border border-slate-200">
                 <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -264,7 +356,7 @@ export default function MyShiftTab({
               </div>
             </div>
 
-            {/* 알림 방식 선택 */}
+            {/* 소리 / 진동 옵션 */}
             <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs">
               <span className="text-slate-500 font-bold flex items-center gap-1">
                 <Volume2 className="w-3.5 h-3.5 text-slate-400" />
@@ -278,7 +370,7 @@ export default function MyShiftTab({
               </select>
             </div>
 
-            {/* 비공개 메모 및 일정 입력 field */}
+            {/* 일정 내용 입력 */}
             <div className="flex items-center gap-2 pt-0.5">
               <input 
                 type="text" 
@@ -296,7 +388,7 @@ export default function MyShiftTab({
               </button>
             </div>
 
-            {/* 비공개(나만 보기) 체크박스 유저 옵션 */}
+            {/* 비공개 옵션 */}
             <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-500 pt-1">
               <label className="flex items-center gap-1 cursor-pointer select-none">
                 <input 
