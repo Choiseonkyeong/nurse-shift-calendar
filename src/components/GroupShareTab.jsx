@@ -43,100 +43,99 @@ export default function GroupShareTab({
   // 1. Supabase DB 교신 및 모바일/PC 간 데이터 동기화
   const syncWithSupabase = async (targetCode, targetName = '공유 그룹', isJoining = false) => {
     const cleanCode = targetCode?.trim().toUpperCase();
-    if (!cleanCode || !userName) return false;
+    
+    // 유효하지 않은 정보일 때 DB 연동 차단
+    if (!cleanCode || !userName || userName.trim() === '') return false;
+    if (!supabase) return false;
+
     setLoading(true);
 
     try {
-      if (supabase) {
-        // [A] 내 근무 데이터 DB 저장 (UPSERT)
-        const { error: upsertErr } = await supabase
-          .from('group_shifts')
-          .upsert(
-            {
-              group_code: cleanCode,
-              group_name: targetName,
-              user_name: userName,
-              shifts: myShifts || {},
-              updated_at: new Date().toISOString()
-            },
-            { onConflict: 'group_code, user_name' }
-          );
+      // [A] 내 근무 데이터 DB 저장 (UPSERT)
+      const { error: upsertErr } = await supabase
+        .from('group_shifts')
+        .upsert(
+          {
+            group_code: cleanCode,
+            group_name: targetName,
+            user_name: userName.trim(),
+            shifts: myShifts || {},
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'group_code, user_name' }
+        );
 
-        if (upsertErr) {
-          console.error('UPSERT Error:', upsertErr);
-          alert(`DB 저장 실패: ${upsertErr.message}`);
-          return false;
-        }
+      if (upsertErr) {
+        console.warn('UPSERT Warning:', upsertErr.message);
+        // 사용자 방해 차단을 위해 경고 콘솔만 남김
+      }
 
-        // [B] 해당 그룹 코드 전체 멤버 조회
-        const { data, error: selectErr } = await supabase
-          .from('group_shifts')
-          .select('*')
-          .eq('group_code', cleanCode);
+      // [B] 해당 그룹 코드 전체 멤버 조회
+      const { data, error: selectErr } = await supabase
+        .from('group_shifts')
+        .select('*')
+        .eq('group_code', cleanCode);
 
-        if (selectErr) {
-          console.error('SELECT Error:', selectErr);
-          alert(`그룹 조회 실패: ${selectErr.message}`);
-          return false;
-        }
+      if (selectErr) {
+        console.warn('SELECT Warning:', selectErr.message);
+        return false;
+      }
 
-        if (data && data.length > 0) {
-          const dbGroupName = data[0].group_name || targetName;
+      if (data && data.length > 0) {
+        const dbGroupName = data[0].group_name || targetName;
 
-          const dbMembers = data.map(item => ({
-            name: item.user_name,
-            shifts: item.shifts || {},
-            memos: {},
-            isMe: item.user_name === userName
-          }));
+        const dbMembers = data.map(item => ({
+          name: item.user_name,
+          shifts: item.shifts || {},
+          memos: {},
+          isMe: item.user_name === userName
+        }));
 
-          let resolvedGroupId = null;
+        let resolvedGroupId = null;
 
-          setGroups(prevGroups => {
-            const existingGroup = prevGroups.find(g => g.code === cleanCode);
-            if (existingGroup) {
-              resolvedGroupId = existingGroup.id;
-              return prevGroups.map(g => 
-                g.code === cleanCode 
-                  ? { ...g, name: existingGroup.name || dbGroupName, members: dbMembers } 
-                  : g
-              );
-            } else {
-              const newG = {
-                id: `group_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-                name: dbGroupName,
-                code: cleanCode,
-                color: 'indigo',
-                members: dbMembers
-              };
-              resolvedGroupId = newG.id;
-              return [...prevGroups, newG];
-            }
-          });
-
-          if (resolvedGroupId) {
-            setActiveGroupId(resolvedGroupId);
+        setGroups(prevGroups => {
+          const existingGroup = prevGroups.find(g => g.code === cleanCode);
+          if (existingGroup) {
+            resolvedGroupId = existingGroup.id;
+            return prevGroups.map(g => 
+              g.code === cleanCode 
+                ? { ...g, name: existingGroup.name || dbGroupName, members: dbMembers } 
+                : g
+            );
+          } else {
+            const newG = {
+              id: `group_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+              name: dbGroupName,
+              code: cleanCode,
+              color: 'indigo',
+              members: dbMembers
+            };
+            resolvedGroupId = newG.id;
+            return [...prevGroups, newG];
           }
-          return true;
-        } else {
-          if (isJoining) {
-            alert(`⚠️ 초대 코드 [ ${cleanCode} ] 에 해당하는 그룹을 찾을 수 없습니다.\n코드를 다시 확인해 주세요.`);
-          }
-          return false;
+        });
+
+        if (resolvedGroupId) {
+          setActiveGroupId(resolvedGroupId);
         }
+        return true;
+      } else {
+        if (isJoining) {
+          alert(`⚠️ 초대 코드 [ ${cleanCode} ] 에 해당하는 그룹을 찾을 수 없습니다.`);
+        }
+        return false;
       }
     } catch (err) {
       console.error('Group sync error:', err);
-      alert(`오류 발생: ${err.message}`);
       return false;
     } finally {
       setLoading(false);
     }
   };
 
-  // 실시간 구독 (Realtime) - 무한 루프 방지를 위해 의존성 배열 최적화
+  // 실시간 구독 (Realtime) 및 내 근무 변경 시 자동 동기화
   useEffect(() => {
-    if (currentCode) {
+    if (currentCode && userName) {
       syncWithSupabase(currentCode, currentName, false);
 
       if (supabase) {
@@ -156,7 +155,7 @@ export default function GroupShareTab({
         };
       }
     }
-  }, [currentCode, userName]);
+  }, [currentCode, userName, myShifts]);
 
   // 2. 새 그룹 생성
   const handleCreateGroupAction = async () => {
@@ -201,7 +200,7 @@ export default function GroupShareTab({
   const handleLeaveGroup = async () => {
     if (!currentGroup) return;
     if (window.confirm(`'${currentGroup.name}' 그룹에서 나가시겠습니까?`)) {
-      if (supabase) {
+      if (supabase && userName) {
         await supabase
           .from('group_shifts')
           .delete()
