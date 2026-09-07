@@ -31,7 +31,6 @@ export default function GroupShareTab({
   const [isEditingName, setIsEditingName] = useState(false);
   const [customNameInput, setCustomNameInput] = useState('');
 
-  // 커스텀 RGB/HEX 색상 상태 (기본값: 인디고 계열 #4F46E5)
   const groupColor = currentGroup?.color || '#4F46E5';
 
   const [groupYear, setGroupYear] = useState(() => Number(selectedDate.split('-')[0]) || 2026);
@@ -162,7 +161,6 @@ export default function GroupShareTab({
     else setGroupMonth(groupMonth + 1);
   };
 
-  // 커스텀 색상 변경 핸들러
   const handleColorChange = (newColor) => {
     setGroups(prev => prev.map(g => g.id === currentGroup.id ? { ...g, color: newColor } : g));
   };
@@ -202,6 +200,15 @@ export default function GroupShareTab({
       setGroups(updated);
       setActiveGroupId(updated.length > 0 ? updated[0].id : null);
     }
+  };
+
+  // 회원별 근무 코드 도출 (내 데이터 싱크 보완)
+  const getMemberShiftCode = (member, dateKey) => {
+    const isMe = member.name === userName || member.isMe;
+    if (isMe && myShifts && myShifts[dateKey] !== undefined) {
+      return myShifts[dateKey] || 'OFF';
+    }
+    return (member.shifts && member.shifts[dateKey]) || 'OFF';
   };
 
   return (
@@ -289,7 +296,6 @@ export default function GroupShareTab({
                 <p className="text-[10px] text-slate-400 font-bold mt-0.5">초대 코드: {currentGroup.code}</p>
               </div>
 
-              {/* 커스텀 RGB 스펙트럼 피커 및 팔레트 */}
               <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
                 <Palette size={14} className="text-slate-500" />
                 <div className="flex items-center gap-1">
@@ -302,7 +308,6 @@ export default function GroupShareTab({
                     />
                   ))}
 
-                  {/* HTML5 RGB 피커 (이미지 스펙트럼 방식) */}
                   <div className="relative flex items-center cursor-pointer ml-1">
                     <input
                       type="color"
@@ -322,7 +327,7 @@ export default function GroupShareTab({
             </div>
           </div>
 
-          {/* 동적 RGB 적용 1달 근무 달력 */}
+          {/* 1달 근무 달력 */}
           <div 
             style={{ backgroundColor: `${groupColor}0D`, borderColor: `${groupColor}33` }} 
             className="p-3 rounded-2xl border space-y-3"
@@ -380,7 +385,7 @@ export default function GroupShareTab({
 
                     <div className="space-y-0.5 my-0.5">
                       {(currentGroup.members || []).map((m, mIdx) => {
-                        const shiftCode = (m.shifts && m.shifts[item.dateStr]) || 'OFF';
+                        const shiftCode = getMemberShiftCode(m, item.dateStr);
                         const isMe = m.name === userName || m.isMe;
 
                         return (
@@ -406,13 +411,14 @@ export default function GroupShareTab({
             </div>
           </div>
 
+          {/* 선택 일자 상세 근무 목록 */}
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
             <span className="text-xs font-black text-slate-800 block">
               📌 {selectedDate} 선택 일자 상세 근무
             </span>
             <div className="grid grid-cols-2 gap-2">
               {(currentGroup.members || []).map((m, idx) => {
-                const shiftCode = (m.shifts && m.shifts[selectedDate]) || 'OFF';
+                const shiftCode = getMemberShiftCode(m, selectedDate);
                 const isMe = m.name === userName || m.isMe;
 
                 return (
