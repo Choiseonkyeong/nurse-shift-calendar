@@ -26,7 +26,8 @@ export default function App() {
   const [currentMonth, setCurrentMonth] = useState(today.month);
   const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
-  const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '간호사');
+  // 초기 이름 및 샘플 데이터 하드코딩 제거 (완전 빈 값 설정)
+  const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '');
   const [myShifts, setMyShifts] = useState(() => {
     const saved = localStorage.getItem('nurse_my_shifts');
     return saved ? JSON.parse(saved) : {};
@@ -103,6 +104,7 @@ export default function App() {
   const handleClearAllData = () => {
     if (window.confirm('모든 근무 및 일정 데이터를 초기화하시겠습니까?')) {
       localStorage.clear();
+      setUserName('');
       setMyShifts({});
       setMemos({});
       setManualUsedAnnual(null);
@@ -112,17 +114,13 @@ export default function App() {
           id: 'g1', 
           name: '5병동 동기들', 
           code: 'W5ALL1', 
-          members: [{ name: userName, shifts: {}, memos: {}, isMe: true }] 
+          members: [{ name: '', shifts: {}, memos: {}, isMe: true }] 
         }
       ];
       setGroups(defaultGroup);
       setActiveGroupId('g1');
 
-      localStorage.setItem('nurse_my_shifts', JSON.stringify({}));
-      localStorage.setItem('nurse_memos', JSON.stringify({}));
-      localStorage.setItem('nurse_groups', JSON.stringify(defaultGroup));
-
-      alert('🎉 모든 근무 데이터가 초기화되었습니다.');
+      alert('🎉 모든 근무 데이터가 초기화되었습니다. 등록 탭에서 근무표를 업로드해 주세요.');
     }
   };
 
@@ -193,7 +191,7 @@ export default function App() {
             N
           </div>
           <div>
-            <h1 className="text-xs font-black text-slate-900 leading-none">{privacyBlur ? '***' : userName} 님의 근무표</h1>
+            <h1 className="text-xs font-black text-slate-900 leading-none">{privacyBlur ? '***' : (userName || '내')} 님의 근무표</h1>
             <span className="text-[9px] font-bold text-slate-400">3교대 수당/연차/그룹 공유</span>
           </div>
         </div>
@@ -335,7 +333,7 @@ export default function App() {
               <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-1">
                 <span className="text-[10px] font-extrabold text-emerald-900 block">🔄 교환 시 근무 변화 예시:</span>
                 <div className="text-[11px] text-emerald-800 flex justify-between font-bold">
-                  <span>나 ({userName}): {myShifts[swapTargetDate] || 'OFF'} ➔ E</span>
+                  <span>나 ({userName || '본인'}): {myShifts[swapTargetDate] || 'OFF'} ➔ E</span>
                 </div>
                 <div className="text-[11px] text-emerald-800 flex justify-between font-bold">
                   <span>동료 ({swapPartner}): E ➔ {myShifts[swapTargetDate] || 'OFF'}</span>
