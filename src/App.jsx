@@ -24,7 +24,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('myShift');
   const [currentYear, setCurrentYear] = useState(2026);
   const [currentMonth, setCurrentMonth] = useState(9);
-  const [selectedDate, setSelectedDate] = useState('2026-09-01');
+  const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
   const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '최수민');
   const [myShifts, setMyShifts] = useState(() => {
