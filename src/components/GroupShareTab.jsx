@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Users, PlusCircle, UserCheck, Check, Copy, RefreshCw, LogOut, Trash2, Edit3, Palette, Calendar, ChevronLeft, ChevronRight, ArrowLeft
+  Users, PlusCircle, UserCheck, Palette, RefreshCw, LogOut, Trash2, ChevronLeft, ChevronRight, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -26,31 +26,31 @@ export default function GroupShareTab({
   myShifts,
   privacyBlur
 }) {
-  const [copiedCode, setCopiedCode] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [customNameInput, setCustomNameInput] = useState('');
-
-  // 독립 그룹 화면 진입 여부 (그룹 선택 시 true로 전환)
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'detail'
 
   const groupColor = currentGroup?.color || '#4F46E5';
 
-  const [groupYear, setGroupYear] = useState(() => Number(selectedDate.split('-')[0]) || 2026);
-  const [groupMonth, setGroupMonth] = useState(() => Number(selectedDate.split('-')[1]) || 9);
+  const [groupYear, setGroupYear] = useState(() => Number(selectedDate?.split('-')[0]) || 2026);
+  const [groupMonth, setGroupMonth] = useState(() => Number(selectedDate?.split('-')[1]) || 9);
 
   const currentCode = currentGroup?.code || '';
   const currentName = currentGroup?.name || '공유 그룹';
 
-  // Supabase DB 동기화
-  const syncWithSupabase = async (targetCode, targetName = '공유 그룹', isJoining = false) => {
+  // 이름 정제 함수 (비교 오류 방지)
+  const cleanName = (name) => (name || '').replace(/쌤|님|\s/g, '').trim();
+
+  // 1. Supabase DB 데이터 동기화 함수
+  const syncWithSupabase = useCallback(async (targetCode, targetName = '공유 그룹', isJoining = false) => {
     const cleanCode = targetCode?.trim().toUpperCase();
-    if (!cleanCode || !userName || userName.trim() === '') return false;
-    if (!supabase) return false;
+    const myCleanName = cleanName(userName);
+
+    if (!cleanCode || !myCleanName || !supabase) return false;
 
     setLoading(true);
 
     try {
+      // [A] 내 근무 데이터 DB 저장 (UPSERT)
       const { error: upsertErr } = await supabase
         .from('group_shifts')
         .upsert(
@@ -66,6 +66,7 @@ export default function GroupShareTab({
 
       if (upsertErr) console.warn('UPSERT Warning:', upsertErr.message);
 
+      // [B] 해당 그룹 코드 전체 멤버 조회
       const { data, error: selectErr } = await supabase
         .from('group_shifts')
         .select('*')
@@ -78,7 +79,7 @@ export default function GroupShareTab({
         const dbMembers = data.map(item => ({
           name: item.user_name,
           shifts: item.shifts || {},
-          isMe: item.user_name === userName
+          isMe: cleanName(item.user_name) === myCleanName
         }));
 
         let resolvedGroupId = null;
@@ -117,8 +118,9 @@ export default function GroupShareTab({
     } finally {
       setLoading(false);
     }
-  };
+  }, [userName, myShifts, supabase, setGroups, setActiveGroupId]);
 
+  // 실시간 구독 (myShifts 제거로 무한 재렌더링 방지)
   useEffect(() => {
     if (currentCode && userName) {
       syncWithSupabase(currentCode, currentName, false);
@@ -136,7 +138,16 @@ export default function GroupShareTab({
         return () => supabase.removeChannel(channel);
       }
     }
-  }, [currentCode, userName, myShifts]);
+  }, [currentCode, userName]); // myShifts를 의존성 배열에서 제거하여 깜빡임 차단
+
+  // 멤버별 스케쥴 단일 출처(Single Source of Truth) 도출 함수
+  const getMemberShiftCode = (member, dateKey) => {
+    const isMe = cleanName(member.name) === cleanName(userName) || member.isMe;
+    if (isMe && myShifts) {
+      return myShifts[dateKey] || 'OFF';
+    }
+    return (member.shifts && member.shifts[dateKey]) || 'OFF';
+  };
 
   // 달력 날짜 매트릭스 계산
   const generateMonthCalendar = (year, month) => {
@@ -213,15 +224,6 @@ export default function GroupShareTab({
     }
   };
 
-  const getMemberShiftCode = (member, dateKey) => {
-    const isMe = member.name === userName || member.isMe;
-    if (isMe && myShifts && myShifts[dateKey] !== undefined) {
-      return myShifts[dateKey] || 'OFF';
-    }
-    return (member.shifts && member.shifts[dateKey]) || 'OFF';
-  };
-
-  // 그룹 클릭 시 별도 상세 화면으로 이동
   const handleOpenGroupDetail = (group) => {
     setActiveGroupId(group.id);
     syncWithSupabase(group.code, group.name, false);
@@ -230,7 +232,7 @@ export default function GroupShareTab({
 
   return (
     <div className="space-y-4">
-      {/* 화면 Mode 1: 메인 그룹 목록 뷰 */}
+      {/* 1. 그룹 목록 뷰 */}
       {viewMode === 'list' && (
         <div className="space-y-4">
           <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-100 space-y-3">
@@ -275,7 +277,6 @@ export default function GroupShareTab({
             </div>
           </div>
 
-          {/* 참여 중인 그룹 카드 리스트 (클릭 시 별도 화면 진입) */}
           <div className="space-y-2">
             <span className="text-xs font-extrabold text-slate-500 block px-1">
               내 공유 그룹 목록 ({groups.length})
@@ -315,17 +316,15 @@ export default function GroupShareTab({
               <div className="bg-white p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-2">
                 <Users size={32} className="mx-auto text-slate-300" />
                 <p className="text-sm font-bold text-slate-700">참여 중인 공유 그룹이 없습니다.</p>
-                <p className="text-xs text-slate-400">상단에서 새 그룹을 생성하거나 초대 코드를 입력해 보세요!</p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* 화면 Mode 2: 특정 그룹 전용 독립 화면 (캘린더 & 스케쥴 전용) */}
+      {/* 2. 특정 그룹 전용 독립 뷰 */}
       {viewMode === 'detail' && currentGroup && (
         <div className="space-y-3">
-          {/* 상단 뒤로가기 헤더 */}
           <button
             onClick={() => setViewMode('list')}
             className="flex items-center gap-1.5 text-xs font-black text-slate-600 bg-white border border-slate-200 px-3 py-2 rounded-xl hover:bg-slate-50 transition shadow-2xs cursor-pointer"
@@ -342,7 +341,6 @@ export default function GroupShareTab({
                   <p className="text-[10px] text-slate-400 font-bold mt-0.5">초대 코드: {currentGroup.code}</p>
                 </div>
 
-                {/* 테마 색상 선택 피커 */}
                 <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
                   <Palette size={14} className="text-slate-500" />
                   <div className="flex items-center gap-1">
@@ -374,7 +372,7 @@ export default function GroupShareTab({
               </div>
             </div>
 
-            {/* 해당 그룹 전용 1달 근무 달력 */}
+            {/* 1달 근무 달력 */}
             <div 
               style={{ backgroundColor: `${groupColor}0D`, borderColor: `${groupColor}33` }} 
               className="p-3 rounded-2xl border space-y-3"
@@ -433,7 +431,7 @@ export default function GroupShareTab({
                       <div className="space-y-0.5 my-0.5">
                         {(currentGroup.members || []).map((m, mIdx) => {
                           const shiftCode = getMemberShiftCode(m, item.dateStr);
-                          const isMe = m.name === userName || m.isMe;
+                          const isMe = cleanName(m.name) === cleanName(userName) || m.isMe;
 
                           return (
                             <div
@@ -466,7 +464,7 @@ export default function GroupShareTab({
               <div className="grid grid-cols-2 gap-2">
                 {(currentGroup.members || []).map((m, idx) => {
                   const shiftCode = getMemberShiftCode(m, selectedDate);
-                  const isMe = m.name === userName || m.isMe;
+                  const isMe = cleanName(m.name) === cleanName(userName) || m.isMe;
 
                   return (
                     <div key={idx} className="bg-white p-2 rounded-lg border border-slate-200 text-xs font-bold flex justify-between items-center">
