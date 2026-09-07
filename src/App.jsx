@@ -22,22 +22,14 @@ export default function App() {
   const today = getTodayDateObj();
 
   const [activeTab, setActiveTab] = useState('myShift');
-  const [currentYear, setCurrentYear] = useState(2026);
-  const [currentMonth, setCurrentMonth] = useState(9);
+  const [currentYear, setCurrentYear] = useState(today.year);
+  const [currentMonth, setCurrentMonth] = useState(today.month);
   const [selectedDate, setSelectedDate] = useState(today.dateStr);
 
-  const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '최수민');
+  const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '간호사');
   const [myShifts, setMyShifts] = useState(() => {
     const saved = localStorage.getItem('nurse_my_shifts');
-    return saved ? JSON.parse(saved) : {
-      '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF',
-      '2026-08-31': 'D', '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E',
-      '2026-09-05': 'OFF', '2026-09-06': 'OFF', '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N',
-      '2026-09-10': 'N', '2026-09-11': 'OFF', '2026-09-12': 'OFF', '2026-09-13': 'D', '2026-09-14': 'D',
-      '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'E', '2026-09-18': 'OFF', '2026-09-19': 'OFF',
-      '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N',
-      '2026-09-25': 'N'
-    };
+    return saved ? JSON.parse(saved) : {};
   });
 
   const [shiftConfigs, setShiftConfigs] = useState(() => {
@@ -191,7 +183,6 @@ export default function App() {
     ? (nightShiftCount * numNightFixed) + (eveningShiftCount * numEveFixed)
     : Math.round(totalNightHours * numHourlyWage * 0.5);
 
-  // 현재 활성화된 그룹 안전하게 탐색
   const currentGroup = groups.find(g => g.id === activeGroupId) || (groups.length > 0 ? groups[0] : null);
 
   return (
