@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
-  Users, PlusCircle, UserCheck, Palette, RefreshCw, LogOut, Trash2, ChevronLeft, ChevronRight, ArrowLeft
+  Users, PlusCircle, UserCheck, Palette, RefreshCw, ChevronLeft, ChevronRight, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -31,16 +31,79 @@ export default function GroupShareTab({
 
   const groupColor = currentGroup?.color || '#4F46E5';
 
-  const [groupYear, setGroupYear] = useState(() => Number(selectedDate?.split('-')[0]) || 2026);
-  const [groupMonth, setGroupMonth] = useState(() => Number(selectedDate?.split('-')[1]) || 9);
+  // [수정] 모든 종류의 날짜 형식을 'YYYY-MM-DD' 표준 규격으로 완벽 파싱하는 강력한 파서
+  const parseAnyDate = useCallback((rawDate) => {
+    if (!rawDate) return '';
+    if (typeof rawDate === 'string') {
+      // '2026. 9. 7.' 또는 '2026.09.07' 형태 처리
+      const cleaned = rawDate.replace(/\./g, '-').replace(/\s/g, '').split('T')[0];
+      const parts = cleaned.split('-').filter(Boolean);
+      if (parts.length >= 3) {
+        const y = parts[0];
+        const m = String(parts[1]).padStart(2, '0');
+        const d = String(parts[2]).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+    }
+    try {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dateVal = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dateVal}`;
+      }
+    } catch (e) {}
+    return String(rawDate);
+  }, []);
+
+  const normalizedSelectedDate = useMemo(() => parseAnyDate(selectedDate), [selectedDate, parseAnyDate]);
+
+  const [groupYear, setGroupYear] = useState(() => Number(normalizedSelectedDate?.split('-')[0]) || 2026);
+  const [groupMonth, setGroupMonth] = useState(() => Number(normalizedSelectedDate?.split('-')[1]) || 9);
 
   const currentCode = currentGroup?.code || '';
   const currentName = currentGroup?.name || '공유 그룹';
 
-  // 이름 정제 함수 (비교 오류 방지)
-  const cleanName = (name) => (name || '').replace(/쌤|님|\s/g, '').trim();
+  // 이름 정제 함수 (공백 및 쌤/님 완벽 제거)
+  const cleanName = useCallback((name) => (name || '').replace(/쌤|님|\s/g, '').trim(), []);
 
-  // 1. Supabase DB 데이터 동기화 함수
+  // 내 데이터인지 여부 확인
+  const checkIsMe = useCallback((targetName) => {
+    return cleanName(targetName) === cleanName(userName);
+  }, [userName, cleanName]);
+
+  // [핵심] 회원별 근무 코드 조회 (어떠한 키 포맷도 다 매칭되도록 보완)
+  const getShiftCodeForMember = useCallback((member, rawDateKey) => {
+    const stdKey = parseAnyDate(rawDateKey);
+    const isMe = checkIsMe(member.name) || member.isMe;
+
+    if (isMe && myShifts) {
+      // 표준 키(YYYY-MM-DD), 원본 키, 다양한 변형 키 순서로 검색
+      if (myShifts[stdKey] !== undefined) return myShifts[stdKey] || 'OFF';
+      if (myShifts[rawDateKey] !== undefined) return myShifts[rawDateKey] || 'OFF';
+      
+      // myShifts의 모든 키를 순회하며 날짜 일치 여부 확인 (최종 방어 로직)
+      const foundKey = Object.keys(myShifts).find(k => parseAnyDate(k) === stdKey);
+      if (foundKey && myShifts[foundKey] !== undefined) {
+        return myShifts[foundKey] || 'OFF';
+      }
+    }
+
+    // 그룹 동료 데이터 조회
+    if (member.shifts) {
+      if (member.shifts[stdKey] !== undefined) return member.shifts[stdKey] || 'OFF';
+      if (member.shifts[rawDateKey] !== undefined) return member.shifts[rawDateKey] || 'OFF';
+      const foundKey = Object.keys(member.shifts).find(k => parseAnyDate(k) === stdKey);
+      if (foundKey && member.shifts[foundKey] !== undefined) {
+        return member.shifts[foundKey] || 'OFF';
+      }
+    }
+
+    return 'OFF';
+  }, [checkIsMe, myShifts, parseAnyDate]);
+
+  // Supabase DB 동기화
   const syncWithSupabase = useCallback(async (targetCode, targetName = '공유 그룹', isJoining = false) => {
     const cleanCode = targetCode?.trim().toUpperCase();
     const myCleanName = cleanName(userName);
@@ -50,7 +113,6 @@ export default function GroupShareTab({
     setLoading(true);
 
     try {
-      // [A] 내 근무 데이터 DB 저장 (UPSERT)
       const { error: upsertErr } = await supabase
         .from('group_shifts')
         .upsert(
@@ -66,7 +128,6 @@ export default function GroupShareTab({
 
       if (upsertErr) console.warn('UPSERT Warning:', upsertErr.message);
 
-      // [B] 해당 그룹 코드 전체 멤버 조회
       const { data, error: selectErr } = await supabase
         .from('group_shifts')
         .select('*')
@@ -118,9 +179,9 @@ export default function GroupShareTab({
     } finally {
       setLoading(false);
     }
-  }, [userName, myShifts, supabase, setGroups, setActiveGroupId]);
+  }, [userName, myShifts, setGroups, setActiveGroupId, cleanName]);
 
-  // 실시간 구독 (myShifts 제거로 무한 재렌더링 방지)
+  // 실시간 구독
   useEffect(() => {
     if (currentCode && userName) {
       syncWithSupabase(currentCode, currentName, false);
@@ -138,32 +199,21 @@ export default function GroupShareTab({
         return () => supabase.removeChannel(channel);
       }
     }
-  }, [currentCode, userName]); // myShifts를 의존성 배열에서 제거하여 깜빡임 차단
+  }, [currentCode, userName]);
 
-  // 멤버별 스케쥴 단일 출처(Single Source of Truth) 도출 함수
-  const getMemberShiftCode = (member, dateKey) => {
-    const isMe = cleanName(member.name) === cleanName(userName) || member.isMe;
-    if (isMe && myShifts) {
-      return myShifts[dateKey] || 'OFF';
-    }
-    return (member.shifts && member.shifts[dateKey]) || 'OFF';
-  };
-
-  // 달력 날짜 매트릭스 계산
-  const generateMonthCalendar = (year, month) => {
-    const firstDay = new Date(year, month - 1, 1).getDay();
-    const lastDate = new Date(year, month, 0).getDate();
+  // 달력 날짜 매트릭스
+  const calendarDays = useMemo(() => {
+    const firstDay = new Date(groupYear, groupMonth - 1, 1).getDay();
+    const lastDate = new Date(groupYear, groupMonth, 0).getDate();
     const days = [];
 
     for (let i = 0; i < firstDay; i++) days.push(null);
     for (let d = 1; d <= lastDate; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dateStr = `${groupYear}-${String(groupMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       days.push({ dayNum: d, dateStr });
     }
     return days;
-  };
-
-  const calendarDays = generateMonthCalendar(groupYear, groupMonth);
+  }, [groupYear, groupMonth]);
 
   const handlePrevGroupMonth = () => {
     if (groupMonth === 1) { setGroupMonth(12); setGroupYear(groupYear - 1); }
@@ -231,7 +281,7 @@ export default function GroupShareTab({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 font-sans">
       {/* 1. 그룹 목록 뷰 */}
       {viewMode === 'list' && (
         <div className="space-y-4">
@@ -306,7 +356,6 @@ export default function GroupShareTab({
 
                       <div className="flex items-center gap-1 text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition">
                         <span>입장하기</span>
-                        <ChevronRight size={14} />
                       </div>
                     </div>
                   );
@@ -407,8 +456,9 @@ export default function GroupShareTab({
                 {calendarDays.map((item, idx) => {
                   if (!item) return <div key={idx} className="min-h-16 bg-slate-50/50 rounded-xl"></div>;
 
-                  const isSelected = selectedDate === item.dateStr;
-                  const isToday = item.dateStr === `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+                  const isSelected = normalizedSelectedDate === item.dateStr;
+                  const todayStr = parseAnyDate(new Date());
+                  const isToday = item.dateStr === todayStr;
 
                   return (
                     <div
@@ -430,8 +480,8 @@ export default function GroupShareTab({
 
                       <div className="space-y-0.5 my-0.5">
                         {(currentGroup.members || []).map((m, mIdx) => {
-                          const shiftCode = getMemberShiftCode(m, item.dateStr);
-                          const isMe = cleanName(m.name) === cleanName(userName) || m.isMe;
+                          const shiftCode = getShiftCodeForMember(m, item.dateStr);
+                          const isMe = checkIsMe(m.name) || m.isMe;
 
                           return (
                             <div
@@ -459,12 +509,12 @@ export default function GroupShareTab({
             {/* 선택 날짜 멤버별 상세 스케쥴 목록 */}
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
               <span className="text-xs font-black text-slate-800 block">
-                📌 {selectedDate} 선택 일자 상세 근무
+                📌 {normalizedSelectedDate} 선택 일자 상세 근무
               </span>
               <div className="grid grid-cols-2 gap-2">
                 {(currentGroup.members || []).map((m, idx) => {
-                  const shiftCode = getMemberShiftCode(m, selectedDate);
-                  const isMe = cleanName(m.name) === cleanName(userName) || m.isMe;
+                  const shiftCode = getShiftCodeForMember(m, normalizedSelectedDate);
+                  const isMe = checkIsMe(m.name) || m.isMe;
 
                   return (
                     <div key={idx} className="bg-white p-2 rounded-lg border border-slate-200 text-xs font-bold flex justify-between items-center">
