@@ -37,7 +37,7 @@ export default function GroupShareTab({
   const [groupYear, setGroupYear] = useState(() => Number(normalizedSelectedDate?.split('-')[0]) || 2026);
   const [groupMonth, setGroupMonth] = useState(() => Number(normalizedSelectedDate?.split('-')[1]) || 9);
 
-  // selectedDate 변경 시 그룹 달력의 연/월도 자동 동기화
+  // selectedDate 변경 시 그룹 달력의 연/월 자동 동기화
   useEffect(() => {
     const { year, month } = splitDateKey(normalizedSelectedDate);
     if (year && month) {
@@ -51,8 +51,9 @@ export default function GroupShareTab({
 
   const checkIsMe = useCallback((targetName) => isSamePerson(targetName, userName), [userName]);
 
-  // 본인 데이터는 로컬 myShifts만 바로 가리킴 (DB 응답 대기 없음 -> 깜빡임 완전 차단)
+  // 본인 데이터는 로컬 myShifts만 바로 가리킴 (undefined 방어 로직 완전 적용)
   const getShiftCodeForMember = useCallback((member, rawDateKey) => {
+    if (!member) return 'OFF';
     const stdKey = toDateKey(rawDateKey);
     const isMe = checkIsMe(member.name) || member.isMe;
 
@@ -62,15 +63,12 @@ export default function GroupShareTab({
       return 'OFF';
     }
 
-    if (member.shifts) {
-
-      if (member?.shifts && member.shifts[stdKey] !== undefined) {
-        return member.shifts[stdKey] || 'OFF';
-       }
-      const foundKey = Object.keys(member.shifts).find(k => toDateKey(k) === stdKey);
-      if (foundKey && member.shifts[foundKey] !== undefined) {
-        return member.shifts[foundKey] || 'OFF';
-      }
+    const mShifts = member.shifts || {};
+    if (mShifts[stdKey] !== undefined) return mShifts[stdKey] || 'OFF';
+    
+    const foundKey = Object.keys(mShifts).find(k => toDateKey(k) === stdKey);
+    if (foundKey && mShifts[foundKey] !== undefined) {
+      return mShifts[foundKey] || 'OFF';
     }
 
     return 'OFF';
