@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   Users, PlusCircle, UserCheck, Palette, RefreshCw, ChevronLeft, ChevronRight, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { toDateKey, cleanDisplayName, isSamePerson } from '../utils/dateUtils';
 
 const DEFAULT_PALETTE = [
   '#4F46E5', '#7C3AED', '#2563EB', '#0284C7', '#0D9488', '#16A34A', 
@@ -31,33 +32,7 @@ export default function GroupShareTab({
 
   const groupColor = currentGroup?.color || '#4F46E5';
 
-  // [수정] 모든 종류의 날짜 형식을 'YYYY-MM-DD' 표준 규격으로 완벽 파싱하는 강력한 파서
-  const parseAnyDate = useCallback((rawDate) => {
-    if (!rawDate) return '';
-    if (typeof rawDate === 'string') {
-      // '2026. 9. 7.' 또는 '2026.09.07' 형태 처리
-      const cleaned = rawDate.replace(/\./g, '-').replace(/\s/g, '').split('T')[0];
-      const parts = cleaned.split('-').filter(Boolean);
-      if (parts.length >= 3) {
-        const y = parts[0];
-        const m = String(parts[1]).padStart(2, '0');
-        const d = String(parts[2]).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-      }
-    }
-    try {
-      const d = new Date(rawDate);
-      if (!isNaN(d.getTime())) {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const dateVal = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${dateVal}`;
-      }
-    } catch (e) {}
-    return String(rawDate);
-  }, []);
-
-  const normalizedSelectedDate = useMemo(() => parseAnyDate(selectedDate), [selectedDate, parseAnyDate]);
+  const normalizedSelectedDate = useMemo(() => toDateKey(selectedDate), [selectedDate]);
 
   const [groupYear, setGroupYear] = useState(() => Number(normalizedSelectedDate?.split('-')[0]) || 2026);
   const [groupMonth, setGroupMonth] = useState(() => Number(normalizedSelectedDate?.split('-')[1]) || 9);
@@ -65,69 +40,38 @@ export default function GroupShareTab({
   const currentCode = currentGroup?.code || '';
   const currentName = currentGroup?.name || '공유 그룹';
 
-  // 이름 정제 함수 (공백 및 쌤/님 완벽 제거)
-  const cleanName = useCallback((name) => (name || '').replace(/쌤|님|\s/g, '').trim(), []);
+  const checkIsMe = useCallback((targetName) => isSamePerson(targetName, userName), [userName]);
 
-  // 내 데이터인지 여부 확인
-  const checkIsMe = useCallback((targetName) => {
-    return cleanName(targetName) === cleanName(userName);
-  }, [userName, cleanName]);
-
-  // [핵심] 회원별 근무 코드 조회 (어떠한 키 포맷도 다 매칭되도록 보완)
+  // 본인 데이터는 로컬 myShifts만 바로 가리킴 (DB 응답 대기 없음 -> 깜빡임 완전 차단)
   const getShiftCodeForMember = useCallback((member, rawDateKey) => {
-    const stdKey = parseAnyDate(rawDateKey);
+    const stdKey = toDateKey(rawDateKey);
     const isMe = checkIsMe(member.name) || member.isMe;
 
-    if (isMe && myShifts) {
-      // 표준 키(YYYY-MM-DD), 원본 키, 다양한 변형 키 순서로 검색
-      if (myShifts[stdKey] !== undefined) return myShifts[stdKey] || 'OFF';
-      if (myShifts[rawDateKey] !== undefined) return myShifts[rawDateKey] || 'OFF';
-      
-      // myShifts의 모든 키를 순회하며 날짜 일치 여부 확인 (최종 방어 로직)
-      const foundKey = Object.keys(myShifts).find(k => parseAnyDate(k) === stdKey);
-      if (foundKey && myShifts[foundKey] !== undefined) {
-        return myShifts[foundKey] || 'OFF';
-      }
+    if (isMe) {
+      const localShifts = myShifts || {};
+      if (localShifts[stdKey] !== undefined) return localShifts[stdKey] || 'OFF';
+      return 'OFF';
     }
 
-    // 그룹 동료 데이터 조회
     if (member.shifts) {
       if (member.shifts[stdKey] !== undefined) return member.shifts[stdKey] || 'OFF';
-      if (member.shifts[rawDateKey] !== undefined) return member.shifts[rawDateKey] || 'OFF';
-      const foundKey = Object.keys(member.shifts).find(k => parseAnyDate(k) === stdKey);
+      const foundKey = Object.keys(member.shifts).find(k => toDateKey(k) === stdKey);
       if (foundKey && member.shifts[foundKey] !== undefined) {
         return member.shifts[foundKey] || 'OFF';
       }
     }
 
     return 'OFF';
-  }, [checkIsMe, myShifts, parseAnyDate]);
+  }, [checkIsMe, myShifts]);
 
-  // Supabase DB 동기화
-  const syncWithSupabase = useCallback(async (targetCode, targetName = '공유 그룹', isJoining = false) => {
+  // [Pull] DB에서 그룹 데이터 가져오기
+  const pullGroupData = useCallback(async (targetCode, targetName = '공유 그룹', isJoining = false) => {
     const cleanCode = targetCode?.trim().toUpperCase();
-    const myCleanName = cleanName(userName);
-
-    if (!cleanCode || !myCleanName || !supabase) return false;
+    if (!cleanCode || !supabase) return false;
 
     setLoading(true);
 
     try {
-      const { error: upsertErr } = await supabase
-        .from('group_shifts')
-        .upsert(
-          {
-            group_code: cleanCode,
-            group_name: targetName,
-            user_name: userName.trim(),
-            shifts: myShifts || {},
-            updated_at: new Date().toISOString()
-          },
-          { onConflict: 'group_code, user_name' }
-        );
-
-      if (upsertErr) console.warn('UPSERT Warning:', upsertErr.message);
-
       const { data, error: selectErr } = await supabase
         .from('group_shifts')
         .select('*')
@@ -140,7 +84,7 @@ export default function GroupShareTab({
         const dbMembers = data.map(item => ({
           name: item.user_name,
           shifts: item.shifts || {},
-          isMe: cleanName(item.user_name) === myCleanName
+          isMe: isSamePerson(item.user_name, userName)
         }));
 
         let resolvedGroupId = null;
@@ -174,32 +118,90 @@ export default function GroupShareTab({
         return false;
       }
     } catch (err) {
-      console.error('Group sync error:', err);
+      console.error('Group pull error:', err);
       return false;
     } finally {
       setLoading(false);
     }
-  }, [userName, myShifts, setGroups, setActiveGroupId, cleanName]);
+  }, [userName, setGroups, setActiveGroupId]);
 
-  // 실시간 구독
+  // [Push] 내 근무 데이터를 DB로 저장
+  const pushMyShiftsToSupabase = useCallback(async (targetCode, targetName = '공유 그룹') => {
+    const cleanCode = targetCode?.trim().toUpperCase();
+    const myCleanName = cleanDisplayName(userName);
+
+    if (!cleanCode || !myCleanName || !supabase) return false;
+
+    try {
+      const { error: upsertErr } = await supabase
+        .from('group_shifts')
+        .upsert(
+          {
+            group_code: cleanCode,
+            group_name: targetName,
+            user_name: userName.trim(),
+            shifts: myShifts || {},
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'group_code, user_name' }
+        );
+
+      if (upsertErr) console.warn('UPSERT Warning:', upsertErr.message);
+      return !upsertErr;
+    } catch (err) {
+      console.error('Group push error:', err);
+      return false;
+    }
+  }, [userName, myShifts]);
+
+  // 동기화: Push 후 Pull 수행
+  const syncWithSupabase = useCallback(async (targetCode, targetName = '공유 그룹', isJoining = false) => {
+    await pushMyShiftsToSupabase(targetCode, targetName);
+    return pullGroupData(targetCode, targetName, isJoining);
+  }, [pushMyShiftsToSupabase, pullGroupData]);
+
+  // 최초 진입 시 1회 Push + Pull
   useEffect(() => {
     if (currentCode && userName) {
       syncWithSupabase(currentCode, currentName, false);
-
-      if (supabase) {
-        const channel = supabase
-          .channel(`group-${currentCode}`)
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'group_shifts', filter: `group_code=eq.${currentCode}` },
-            () => syncWithSupabase(currentCode, currentName, false)
-          )
-          .subscribe();
-
-        return () => supabase.removeChannel(channel);
-      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCode, userName]);
+
+  // 실시간 구독: 원격 변경 감지 시 Pull만 실행 (Push 금지로 무한 루프 차단)
+  useEffect(() => {
+    if (currentCode && userName && supabase) {
+      const channel = supabase
+        .channel(`group-${currentCode}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'group_shifts', filter: `group_code=eq.${currentCode}` },
+          () => pullGroupData(currentCode, currentName, false)
+        )
+        .subscribe();
+
+      return () => supabase.removeChannel(channel);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCode, userName]);
+
+  // 내 근무표 변경 시 800ms 디바운스로 Push 실행
+  const isFirstMyShiftsRender = useRef(true);
+  useEffect(() => {
+    if (isFirstMyShiftsRender.current) {
+      isFirstMyShiftsRender.current = false;
+      return;
+    }
+
+    if (!currentCode || !userName) return;
+
+    const timer = setTimeout(() => {
+      pushMyShiftsToSupabase(currentCode, currentName);
+    }, 800);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myShifts]);
 
   // 달력 날짜 매트릭스
   const calendarDays = useMemo(() => {
@@ -457,7 +459,7 @@ export default function GroupShareTab({
                   if (!item) return <div key={idx} className="min-h-16 bg-slate-50/50 rounded-xl"></div>;
 
                   const isSelected = normalizedSelectedDate === item.dateStr;
-                  const todayStr = parseAnyDate(new Date());
+                  const todayStr = toDateKey(new Date());
                   const isToday = item.dateStr === todayStr;
 
                   return (
