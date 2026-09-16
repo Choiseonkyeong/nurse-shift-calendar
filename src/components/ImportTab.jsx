@@ -6,7 +6,7 @@ import { splitDateKey, shiftShiftsToMonth, getTodayDateObj } from '../utils/date
 const EXCEL_BASE_YEAR = 2026;
 const EXCEL_BASE_MONTH = 9;
 const PHOTO_BASE_YEAR = 2026;
-const PHOTO_BASE_MONTH = 8; // 엑셀 기준월의 한 달 전
+const PHOTO_BASE_MONTH = 8; // 목업 데이터 원본 기준월
 
 export default function ImportTab({
   setMyShifts,
@@ -27,7 +27,6 @@ export default function ImportTab({
 
   const { year: targetYear, month: targetMonth } = getTargetYearMonth();
 
-  // 목업 데이터 예시 (기존 파일의 augustRealShifts, nurseShiftsDatabase 구조 유지)
   const augustRealShifts = {
     '2026-08-01': 'D', '2026-08-02': 'D', '2026-08-03': 'OFF', '2026-08-04': 'E', '2026-08-05': 'E',
     '2026-08-06': 'OFF', '2026-08-07': 'N', '2026-08-08': 'N', '2026-08-09': 'OFF', '2026-08-10': 'D'
@@ -47,11 +46,8 @@ export default function ImportTab({
     const { year: tYear, month: tMonth } = getTargetYearMonth();
 
     if (importType === 'image') {
-      // 사진(OCR)은 선택된 달의 "이전 달" 근무표로 취급 (기존 8월/9월 상대 간격 유지)
-      const photoTargetYM = tYear * 12 + (tMonth - 1) - 1;
-      const photoTargetYear = Math.floor(photoTargetYM / 12);
-      const photoTargetMonth = (photoTargetYM % 12) + 1;
-      targetShifts = shiftShiftsToMonth(augustRealShifts, PHOTO_BASE_YEAR, PHOTO_BASE_MONTH, photoTargetYear, photoTargetMonth);
+      // 사진(OCR) 데이터도 선택된 연/월(tYear, tMonth)로 정확하게 변환되어 등록됨
+      targetShifts = shiftShiftsToMonth(augustRealShifts, PHOTO_BASE_YEAR, PHOTO_BASE_MONTH, tYear, tMonth);
     } else {
       const raw = nurseShiftsDatabase[selectedName] || nurseShiftsDatabase['최수민'];
       targetShifts = shiftShiftsToMonth(raw, EXCEL_BASE_YEAR, EXCEL_BASE_MONTH, tYear, tMonth);
