@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DollarSign, Clock, CalendarCheck, Settings, Save } from 'lucide-react';
+import { DollarSign, CalendarCheck, Settings, Save, Award } from 'lucide-react';
 import { splitDateKey, getTodayDateObj } from '../utils/dateUtils';
 
 export default function AllowanceTab({
@@ -11,16 +11,12 @@ export default function AllowanceTab({
   const [isEditingConfig, setIsEditingConfig] = useState(false);
   const [tempConfigs, setTempConfigs] = useState(shiftConfigs || {});
 
-  // 안전한 객체 접근 보장
   const safeShifts = myShifts || {};
   const safeConfigs = shiftConfigs || {};
 
-  // 선택 날짜 기준 연/월 파싱
   const { year, month } = selectedDate ? splitDateKey(selectedDate) : getTodayDateObj();
-
-  // 이번 달 근무 카운트 및 수당 계산 (방어 로직 강화)
   const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
-  
+
   const shiftCounts = { D: 0, E: 0, N: 0, OFF: 0 };
   let totalAllowance = 0;
 
@@ -29,12 +25,12 @@ export default function AllowanceTab({
       if (shiftCounts[code] !== undefined) {
         shiftCounts[code] += 1;
       }
-      const pay = safeConfigs[code]?.pay || 0;
-      totalAllowance += Number(pay) || 0;
+      const pay = safeConfigs[code]?.pay;
+      totalAllowance += Number(pay || 0);
     }
   });
 
-  // 숫자를 안전하게 콤마 포맷팅하는 유틸 (undefined 방지)
+  // 에러 방지용 안전 포맷팅 함수
   const formatMoney = (val) => {
     const num = Number(val);
     return isNaN(num) ? '0' : num.toLocaleString();
@@ -58,92 +54,95 @@ export default function AllowanceTab({
   };
 
   return (
-    <div className="space-y-4 font-sans max-w-md mx-auto">
-      {/* 1. 당월 예상 수당 총액 카드리포트 */}
-      <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white p-5 rounded-2xl shadow-md space-y-3">
-        <div className="flex justify-between items-center">
-          <span className="text-xs font-bold opacity-80 flex items-center gap-1">
-            <DollarSign size={16} /> {year}년 {month}월 예상 근무 수당
-          </span>
+    <div className="space-y-4 font-sans">
+      {/* 1. 상단 수당 요약 카드 */}
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-5 rounded-3xl shadow-lg relative overflow-hidden">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <span className="text-xs font-semibold opacity-80 block">
+              {year}년 {month}월 예상 수당
+            </span>
+            <h2 className="text-2xl font-black mt-1">
+              {formatMoney(totalAllowance)} 원
+            </h2>
+          </div>
           <button
             onClick={() => {
               setTempConfigs(safeConfigs);
               setIsEditingConfig(!isEditingConfig);
             }}
-            className="text-[11px] font-bold bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-lg border border-white/20 transition flex items-center gap-1 cursor-pointer"
+            className="p-2 bg-white/20 hover:bg-white/30 rounded-xl backdrop-blur-md transition cursor-pointer"
+            title="수당 단가 설정"
           >
-            <Settings size={12} />
-            <span>{isEditingConfig ? '닫기' : '수당 단가 설정'}</span>
+            <Settings size={18} />
           </button>
         </div>
 
-        <div className="space-y-1">
-          <div className="text-3xl font-black tracking-tight">
-            {formatMoney(totalAllowance)} 원
+        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/20 text-center text-xs">
+          <div className="bg-white/10 backdrop-blur-xs p-2 rounded-xl">
+            <span className="block text-[10px] opacity-75">Day ({shiftCounts.D}회)</span>
+            <span className="font-bold">{formatMoney((safeConfigs.D?.pay || 0) * shiftCounts.D)}원</span>
           </div>
-          <p className="text-[11px] opacity-75">
-            * 설정된 근무별 단가 기준 집계 금액입니다.
-          </p>
+          <div className="bg-white/10 backdrop-blur-xs p-2 rounded-xl">
+            <span className="block text-[10px] opacity-75">Evening ({shiftCounts.E}회)</span>
+            <span className="font-bold">{formatMoney((safeConfigs.E?.pay || 0) * shiftCounts.E)}원</span>
+          </div>
+          <div className="bg-white/10 backdrop-blur-xs p-2 rounded-xl">
+            <span className="block text-[10px] opacity-75">Night ({shiftCounts.N}회)</span>
+            <span className="font-bold">{formatMoney((safeConfigs.N?.pay || 0) * shiftCounts.N)}원</span>
+          </div>
         </div>
       </div>
 
-      {/* 2. 단가 설정 폼 (편집 모드 시) */}
+      {/* 2. 단가 설정 모달/영역 */}
       {isEditingConfig && (
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-          <h3 className="text-xs font-black text-slate-800 flex items-center gap-1 border-b pb-2">
-            <Settings size={14} className="text-indigo-600" /> 근무별 단가 설정 (원)
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+          <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5 border-b pb-2">
+            <Settings size={16} className="text-indigo-600" /> 근무별 수당 단가 수정
           </h3>
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-3 gap-2">
             {['D', 'E', 'N'].map((code) => (
-              <div key={code} className="p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                <span className="font-extrabold text-slate-700">{code} 근무 단가</span>
+              <div key={code} className="space-y-1">
+                <label className="text-xs font-bold text-slate-600 block">{code} 근무 (원)</label>
                 <input
                   type="number"
                   value={tempConfigs[code]?.pay ?? 0}
                   onChange={(e) => handleConfigChange(code, 'pay', e.target.value)}
-                  className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none"
+                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500"
                 />
               </div>
             ))}
           </div>
           <button
             onClick={handleSaveConfigs}
-            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+            className="w-full py-2 bg-indigo-600 text-white font-extrabold text-xs rounded-xl hover:bg-indigo-700 transition flex items-center justify-center gap-1 cursor-pointer"
           >
-            <Save size={14} /> 단가 저장하기
+            <Save size={14} /> 저장하기
           </button>
         </div>
       )}
 
-      {/* 3. 근무 현황 통계 (D / E / N / OFF) */}
+      {/* 3. 근무 카운트 상세 카드 */}
       <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs space-y-3">
-        <h3 className="text-xs font-black text-slate-800 flex items-center gap-1">
-          <CalendarCheck size={14} className="text-indigo-600" /> {month}월 근무 통계
+        <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
+          <CalendarCheck size={16} className="text-indigo-600" /> 이번 달 근무 집계
         </h3>
-
-        <div className="grid grid-cols-4 gap-2 text-center">
-          <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl space-y-1">
-            <span className="text-[10px] font-bold text-amber-700 block">Day</span>
-            <span className="text-base font-black text-amber-900">{shiftCounts.D}회</span>
-            <span className="text-[9px] text-amber-600 block">{formatMoney((safeConfigs.D?.pay || 0) * shiftCounts.D)}원</span>
+        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+          <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+            <span className="text-[10px] font-bold text-amber-600 block">Day</span>
+            <span className="text-lg font-black text-amber-900">{shiftCounts.D}</span>
           </div>
-
-          <div className="p-3 bg-orange-50 border border-orange-100 rounded-xl space-y-1">
-            <span className="text-[10px] font-bold text-orange-700 block">Evening</span>
-            <span className="text-base font-black text-orange-900">{shiftCounts.E}회</span>
-            <span className="text-[9px] text-orange-600 block">{formatMoney((safeConfigs.E?.pay || 0) * shiftCounts.E)}원</span>
+          <div className="p-3 bg-orange-50 border border-orange-100 rounded-xl">
+            <span className="text-[10px] font-bold text-orange-600 block">Evening</span>
+            <span className="text-lg font-black text-orange-900">{shiftCounts.E}</span>
           </div>
-
-          <div className="p-3 bg-sky-50 border border-sky-100 rounded-xl space-y-1">
-            <span className="text-[10px] font-bold text-sky-700 block">Night</span>
-            <span className="text-base font-black text-sky-900">{shiftCounts.N}회</span>
-            <span className="text-[9px] text-sky-600 block">{formatMoney((safeConfigs.N?.pay || 0) * shiftCounts.N)}원</span>
+          <div className="p-3 bg-sky-50 border border-sky-100 rounded-xl">
+            <span className="text-[10px] font-bold text-sky-600 block">Night</span>
+            <span className="text-lg font-black text-sky-900">{shiftCounts.N}</span>
           </div>
-
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
             <span className="text-[10px] font-bold text-slate-500 block">휴무</span>
-            <span className="text-base font-black text-slate-700">{shiftCounts.OFF}회</span>
-            <span className="text-[9px] text-slate-400 block">-</span>
+            <span className="text-lg font-black text-slate-700">{shiftCounts.OFF}</span>
           </div>
         </div>
       </div>
