@@ -63,7 +63,10 @@ export default function GroupShareTab({
     }
 
     if (member.shifts) {
-      if (member.shifts[stdKey] !== undefined) return member.shifts[stdKey] || 'OFF';
+
+      if (member?.shifts && member.shifts[stdKey] !== undefined) {
+        return member.shifts[stdKey] || 'OFF';
+       }
       const foundKey = Object.keys(member.shifts).find(k => toDateKey(k) === stdKey);
       if (foundKey && member.shifts[foundKey] !== undefined) {
         return member.shifts[foundKey] || 'OFF';
