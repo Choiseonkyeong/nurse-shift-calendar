@@ -1,397 +1,208 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Calendar, Users, Calculator, Upload, Eye, EyeOff, ArrowLeftRight, X 
-} from 'lucide-react';
-
+import { Calendar, DollarSign, Users, Upload, Shield } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
 import AllowanceTab from './components/AllowanceTab';
 import GroupShareTab from './components/GroupShareTab';
 import ImportTab from './components/ImportTab';
-
-const getTodayDateObj = () => {
-  const d = new Date();
-  return {
-    year: d.getFullYear(),
-    month: d.getMonth() + 1,
-    day: d.getDate(),
-    dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  };
-};
+import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 
 export default function App() {
   const today = getTodayDateObj();
-
   const [activeTab, setActiveTab] = useState('myShift');
-  const [currentYear, setCurrentYear] = useState(today.year);
-  const [currentMonth, setCurrentMonth] = useState(today.month);
-  const [selectedDate, setSelectedDate] = useState(today.dateStr);
+  
+  // selectedDate는 어떤 값이 넘어와도 무조건 'YYYY-MM-DD' 10자리 표준 키로 정규화
+  const [selectedDate, _setSelectedDate] = useState(today.dateStr);
+  const setSelectedDate = (raw) => _setSelectedDate(toDateKey(raw));
 
-  // 초기 이름 및 샘플 데이터 하드코딩 제거 (완전 빈 값 설정)
-  const [userName, setUserName] = useState(() => localStorage.getItem('nurse_user_name') || '');
+  const [userName, setUserName] = useState(() => localStorage.getItem('shift_user_name') || '홍숙언');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempUserName, setTempUserName] = useState(userName);
+
   const [myShifts, setMyShifts] = useState(() => {
-    const saved = localStorage.getItem('nurse_my_shifts');
+    const saved = localStorage.getItem('my_shift_data');
     return saved ? JSON.parse(saved) : {};
   });
 
   const [shiftConfigs, setShiftConfigs] = useState(() => {
-    const saved = localStorage.getItem('nurse_shift_configs');
+    const saved = localStorage.getItem('shift_configs');
     return saved ? JSON.parse(saved) : {
-      D: { name: 'Day', time: '07:30 - 15:30', nightHours: 0, color: '#FEF08A', textColor: '#854D0E' },
-      E: { name: 'Evening', time: '14:30 - 22:30', nightHours: 0.5, color: '#FED7AA', textColor: '#9A3412' },
-      N: { name: 'Night', time: '21:30 - 08:00', nightHours: 8, color: '#E0F2FE', textColor: '#075985' },
-      M: { name: 'Mid', time: '10:00 - 18:00', nightHours: 0, color: '#E9D5FF', textColor: '#6B21A8' },
-      OFF: { name: 'Off', time: '휴무', nightHours: 0, color: '#F3F4F6', textColor: '#374151' },
-      연차: { name: 'Annual', time: '연차 휴가', nightHours: 0, color: '#FBCFE8', textColor: '#9D174D' }
+      D: { name: 'Day', start: '07:00', end: '15:30', pay: 100000, color: '#F59E0B' },
+      E: { name: 'Evening', start: '15:00', end: '23:00', pay: 110000, color: '#F97316' },
+      N: { name: 'Night', start: '22:30', end: '07:30', pay: 150000, color: '#0284C7' },
+      OFF: { name: '휴무', start: '', end: '', pay: 0, color: '#94A3B8' }
     };
   });
 
-  const [totalAnnualLeave, setTotalAnnualLeave] = useState(() => localStorage.getItem('nurse_total_annual') || '15');
-  const [manualUsedAnnual, setManualUsedAnnual] = useState(() => {
-    const saved = localStorage.getItem('nurse_manual_annual');
-    return saved !== null ? saved : null;
-  });
-
-  const [calcMode, setCalcMode] = useState(() => localStorage.getItem('nurse_calc_mode') || 'fixed');
-  const [nightFixedAllowance, setNightFixedAllowance] = useState(() => localStorage.getItem('nurse_night_fixed') || '25000');
-  const [eveningFixedAllowance, setEveningFixedAllowance] = useState(() => localStorage.getItem('nurse_eve_fixed') || '5000');
-  const [hourlyWage, setHourlyWage] = useState(() => localStorage.getItem('nurse_hourly_wage') || '13000');
-
-  const [memos, setMemos] = useState(() => {
-    const saved = localStorage.getItem('nurse_memos');
-    return saved ? JSON.parse(saved) : {};
-  });
-  const [memoText, setMemoText] = useState('');
-  const [isPrivateMemo, setIsPrivateMemo] = useState(false);
-
   const [groups, setGroups] = useState(() => {
-    const saved = localStorage.getItem('nurse_groups');
-    return saved ? JSON.parse(saved) : [
-      { 
-        id: 'g1', 
-        name: '5병동 동기들', 
-        code: 'W5ALL1', 
-        members: [
-          { name: userName, shifts: myShifts, memos: memos, isMe: true }
-        ] 
-      }
-    ];
+    const saved = localStorage.getItem('my_group_list');
+    return saved ? JSON.parse(saved) : [];
   });
-  const [activeGroupId, setActiveGroupId] = useState(() => localStorage.getItem('nurse_active_group_id') || 'g1');
+
+  const [activeGroupId, setActiveGroupId] = useState(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [privacyBlur, setPrivacyBlur] = useState(false);
 
-  const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
-  const [swapPartner, setSwapPartner] = useState('김민지');
-  const [swapTargetDate, setSwapTargetDate] = useState(selectedDate);
+  useEffect(() => {
+    localStorage.setItem('my_shift_data', JSON.stringify(myShifts));
+  }, [myShifts]);
 
-  useEffect(() => { localStorage.setItem('nurse_user_name', userName); }, [userName]);
-  useEffect(() => { localStorage.setItem('nurse_my_shifts', JSON.stringify(myShifts)); }, [myShifts]);
-  useEffect(() => { localStorage.setItem('nurse_shift_configs', JSON.stringify(shiftConfigs)); }, [shiftConfigs]);
-  useEffect(() => { localStorage.setItem('nurse_total_annual', totalAnnualLeave); }, [totalAnnualLeave]);
-  useEffect(() => { 
-    if (manualUsedAnnual !== null) localStorage.setItem('nurse_manual_annual', manualUsedAnnual);
-    else localStorage.removeItem('nurse_manual_annual');
-  }, [manualUsedAnnual]);
-  useEffect(() => { localStorage.setItem('nurse_calc_mode', calcMode); }, [calcMode]);
-  useEffect(() => { localStorage.setItem('nurse_night_fixed', nightFixedAllowance); }, [nightFixedAllowance]);
-  useEffect(() => { localStorage.setItem('nurse_eve_fixed', eveningFixedAllowance); }, [eveningFixedAllowance]);
-  useEffect(() => { localStorage.setItem('nurse_hourly_wage', hourlyWage); }, [hourlyWage]);
-  useEffect(() => { localStorage.setItem('nurse_memos', JSON.stringify(memos)); }, [memos]);
-  useEffect(() => { localStorage.setItem('nurse_groups', JSON.stringify(groups)); }, [groups]);
-  useEffect(() => { localStorage.setItem('nurse_active_group_id', activeGroupId); }, [activeGroupId]);
+  useEffect(() => {
+    localStorage.setItem('shift_configs', JSON.stringify(shiftConfigs));
+  }, [shiftConfigs]);
 
-  const handleClearAllData = () => {
-    if (window.confirm('모든 근무 및 일정 데이터를 초기화하시겠습니까?')) {
-      localStorage.clear();
-      setUserName('');
-      setMyShifts({});
-      setMemos({});
-      setManualUsedAnnual(null);
-      
-      const defaultGroup = [
-        { 
-          id: 'g1', 
-          name: '5병동 동기들', 
-          code: 'W5ALL1', 
-          members: [{ name: '', shifts: {}, memos: {}, isMe: true }] 
-        }
-      ];
-      setGroups(defaultGroup);
-      setActiveGroupId('g1');
+  useEffect(() => {
+    localStorage.setItem('my_group_list', JSON.stringify(groups));
+  }, [groups]);
 
-      alert('🎉 모든 근무 데이터가 초기화되었습니다. 등록 탭에서 근무표를 업로드해 주세요.');
+  useEffect(() => {
+    localStorage.setItem('shift_user_name', userName);
+  }, [userName]);
+
+  const handleSaveName = () => {
+    if (tempUserName.trim()) {
+      setUserName(tempUserName.trim());
+      setIsEditingName(false);
     }
   };
 
-  const handlePrevMonth = () => {
-    if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); }
-    else setCurrentMonth(currentMonth - 1);
-  };
-
-  const handleNextMonth = () => {
-    if (currentMonth === 12) { setCurrentMonth(1); setCurrentYear(currentYear + 1); }
-    else setCurrentMonth(currentMonth + 1);
-  };
-
-  const handleShiftChange = (dateStr, newCode) => {
-    setMyShifts(prev => {
-      const updated = { ...prev };
-      if (!newCode) delete updated[dateStr];
-      else updated[dateStr] = newCode;
-      return updated;
-    });
-  };
-
-  const handleConfigChange = (code, key, value) => {
-    setShiftConfigs(prev => ({ ...prev, [code]: { ...prev[code], [key]: value } }));
-  };
-
-  const handleAddMemo = () => {
-    if (!memoText.trim()) return;
-    setMemos({
-      ...memos,
-      [selectedDate]: [...(memos[selectedDate] || []), { id: Date.now(), type: '개인일정', text: memoText, isPrivate: isPrivateMemo }]
-    });
-    setMemoText('');
-    setIsPrivateMemo(false);
-  };
-
-  const handleExecuteShiftSwap = () => {
-    const myCode = myShifts[swapTargetDate] || 'OFF';
-    const partnerCode = 'E';
-    setMyShifts(prev => ({ ...prev, [swapTargetDate]: partnerCode }));
-    setIsSwapModalOpen(false);
-    alert(`🔄 ${swapTargetDate} ${swapPartner} 선생님과의 근무 교대(${myCode} ⇄ ${partnerCode})가 완료되었습니다.`);
-  };
-
-  const currentMonthShifts = Object.entries(myShifts).filter(([date]) => date.startsWith(`${currentYear}-${String(currentMonth).padStart(2, '0')}`));
-  const nightShiftCount = currentMonthShifts.filter(([_, code]) => code === 'N').length;
-  const eveningShiftCount = currentMonthShifts.filter(([_, code]) => code === 'E').length;
-  const autoAnnualLeaveCount = Object.values(myShifts).filter(code => code === '연차').length;
-  const usedAnnualLeaveCount = manualUsedAnnual !== null ? Number(manualUsedAnnual) : autoAnnualLeaveCount;
-  const remainingAnnualLeave = (Number(totalAnnualLeave) || 0) - usedAnnualLeaveCount;
-
-  const numNightFixed = Number(String(nightFixedAllowance).replace(/[^0-9]/g, '')) || 0;
-  const numEveFixed = Number(String(eveningFixedAllowance).replace(/[^0-9]/g, '')) || 0;
-  const numHourlyWage = Number(String(hourlyWage).replace(/[^0-9]/g, '')) || 0;
-  const totalNightHours = (nightShiftCount * (Number(shiftConfigs.N?.nightHours) || 0)) + (eveningShiftCount * (Number(shiftConfigs.E?.nightHours) || 0));
-
-  const estimatedAllowance = calcMode === 'fixed'
-    ? (nightShiftCount * numNightFixed) + (eveningShiftCount * numEveFixed)
-    : Math.round(totalNightHours * numHourlyWage * 0.5);
-
-  const currentGroup = groups.find(g => g.id === activeGroupId) || (groups.length > 0 ? groups[0] : null);
+  const currentGroup = groups.find(g => g.id === activeGroupId) || groups[0] || null;
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col max-w-md mx-auto shadow-2xl relative font-sans text-slate-800 pb-20">
-      <header className="bg-white px-4 py-3 border-b border-slate-200 sticky top-0 z-30 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-md">
-            N
-          </div>
-          <div>
-            <h1 className="text-xs font-black text-slate-900 leading-none">{privacyBlur ? '***' : (userName || '내')} 님의 근무표</h1>
-            <span className="text-[9px] font-bold text-slate-400">3교대 수당/연차/그룹 공유</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setIsSwapModalOpen(true)}
-            className="p-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-[10px] font-bold flex items-center gap-1 hover:bg-emerald-100 transition"
-          >
-            <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-600" />
-            <span>맞교대</span>
-          </button>
-
-          <button
-            onClick={() => setPrivacyBlur(!privacyBlur)}
-            className={`p-1.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-all ${
-              privacyBlur ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-slate-50 border-slate-200 text-slate-600'
-            }`}
-          >
-            {privacyBlur ? <EyeOff className="w-3.5 h-3.5 text-rose-600" /> : <Eye className="w-3.5 h-3.5" />}
-            <span>{privacyBlur ? '보안 ON' : '보안'}</span>
-          </button>
-        </div>
-      </header>
-
-      <main className="p-3.5 space-y-3.5 flex-1 overflow-y-auto">
-        {activeTab === 'myShift' && (
-          <MyShiftTab
-            currentYear={currentYear}
-            currentMonth={currentMonth}
-            selectedDate={selectedDate}
-            setSelectedDate={setSelectedDate}
-            handlePrevMonth={handlePrevMonth}
-            handleNextMonth={handleNextMonth}
-            shiftConfigs={shiftConfigs}
-            myShifts={myShifts}
-            memos={memos}
-            today={today}
-            handleShiftChange={handleShiftChange}
-            memoText={memoText}
-            setMemoText={setMemoText}
-            isPrivateMemo={isPrivateMemo}
-            setIsPrivateMemo={setIsPrivateMemo}
-            handleAddMemo={handleAddMemo}
-            setMemos={setMemos}
-          />
-        )}
-
-        {activeTab === 'allowance' && (
-          <AllowanceTab
-            shiftConfigs={shiftConfigs}
-            handleConfigChange={handleConfigChange}
-            manualUsedAnnual={manualUsedAnnual}
-            setManualUsedAnnual={setManualUsedAnnual}
-            totalAnnualLeave={totalAnnualLeave}
-            setTotalAnnualLeave={setTotalAnnualLeave}
-            autoAnnualLeaveCount={autoAnnualLeaveCount}
-            remainingAnnualLeave={remainingAnnualLeave}
-            currentMonth={currentMonth}
-            calcMode={calcMode}
-            setCalcMode={setCalcMode}
-            nightShiftCount={nightShiftCount}
-            eveningShiftCount={eveningShiftCount}
-            numNightFixed={numNightFixed}
-            setNightFixedAllowance={setNightFixedAllowance}
-            numEveFixed={numEveFixed}
-            setEveningFixedAllowance={setEveningFixedAllowance}
-            numHourlyWage={numHourlyWage}
-            setHourlyWage={setHourlyWage}
-            estimatedAllowance={estimatedAllowance}
-          />
-        )}
-
-        {activeTab === 'groupShare' && (
-          <GroupShareTab
-            newGroupName={newGroupName}
-            setNewGroupName={setNewGroupName}
-            joinCodeInput={joinCodeInput}
-            setJoinCodeInput={setJoinCodeInput}
-            groups={groups}
-            setGroups={setGroups}
-            activeGroupId={activeGroupId}
-            setActiveGroupId={setActiveGroupId}
-            currentGroup={currentGroup}
-            selectedDate={selectedDate}
-            shiftConfigs={shiftConfigs}
-            userName={userName}
-            myShifts={myShifts}
-            memos={memos}
-            privacyBlur={privacyBlur}
-          />
-        )}
-
-        {activeTab === 'import' && (
-          <ImportTab
-            setMyShifts={setMyShifts}
-            setUserName={setUserName}
-            handleClearAllData={handleClearAllData}
-          />
-        )}
-      </main>
-
-      {isSwapModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b pb-3 border-slate-100">
-              <div className="flex items-center gap-2">
-                <ArrowLeftRight className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-sm font-black text-slate-900">맞교대 (스왑) 시뮬레이터</h3>
+    <div className="min-h-screen bg-slate-100 flex justify-center items-start sm:py-6 font-sans">
+      <div className="w-full max-w-md bg-white min-h-screen sm:min-h-0 sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative">
+        
+        {/* 상단 프로필 헤더 */}
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 pt-6 rounded-b-3xl shadow-md">
+          <div className="flex justify-between items-center mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center font-bold text-lg border border-white/30">
+                {userName.substring(0, 1)}
               </div>
-              <button onClick={() => setIsSwapModalOpen(false)} className="text-slate-400 p-1">
-                <X className="w-5 h-5" />
+              <div>
+                {isEditingName ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={tempUserName}
+                      onChange={(e) => setTempUserName(e.target.value)}
+                      className="px-2 py-0.5 text-xs text-slate-800 font-bold rounded bg-white outline-none w-24"
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                    />
+                    <button onClick={handleSaveName} className="text-[10px] bg-white/30 px-2 py-1 rounded font-bold hover:bg-white/40">저장</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 cursor-pointer" onClick={() => setIsEditingName(true)}>
+                    <h1 className="font-extrabold text-base leading-tight">{userName} 님의 근무표</h1>
+                    <span className="text-[10px] opacity-70">✏️</span>
+                  </div>
+                )}
+                <p className="text-[11px] opacity-80 font-medium">3교대 수당/병동그룹 공유</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button 
+                onClick={() => setPrivacyBlur(!privacyBlur)}
+                className={`text-[11px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1 border transition ${
+                  privacyBlur ? 'bg-amber-400 text-slate-900 border-amber-300' : 'bg-white/10 text-white border-white/20'
+                }`}
+              >
+                <Shield size={12} />
+                <span>{privacyBlur ? '보안 ON' : '보안'}</span>
               </button>
             </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-extrabold text-slate-700 block mb-1">교대 대상 동료 선택:</label>
-                <select
-                  value={swapPartner}
-                  onChange={(e) => setSwapPartner(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
-                >
-                  <option value="김민지">김민지 (3년차 동기)</option>
-                  <option value="박지현">박지현 (5년차 선배)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="font-extrabold text-slate-700 block mb-1">교대 교환 날짜:</label>
-                <input
-                  type="date"
-                  value={swapTargetDate}
-                  onChange={(e) => setSwapTargetDate(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
-                />
-              </div>
-
-              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-1">
-                <span className="text-[10px] font-extrabold text-emerald-900 block">🔄 교환 시 근무 변화 예시:</span>
-                <div className="text-[11px] text-emerald-800 flex justify-between font-bold">
-                  <span>나 ({userName || '본인'}): {myShifts[swapTargetDate] || 'OFF'} ➔ E</span>
-                </div>
-                <div className="text-[11px] text-emerald-800 flex justify-between font-bold">
-                  <span>동료 ({swapPartner}): E ➔ {myShifts[swapTargetDate] || 'OFF'}</span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleExecuteShiftSwap}
-              className="w-full py-2.5 bg-emerald-600 text-white font-extrabold text-xs rounded-xl hover:bg-emerald-700 shadow-md"
-            >
-              근무 교대 확정 및 적용
-            </button>
           </div>
         </div>
-      )}
 
-      <nav className="bg-white/95 backdrop-blur-md border-t border-slate-200 fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 flex justify-around py-2 px-1">
-        <button
-          onClick={() => setActiveTab('myShift')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
-            activeTab === 'myShift' ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold'
-          }`}
-        >
-          <Calendar className="w-5 h-5" />
-          <span className="text-[10px]">내 근무</span>
-        </button>
+        {/* 메인 탭 뷰 영역 */}
+        <div className="p-4 flex-1 pb-20 overflow-y-auto">
+          {activeTab === 'myShift' && (
+            <MyShiftTab
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              myShifts={myShifts}
+              setMyShifts={setMyShifts}
+              shiftConfigs={shiftConfigs}
+            />
+          )}
 
-        <button
-          onClick={() => setActiveTab('allowance')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
-            activeTab === 'allowance' ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold'
-          }`}
-        >
-          <Calculator className="w-5 h-5" />
-          <span className="text-[10px]">연차/수당</span>
-        </button>
+          {activeTab === 'allowance' && (
+            <AllowanceTab
+              myShifts={myShifts}
+              shiftConfigs={shiftConfigs}
+              setShiftConfigs={setShiftConfigs}
+              selectedDate={selectedDate}
+            />
+          )}
 
-        <button
-          onClick={() => setActiveTab('groupShare')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
-            activeTab === 'groupShare' ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold'
-          }`}
-        >
-          <Users className="w-5 h-5" />
-          <span className="text-[10px]">그룹 공유</span>
-        </button>
+          {activeTab === 'groupShare' && (
+            <GroupShareTab
+              newGroupName={newGroupName}
+              setNewGroupName={setNewGroupName}
+              joinCodeInput={joinCodeInput}
+              setJoinCodeInput={setJoinCodeInput}
+              groups={groups}
+              setGroups={setGroups}
+              activeGroupId={activeGroupId}
+              setActiveGroupId={setActiveGroupId}
+              currentGroup={currentGroup}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              shiftConfigs={shiftConfigs}
+              userName={userName}
+              myShifts={myShifts}
+              privacyBlur={privacyBlur}
+            />
+          )}
 
-        <button
-          onClick={() => setActiveTab('import')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
-            activeTab === 'import' ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold'
-          }`}
-        >
-          <Upload className="w-5 h-5" />
-          <span className="text-[10px]">등록</span>
-        </button>
-      </nav>
+          {activeTab === 'import' && (
+            <ImportTab
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              myShifts={myShifts}
+              setMyShifts={setMyShifts}
+              userName={userName}
+            />
+          )}
+        </div>
+
+        {/* 하단 네비게이션 바 */}
+        <div className="fixed bottom-0 max-w-md w-full bg-white border-t border-slate-200 px-6 py-2.5 flex justify-between items-center shadow-lg rounded-t-2xl z-50">
+          <button
+            onClick={() => setActiveTab('myShift')}
+            className={`flex flex-col items-center gap-1 transition ${activeTab === 'myShift' ? 'text-indigo-600 font-extrabold' : 'text-slate-400 font-semibold'}`}
+          >
+            <Calendar size={20} />
+            <span className="text-[11px]">내 근무</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('allowance')}
+            className={`flex flex-col items-center gap-1 transition ${activeTab === 'allowance' ? 'text-indigo-600 font-extrabold' : 'text-slate-400 font-semibold'}`}
+          >
+            <DollarSign size={20} />
+            <span className="text-[11px]">연차/수당</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('groupShare')}
+            className={`flex flex-col items-center gap-1 transition ${activeTab === 'groupShare' ? 'text-indigo-600 font-extrabold' : 'text-slate-400 font-semibold'}`}
+          >
+            <Users size={20} />
+            <span className="text-[11px]">그룹 공유</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('import')}
+            className={`flex flex-col items-center gap-1 transition ${activeTab === 'import' ? 'text-indigo-600 font-extrabold' : 'text-slate-400 font-semibold'}`}
+          >
+            <Upload size={20} />
+            <span className="text-[11px]">등록</span>
+          </button>
+        </div>
+
+      </div>
     </div>
   );
 }
