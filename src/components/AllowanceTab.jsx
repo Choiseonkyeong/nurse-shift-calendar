@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { DollarSign, Settings, Calendar, Award, Save } from 'lucide-react';
-import { splitDateKey, getTodayDateObj } from '../utils/dateUtils';
+import { DollarSign, Settings, Save, Calendar } from 'lucide-react';
 
 export default function AllowanceTab({
   myShifts = {},
@@ -8,42 +7,28 @@ export default function AllowanceTab({
   setShiftConfigs,
   selectedDate
 }) {
-  const [activeSubTab, setActiveSubTab] = useState('allowance'); // 'allowance' | 'config'
+  const [activeSubTab, setActiveSubTab] = useState('allowance');
   const [tempConfigs, setTempConfigs] = useState(shiftConfigs || {});
 
-  const safeShifts = myShifts || {};
-  const safeConfigs = shiftConfigs || {};
+  const [year, month] = selectedDate ? selectedDate.split('-').map(Number) : [2026, 9];
+  const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
 
-  const { year, month } = selectedDate ? splitDateKey(selectedDate) : getTodayDateObj();
-  const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
-
-  const shiftCounts = { D: 0, E: 0, N: 0, OFF: 0 };
+  const shiftCounts = { D: 0, E: 0, N: 0, M: 0, OFF: 0, 연차: 0 };
   let totalAllowance = 0;
 
-  Object.entries(safeShifts).forEach(([dateKey, code]) => {
-    if (dateKey.startsWith(currentMonthPrefix) && code) {
+  Object.entries(myShifts || {}).forEach(([dateKey, code]) => {
+    if (dateKey.startsWith(monthPrefix) && code) {
       if (shiftCounts[code] !== undefined) {
         shiftCounts[code] += 1;
       }
-      const pay = safeConfigs[code]?.pay;
-      totalAllowance += Number(pay || 0);
+      const pay = shiftConfigs[code]?.pay || 0;
+      totalAllowance += Number(pay);
     }
   });
 
-  // 에러 방지용 안전 포맷팅 함수
   const formatMoney = (val) => {
     const num = Number(val);
     return isNaN(num) ? '0' : num.toLocaleString();
-  };
-
-  const handleConfigChange = (code, field, val) => {
-    setTempConfigs(prev => ({
-      ...prev,
-      [code]: {
-        ...(prev[code] || {}),
-        [field]: field === 'pay' ? Number(val) || 0 : val
-      }
-    }));
   };
 
   const handleSaveConfigs = () => {
@@ -54,12 +39,11 @@ export default function AllowanceTab({
   };
 
   return (
-    <div className="space-y-4 font-sans max-w-md mx-auto">
-      {/* 상단 서브 탭 스위처 */}
+    <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
       <div className="flex bg-slate-200/70 p-1 rounded-2xl text-xs font-extrabold">
         <button
           onClick={() => setActiveSubTab('allowance')}
-          className={`flex-1 py-2 rounded-xl transition ${
+          className={`flex-1 py-2 rounded-xl transition cursor-pointer ${
             activeSubTab === 'allowance' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500'
           }`}
         >
@@ -67,10 +51,10 @@ export default function AllowanceTab({
         </button>
         <button
           onClick={() => {
-            setTempConfigs(safeConfigs);
+            setTempConfigs(shiftConfigs);
             setActiveSubTab('config');
           }}
-          className={`flex-1 py-2 rounded-xl transition ${
+          className={`flex-1 py-2 rounded-xl transition cursor-pointer ${
             activeSubTab === 'config' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500'
           }`}
         >
@@ -78,10 +62,8 @@ export default function AllowanceTab({
         </button>
       </div>
 
-      {/* 1. 수당 및 연차 현황 탭 */}
       {activeSubTab === 'allowance' && (
         <div className="space-y-4">
-          {/* 이번 달 예상 수당 카드 */}
           <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-5 rounded-3xl shadow-md space-y-2">
             <span className="text-xs font-extrabold opacity-80 flex items-center gap-1">
               <DollarSign size={16} /> {year}년 {month}월 예상 근무 수당
@@ -92,7 +74,6 @@ export default function AllowanceTab({
             <p className="text-[11px] opacity-70">* 설정된 근무 단가 기준 집계 금액입니다.</p>
           </div>
 
-          {/* 근무 통계 카드 */}
           <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs space-y-3">
             <h3 className="text-xs font-black text-slate-800 flex items-center gap-1">
               <Calendar size={14} className="text-indigo-600" /> {month}월 근무 집계
@@ -119,7 +100,6 @@ export default function AllowanceTab({
         </div>
       )}
 
-      {/* 2. 단가 설정 탭 */}
       {activeSubTab === 'config' && (
         <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-4">
           <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5 border-b pb-2">
@@ -133,7 +113,10 @@ export default function AllowanceTab({
                   <input
                     type="number"
                     value={tempConfigs[code]?.pay ?? 0}
-                    onChange={(e) => handleConfigChange(code, 'pay', e.target.value)}
+                    onChange={(e) => setTempConfigs({
+                      ...tempConfigs,
+                      [code]: { ...(tempConfigs[code] || {}), pay: Number(e.target.value) || 0 }
+                    })}
                     className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-right outline-none focus:border-indigo-500"
                   />
                   <span className="text-xs font-bold text-slate-500">원</span>
