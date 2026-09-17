@@ -1,21 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { 
-  Users, PlusCircle, UserCheck, Palette, RefreshCw, ChevronLeft, ChevronRight, ArrowLeft
-} from 'lucide-react';
+import { Users, PlusCircle, UserCheck, RefreshCw, Copy } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { toDateKey, cleanDisplayName, isSamePerson, splitDateKey } from '../utils/dateUtils';
-
-const DEFAULT_PALETTE = [
-  '#4F46E5', '#7C3AED', '#2563EB', '#0284C7', '#0D9488', '#16A34A', 
-  '#CA8A04', '#EA580C', '#E11D48', '#DB2777', '#475569', '#000000'
-];
+import { toDateKey, cleanDisplayName, isSamePerson } from '../utils/dateUtils';
 
 export default function GroupShareTab({
   newGroupName,
   setNewGroupName,
   joinCodeInput,
   setJoinCodeInput,
-  groups,
+  groups = [],
   setGroups,
   activeGroupId,
   setActiveGroupId,
@@ -24,42 +17,28 @@ export default function GroupShareTab({
   setSelectedDate,
   shiftConfigs,
   userName,
-  myShifts,
+  myShifts = {},
   privacyBlur
 }) {
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'detail'
 
-  const groupColor = currentGroup?.color || '#4F46E5';
-
-  const normalizedSelectedDate = useMemo(() => toDateKey(selectedDate), [selectedDate]);
-
-  const [groupYear, setGroupYear] = useState(() => Number(normalizedSelectedDate?.split('-')[0]) || 2026);
-  const [groupMonth, setGroupMonth] = useState(() => Number(normalizedSelectedDate?.split('-')[1]) || 9);
-
-  // selectedDate 변경 시 그룹 달력의 연/월 자동 동기화
-  useEffect(() => {
-    const { year, month } = splitDateKey(normalizedSelectedDate);
-    if (year && month) {
-      setGroupYear(year);
-      setGroupMonth(month);
-    }
-  }, [normalizedSelectedDate]);
+  const normalizedSelectedDate = useMemo(() => toDateKey(selectedDate || new Date()), [selectedDate]);
+  const safeGroups = groups || [];
+  const safeMyShifts = myShifts || {};
 
   const currentCode = currentGroup?.code || '';
-  const currentName = currentGroup?.name || '공유 그룹';
+  const currentName = currentGroup?.name || '';
 
   const checkIsMe = useCallback((targetName) => isSamePerson(targetName, userName), [userName]);
 
-  // 본인 데이터는 로컬 myShifts만 바로 가리킴 (undefined 방어 로직 완전 적용)
+  // 방어 코드가 강화된 멤버 근무 조회 (undefined 터짐 원천 차단)
   const getShiftCodeForMember = useCallback((member, rawDateKey) => {
     if (!member) return 'OFF';
     const stdKey = toDateKey(rawDateKey);
     const isMe = checkIsMe(member.name) || member.isMe;
 
     if (isMe) {
-      const localShifts = myShifts || {};
-      if (localShifts[stdKey] !== undefined) return localShifts[stdKey] || 'OFF';
+      if (safeMyShifts[stdKey] !== undefined) return safeMyShifts[stdKey] || 'OFF';
       return 'OFF';
     }
 
@@ -72,9 +51,9 @@ export default function GroupShareTab({
     }
 
     return 'OFF';
-  }, [checkIsMe, myShifts]);
+  }, [checkIsMe, safeMyShifts]);
 
-  // [Pull] DB에서 그룹 데이터 가져오기
+  // [Pull] DB 그룹 가져오기
   const pullGroupData = useCallback(async (targetCode, targetName = '공유 그룹', isJoining = false) => {
     const cleanCode = targetCode?.trim().toUpperCase();
     if (!cleanCode || !supabase) return false;
@@ -100,10 +79,11 @@ export default function GroupShareTab({
         let resolvedGroupId = null;
 
         setGroups(prevGroups => {
-          const existingGroup = prevGroups.find(g => g.code === cleanCode);
+          const prevList = prevGroups || [];
+          const existingGroup = prevList.find(g => g.code === cleanCode);
           if (existingGroup) {
             resolvedGroupId = existingGroup.id;
-            return prevGroups.map(g => 
+            return prevList.map(g => 
               g.code === cleanCode 
                 ? { ...g, name: existingGroup.name || dbGroupName, members: dbMembers } 
                 : g
@@ -113,11 +93,10 @@ export default function GroupShareTab({
               id: `group_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
               name: dbGroupName,
               code: cleanCode,
-              color: '#4F46E5',
               members: dbMembers
             };
             resolvedGroupId = newG.id;
-            return [...prevGroups, newG];
+            return [...prevList, newG];
           }
         });
 
@@ -135,7 +114,7 @@ export default function GroupShareTab({
     }
   }, [userName, setGroups, setActiveGroupId]);
 
-  // [Push] 내 근무 데이터를 DB로 저장
+  // [Push] 내 근무 DB 전송
   const pushMyShiftsToSupabase = useCallback(async (targetCode, targetName = '공유 그룹') => {
     const cleanCode = targetCode?.trim().toUpperCase();
     const myCleanName = cleanDisplayName(userName);
@@ -150,27 +129,24 @@ export default function GroupShareTab({
             group_code: cleanCode,
             group_name: targetName,
             user_name: userName.trim(),
-            shifts: myShifts || {},
+            shifts: safeMyShifts,
             updated_at: new Date().toISOString()
           },
           { onConflict: 'group_code, user_name' }
         );
 
-      if (upsertErr) console.warn('UPSERT Warning:', upsertErr.message);
       return !upsertErr;
     } catch (err) {
       console.error('Group push error:', err);
       return false;
     }
-  }, [userName, myShifts]);
+  }, [userName, safeMyShifts]);
 
-  // 동기화: Push 후 Pull 수행
   const syncWithSupabase = useCallback(async (targetCode, targetName = '공유 그룹', isJoining = false) => {
     await pushMyShiftsToSupabase(targetCode, targetName);
     return pullGroupData(targetCode, targetName, isJoining);
   }, [pushMyShiftsToSupabase, pullGroupData]);
 
-  // 최초 진입 시 1회 Push + Pull
   useEffect(() => {
     if (currentCode && userName) {
       syncWithSupabase(currentCode, currentName, false);
@@ -178,7 +154,7 @@ export default function GroupShareTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCode, userName]);
 
-  // 실시간 구독: 원격 변경 감지 시 Pull만 실행 (Push 금지로 무한 루프 차단)
+  // Realtime 구독 (Push 없이 Pull만 수신하여 자가발화 방지)
   useEffect(() => {
     if (currentCode && userName && supabase) {
       const channel = supabase
@@ -195,14 +171,13 @@ export default function GroupShareTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCode, userName]);
 
-  // 내 근무표 변경 시 800ms 디바운스로 Push 실행
-  const isFirstMyShiftsRender = useRef(true);
+  // 800ms 디바운스 Push
+  const isFirstRender = useRef(true);
   useEffect(() => {
-    if (isFirstMyShiftsRender.current) {
-      isFirstMyShiftsRender.current = false;
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
       return;
     }
-
     if (!currentCode || !userName) return;
 
     const timer = setTimeout(() => {
@@ -213,34 +188,6 @@ export default function GroupShareTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myShifts]);
 
-  // 달력 날짜 매트릭스
-  const calendarDays = useMemo(() => {
-    const firstDay = new Date(groupYear, groupMonth - 1, 1).getDay();
-    const lastDate = new Date(groupYear, groupMonth, 0).getDate();
-    const days = [];
-
-    for (let i = 0; i < firstDay; i++) days.push(null);
-    for (let d = 1; d <= lastDate; d++) {
-      const dateStr = `${groupYear}-${String(groupMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      days.push({ dayNum: d, dateStr });
-    }
-    return days;
-  }, [groupYear, groupMonth]);
-
-  const handlePrevGroupMonth = () => {
-    if (groupMonth === 1) { setGroupMonth(12); setGroupYear(groupYear - 1); }
-    else setGroupMonth(groupMonth - 1);
-  };
-
-  const handleNextGroupMonth = () => {
-    if (groupMonth === 12) { setGroupMonth(1); setGroupYear(groupYear + 1); }
-    else setGroupMonth(groupMonth + 1);
-  };
-
-  const handleColorChange = (newColor) => {
-    setGroups(prev => prev.map(g => g.id === currentGroup.id ? { ...g, color: newColor } : g));
-  };
-
   const handleCreateGroupAction = async () => {
     if (!newGroupName.trim()) return alert('생성할 그룹 이름을 입력해 주세요.');
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -248,7 +195,6 @@ export default function GroupShareTab({
     setNewGroupName('');
     if (await syncWithSupabase(code, name, false)) {
       alert(`🎉 그룹 '${name}' 생성 완료!\n코드: [ ${code} ]`);
-      setViewMode('detail');
     }
   };
 
@@ -258,289 +204,161 @@ export default function GroupShareTab({
     setJoinCodeInput('');
     if (await syncWithSupabase(code, '공유 그룹', true)) {
       alert(`🎉 초대 코드 [ ${code} ] 그룹에 연결되었습니다!`);
-      setViewMode('detail');
     }
   };
 
-  const handleLeaveGroup = async () => {
-    if (!currentGroup) return;
-    if (window.confirm(`'${currentGroup.name}' 그룹에서 나가시겠습니까?`)) {
-      if (supabase && userName) {
-        await supabase.from('group_shifts').delete().eq('group_code', currentGroup.code).eq('user_name', userName);
-      }
-      const updated = groups.filter(g => g.id !== currentGroup.id);
-      setGroups(updated);
-      setActiveGroupId(updated.length > 0 ? updated[0].id : null);
-      setViewMode('list');
-    }
+  const handleCopyCode = (code) => {
+    navigator.clipboard.writeText(code);
+    alert(`초대 코드 [ ${code} ]가 복사되었습니다!`);
   };
 
-  const handleDeleteGroup = async () => {
-    if (!currentGroup) return;
-    if (window.confirm(`⚠️ '${currentGroup.name}' 그룹을 완전히 삭제하시겠습니까?`)) {
-      if (supabase) await supabase.from('group_shifts').delete().eq('group_code', currentGroup.code);
-      const updated = groups.filter(g => g.id !== currentGroup.id);
-      setGroups(updated);
-      setActiveGroupId(updated.length > 0 ? updated[0].id : null);
-      setViewMode('list');
-    }
-  };
-
-  const handleOpenGroupDetail = (group) => {
-    setActiveGroupId(group.id);
-    syncWithSupabase(group.code, group.name, false);
-    setViewMode('detail');
-  };
+  const activeGroup = currentGroup || safeGroups[0] || null;
+  const memberList = activeGroup?.members || [];
 
   return (
-    <div className="space-y-4 font-sans">
-      {/* 1. 그룹 목록 뷰 */}
-      {viewMode === 'list' && (
-        <div className="space-y-4">
-          <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-100 space-y-3">
-            <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-900">
-              <Users size={18} className="text-indigo-600" /> 공유 그룹 관리
-            </h2>
+    <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
+      {/* 1. 어플 내 공유 그룹 관리 섹션 (원본 디자인) */}
+      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
+        <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-950">
+          <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
+        </h2>
 
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2">
-                <p className="font-bold text-indigo-950 flex items-center gap-1">
-                  <PlusCircle size={14} className="text-indigo-600" /> 새 그룹 생성
-                </p>
-                <input 
-                  type="text" 
-                  placeholder="예: 5병동 동기들" 
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateGroupAction()}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold outline-none"
-                />
-                <button onClick={handleCreateGroupAction} className="w-full bg-indigo-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-indigo-700 transition cursor-pointer">
-                  그룹 만들기
-                </button>
-              </div>
-
-              <div className="p-3 bg-amber-50/60 border border-amber-100 rounded-xl space-y-2">
-                <p className="font-bold text-amber-950 flex items-center gap-1">
-                  <UserCheck size={14} className="text-amber-600" /> 코드 입장
-                </p>
-                <input 
-                  type="text" 
-                  placeholder="6자리 코드 입력" 
-                  value={joinCodeInput}
-                  onChange={(e) => setJoinCodeInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleJoinGroupAction()}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold uppercase text-center outline-none"
-                />
-                <button onClick={handleJoinGroupAction} className="w-full bg-amber-600 text-white font-extrabold py-1.5 rounded-lg hover:bg-amber-700 transition cursor-pointer">
-                  참여하기
-                </button>
-              </div>
-            </div>
+        {/* 새 그룹 생성 / 코드 입장 2열 카드 */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          {/* 새 그룹 생성 */}
+          <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-2">
+            <p className="font-bold text-indigo-950 flex items-center gap-1">
+              <PlusCircle size={14} className="text-indigo-600" /> 새 그룹 생성
+            </p>
+            <input 
+              type="text" 
+              placeholder="예: 81병동 동기" 
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateGroupAction()}
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-indigo-400"
+            />
+            <button 
+              onClick={handleCreateGroupAction} 
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2 rounded-xl transition cursor-pointer shadow-2xs"
+            >
+              그룹 만들기
+            </button>
           </div>
 
-          <div className="space-y-2">
-            <span className="text-xs font-extrabold text-slate-500 block px-1">
-              내 공유 그룹 목록 ({groups.length})
-            </span>
-
-            {groups.length > 0 ? (
-              <div className="grid grid-cols-1 gap-2.5">
-                {groups.map(g => {
-                  const gColor = g.color || '#4F46E5';
-                  const memberCount = g.members ? g.members.length : 1;
-                  return (
-                    <div
-                      key={g.id}
-                      onClick={() => handleOpenGroupDetail(g)}
-                      style={{ borderLeftColor: gColor }}
-                      className="p-4 bg-white rounded-2xl border border-slate-200 border-l-4 shadow-xs hover:shadow-md transition cursor-pointer flex justify-between items-center group"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-black text-sm text-slate-900 group-hover:text-indigo-600 transition">{g.name}</h3>
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                            {memberCount}명 참여 중
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 font-bold">초대 코드: {g.code}</p>
-                      </div>
-
-                      <div className="flex items-center gap-1 text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition">
-                        <span>입장하기</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="bg-white p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-2">
-                <Users size={32} className="mx-auto text-slate-300" />
-                <p className="text-sm font-bold text-slate-700">참여 중인 공유 그룹이 없습니다.</p>
-              </div>
-            )}
+          {/* 코드 입장 */}
+          <div className="p-3.5 bg-amber-50/50 border border-amber-100 rounded-2xl space-y-2">
+            <p className="font-bold text-amber-950 flex items-center gap-1">
+              <UserCheck size={14} className="text-amber-600" /> 코드 입장
+            </p>
+            <input 
+              type="text" 
+              placeholder="6자리 코드 입력" 
+              value={joinCodeInput}
+              onChange={(e) => setJoinCodeInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleJoinGroupAction()}
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold uppercase text-center outline-none focus:border-amber-400"
+            />
+            <button 
+              onClick={handleJoinGroupAction} 
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-2 rounded-xl transition cursor-pointer shadow-2xs"
+            >
+              참여하기
+            </button>
           </div>
         </div>
-      )}
 
-      {/* 2. 특정 그룹 전용 독립 뷰 */}
-      {viewMode === 'detail' && currentGroup && (
-        <div className="space-y-3">
-          <button
-            onClick={() => setViewMode('list')}
-            className="flex items-center gap-1.5 text-xs font-black text-slate-600 bg-white border border-slate-200 px-3 py-2 rounded-xl hover:bg-slate-50 transition shadow-2xs cursor-pointer"
-          >
-            <ArrowLeft size={16} className="text-indigo-600" />
-            <span>전체 그룹 목록으로 돌아가기</span>
-          </button>
-
-          <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-100 space-y-4">
-            <div className="border-b pb-3 space-y-2">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-black text-lg text-slate-900">{currentGroup.name}</h3>
-                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">초대 코드: {currentGroup.code}</p>
-                </div>
-
-                <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-                  <Palette size={14} className="text-slate-500" />
-                  <div className="flex items-center gap-1">
-                    {DEFAULT_PALETTE.slice(0, 5).map((hex) => (
-                      <button
-                        key={hex}
-                        onClick={() => handleColorChange(hex)}
-                        style={{ backgroundColor: hex }}
-                        className={`w-4 h-4 rounded-full transition ${groupColor === hex ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' : 'opacity-70'}`}
-                      />
-                    ))}
-
-                    <div className="relative flex items-center cursor-pointer ml-1">
-                      <input
-                        type="color"
-                        value={groupColor}
-                        onChange={(e) => handleColorChange(e.target.value)}
-                        className="w-6 h-6 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
-                        title="자유 RGB 스펙트럼 색상 선택"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-1">
-                <button onClick={handleLeaveGroup} className="text-[11px] font-bold text-slate-500 border border-slate-200 px-2 py-1 rounded-lg">나가기</button>
-                <button onClick={handleDeleteGroup} className="text-[11px] font-bold text-rose-600 border border-rose-200 px-2 py-1 rounded-lg">삭제</button>
-              </div>
-            </div>
-
-            {/* 1달 근무 달력 */}
-            <div 
-              style={{ backgroundColor: `${groupColor}0D`, borderColor: `${groupColor}33` }} 
-              className="p-3 rounded-2xl border space-y-3"
-            >
-              <div className="flex justify-between items-center px-1">
-                <div className="flex items-center gap-2">
-                  <button onClick={handlePrevGroupMonth} className="p-1 hover:bg-white rounded-lg transition"><ChevronLeft size={16} /></button>
-                  <span className="font-black text-sm text-slate-900">{groupYear}년 {groupMonth}월 그룹 근무표</span>
-                  <button onClick={handleNextGroupMonth} className="p-1 hover:bg-white rounded-lg transition"><ChevronRight size={16} /></button>
-                </div>
-
-                <button 
-                  onClick={() => syncWithSupabase(currentCode, currentName, false)}
-                  className="text-[11px] font-bold text-slate-600 flex items-center gap-1 hover:underline cursor-pointer"
+        {/* 참여 중인 그룹 목록 둥근 탭 배지 */}
+        <div className="pt-2 border-t border-slate-100 space-y-2">
+          <span className="text-xs font-bold text-slate-400 block">참여 중인 그룹 목록</span>
+          <div className="flex flex-wrap gap-2">
+            {safeGroups.map((g) => {
+              const isActive = activeGroup?.id === g.id;
+              const mCount = g.members?.length || 1;
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => {
+                    setActiveGroupId(g.id);
+                    syncWithSupabase(g.code, g.name, false);
+                  }}
+                  className={`px-4 py-2 rounded-full font-extrabold text-xs transition border cursor-pointer ${
+                    isActive
+                      ? 'bg-indigo-600 text-white border-transparent shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
                 >
-                  <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-                  <span>동기화</span>
+                  {g.name} ({mCount}명)
                 </button>
-              </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
-              <div className="grid grid-cols-7 text-center text-[11px] font-extrabold text-slate-500 border-b pb-1">
-                <span className="text-rose-500">일</span>
-                <span>월</span>
-                <span>화</span>
-                <span>수</span>
-                <span>목</span>
-                <span>금</span>
-                <span className="text-sky-500">토</span>
-              </div>
+      {/* 2. 선택된 그룹 상세 현황 카드 (원본 디자인) */}
+      {activeGroup && (
+        <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
+          {/* 그룹 타이틀 및 초대 코드 복사 배지 */}
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">{activeGroup.name}</h3>
+              <p className="text-[11px] font-medium text-slate-400 mt-0.5">
+                초대 코드를 동료에게 전달해 그룹에 참여시키세요!
+              </p>
+            </div>
+            <button
+              onClick={() => handleCopyCode(activeGroup.code)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-2xl transition border border-indigo-100 cursor-pointer"
+            >
+              <Copy size={13} />
+              <span>코드: {activeGroup.code}</span>
+            </button>
+          </div>
 
-              <div className="grid grid-cols-7 gap-1 text-xs">
-                {calendarDays.map((item, idx) => {
-                  if (!item) return <div key={idx} className="min-h-16 bg-slate-50/50 rounded-xl"></div>;
-
-                  const isSelected = normalizedSelectedDate === item.dateStr;
-                  const todayStr = toDateKey(new Date());
-                  const isToday = item.dateStr === todayStr;
-
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => setSelectedDate && setSelectedDate(item.dateStr)}
-                      style={{
-                        borderColor: isSelected ? groupColor : isToday ? '#FCD34D' : '#E2E8F0',
-                        borderWidth: isSelected ? '2px' : '1px'
-                      }}
-                      className={`min-h-20 p-1 rounded-xl transition cursor-pointer flex flex-col justify-between ${
-                        isSelected ? 'bg-white shadow-sm' : isToday ? 'bg-amber-50/80' : 'bg-white hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className={`text-[10px] font-black px-1 rounded ${isToday ? 'bg-amber-500 text-white' : 'text-slate-700'}`}>
-                          {item.dayNum}
-                        </span>
-                      </div>
-
-                      <div className="space-y-0.5 my-0.5">
-                        {(currentGroup.members || []).map((m, mIdx) => {
-                          const shiftCode = getShiftCodeForMember(m, item.dateStr);
-                          const isMe = checkIsMe(m.name) || m.isMe;
-
-                          return (
-                            <div
-                              key={mIdx}
-                              className={`flex justify-between items-center px-1 py-0.5 rounded text-[8px] font-black leading-none ${
-                                shiftCode === 'D' ? 'bg-amber-100 text-amber-900' :
-                                shiftCode === 'E' ? 'bg-orange-100 text-orange-900' :
-                                shiftCode === 'N' ? 'bg-sky-100 text-sky-900' : 'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              <span className="truncate max-w-[28px]">
-                                {privacyBlur ? (isMe ? '나' : `동 ${mIdx}`) : m.name.substring(0, 2)}
-                              </span>
-                              <span>{shiftCode}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          <div className="border-t border-slate-100 pt-3 space-y-3">
+            {/* 서브 헤더 (선택된 날짜 및 동기화) */}
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-extrabold text-slate-800 flex items-center gap-1">
+                📅 {normalizedSelectedDate} 그룹 멤버 근무 상황
+              </span>
+              <button
+                onClick={() => syncWithSupabase(activeGroup.code, activeGroup.name, false)}
+                className="text-indigo-600 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                <span>총 {memberList.length}명 참여 중</span>
+              </button>
             </div>
 
-            {/* 선택 날짜 멤버별 상세 스케쥴 목록 */}
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-              <span className="text-xs font-black text-slate-800 block">
-                📌 {normalizedSelectedDate} 선택 일자 상세 근무
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                {(currentGroup.members || []).map((m, idx) => {
-                  const shiftCode = getShiftCodeForMember(m, normalizedSelectedDate);
-                  const isMe = checkIsMe(m.name) || m.isMe;
+            {/* 그룹 멤버별 근무 상태 박스 뷰 */}
+            <div className="space-y-2">
+              {memberList.map((m, idx) => {
+                const shiftCode = getShiftCodeForMember(m, normalizedSelectedDate);
+                const isMe = checkIsMe(m.name) || m.isMe;
 
-                  return (
-                    <div key={idx} className="bg-white p-2 rounded-lg border border-slate-200 text-xs font-bold flex justify-between items-center">
-                      <span>{privacyBlur ? (isMe ? '나' : `동료 ${idx}`) : m.name} 쌤</span>
-                      <span 
-                        style={{ backgroundColor: `${groupColor}1A`, color: groupColor }}
-                        className="px-2 py-0.5 rounded-md font-black"
-                      >
-                        {shiftCode}
+                return (
+                  <div
+                    key={idx}
+                    className="p-3 bg-indigo-50/40 border border-indigo-100 rounded-2xl flex justify-between items-center"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-xs text-slate-900">
+                        {privacyBlur ? (isMe ? '나' : `동료 ${idx + 1}`) : `${m.name} 쌤`}
                       </span>
+                      {isMe && (
+                        <span className="w-5 h-5 bg-indigo-600 text-white rounded-full text-[10px] font-black flex items-center justify-center">
+                          나
+                        </span>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+
+                    <span className="px-4 py-1.5 bg-white text-slate-800 font-black text-xs rounded-xl shadow-2xs border border-slate-200">
+                      {shiftCode}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
