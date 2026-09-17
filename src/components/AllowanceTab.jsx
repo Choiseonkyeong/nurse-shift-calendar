@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DollarSign, CalendarCheck, Settings, Save, Award } from 'lucide-react';
+import { DollarSign, Settings, Calendar, Award, Save } from 'lucide-react';
 import { splitDateKey, getTodayDateObj } from '../utils/dateUtils';
 
 export default function AllowanceTab({
@@ -8,7 +8,7 @@ export default function AllowanceTab({
   setShiftConfigs,
   selectedDate
 }) {
-  const [isEditingConfig, setIsEditingConfig] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState('allowance'); // 'allowance' | 'config'
   const [tempConfigs, setTempConfigs] = useState(shiftConfigs || {});
 
   const safeShifts = myShifts || {};
@@ -50,102 +50,105 @@ export default function AllowanceTab({
     if (setShiftConfigs) {
       setShiftConfigs(tempConfigs);
     }
-    setIsEditingConfig(false);
+    setActiveSubTab('allowance');
   };
 
   return (
-    <div className="space-y-4 font-sans">
-      {/* 1. 상단 수당 요약 카드 */}
-      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-5 rounded-3xl shadow-lg relative overflow-hidden">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <span className="text-xs font-semibold opacity-80 block">
-              {year}년 {month}월 예상 수당
-            </span>
-            <h2 className="text-2xl font-black mt-1">
-              {formatMoney(totalAllowance)} 원
-            </h2>
-          </div>
-          <button
-            onClick={() => {
-              setTempConfigs(safeConfigs);
-              setIsEditingConfig(!isEditingConfig);
-            }}
-            className="p-2 bg-white/20 hover:bg-white/30 rounded-xl backdrop-blur-md transition cursor-pointer"
-            title="수당 단가 설정"
-          >
-            <Settings size={18} />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/20 text-center text-xs">
-          <div className="bg-white/10 backdrop-blur-xs p-2 rounded-xl">
-            <span className="block text-[10px] opacity-75">Day ({shiftCounts.D}회)</span>
-            <span className="font-bold">{formatMoney((safeConfigs.D?.pay || 0) * shiftCounts.D)}원</span>
-          </div>
-          <div className="bg-white/10 backdrop-blur-xs p-2 rounded-xl">
-            <span className="block text-[10px] opacity-75">Evening ({shiftCounts.E}회)</span>
-            <span className="font-bold">{formatMoney((safeConfigs.E?.pay || 0) * shiftCounts.E)}원</span>
-          </div>
-          <div className="bg-white/10 backdrop-blur-xs p-2 rounded-xl">
-            <span className="block text-[10px] opacity-75">Night ({shiftCounts.N}회)</span>
-            <span className="font-bold">{formatMoney((safeConfigs.N?.pay || 0) * shiftCounts.N)}원</span>
-          </div>
-        </div>
+    <div className="space-y-4 font-sans max-w-md mx-auto">
+      {/* 상단 서브 탭 스위처 */}
+      <div className="flex bg-slate-200/70 p-1 rounded-2xl text-xs font-extrabold">
+        <button
+          onClick={() => setActiveSubTab('allowance')}
+          className={`flex-1 py-2 rounded-xl transition ${
+            activeSubTab === 'allowance' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500'
+          }`}
+        >
+          수당 / 연차 현황
+        </button>
+        <button
+          onClick={() => {
+            setTempConfigs(safeConfigs);
+            setActiveSubTab('config');
+          }}
+          className={`flex-1 py-2 rounded-xl transition ${
+            activeSubTab === 'config' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500'
+          }`}
+        >
+          수당 단가 설정
+        </button>
       </div>
 
-      {/* 2. 단가 설정 모달/영역 */}
-      {isEditingConfig && (
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+      {/* 1. 수당 및 연차 현황 탭 */}
+      {activeSubTab === 'allowance' && (
+        <div className="space-y-4">
+          {/* 이번 달 예상 수당 카드 */}
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-5 rounded-3xl shadow-md space-y-2">
+            <span className="text-xs font-extrabold opacity-80 flex items-center gap-1">
+              <DollarSign size={16} /> {year}년 {month}월 예상 근무 수당
+            </span>
+            <div className="text-3xl font-black">
+              {formatMoney(totalAllowance)} <span className="text-base font-bold">원</span>
+            </div>
+            <p className="text-[11px] opacity-70">* 설정된 근무 단가 기준 집계 금액입니다.</p>
+          </div>
+
+          {/* 근무 통계 카드 */}
+          <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs space-y-3">
+            <h3 className="text-xs font-black text-slate-800 flex items-center gap-1">
+              <Calendar size={14} className="text-indigo-600" /> {month}월 근무 집계
+            </h3>
+            <div className="grid grid-cols-4 gap-2 text-center text-xs">
+              <div className="p-2.5 bg-amber-50 border border-amber-100 rounded-2xl">
+                <span className="text-[10px] font-bold text-amber-600 block">Day</span>
+                <span className="text-base font-black text-amber-900">{shiftCounts.D}회</span>
+              </div>
+              <div className="p-2.5 bg-orange-50 border border-orange-100 rounded-2xl">
+                <span className="text-[10px] font-bold text-orange-600 block">Evening</span>
+                <span className="text-base font-black text-orange-900">{shiftCounts.E}회</span>
+              </div>
+              <div className="p-2.5 bg-sky-50 border border-sky-100 rounded-2xl">
+                <span className="text-[10px] font-bold text-sky-600 block">Night</span>
+                <span className="text-base font-black text-sky-900">{shiftCounts.N}회</span>
+              </div>
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                <span className="text-[10px] font-bold text-slate-500 block">OFF</span>
+                <span className="text-base font-black text-slate-700">{shiftCounts.OFF}회</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. 단가 설정 탭 */}
+      {activeSubTab === 'config' && (
+        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-4">
           <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5 border-b pb-2">
-            <Settings size={16} className="text-indigo-600" /> 근무별 수당 단가 수정
+            <Settings size={16} className="text-indigo-600" /> 근무별 수당 단가 설정
           </h3>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-3">
             {['D', 'E', 'N'].map((code) => (
-              <div key={code} className="space-y-1">
-                <label className="text-xs font-bold text-slate-600 block">{code} 근무 (원)</label>
-                <input
-                  type="number"
-                  value={tempConfigs[code]?.pay ?? 0}
-                  onChange={(e) => handleConfigChange(code, 'pay', e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500"
-                />
+              <div key={code} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <span className="font-extrabold text-xs text-slate-700">{code} 근무 단가</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={tempConfigs[code]?.pay ?? 0}
+                    onChange={(e) => handleConfigChange(code, 'pay', e.target.value)}
+                    className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-right outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-xs font-bold text-slate-500">원</span>
+                </div>
               </div>
             ))}
           </div>
           <button
             onClick={handleSaveConfigs}
-            className="w-full py-2 bg-indigo-600 text-white font-extrabold text-xs rounded-xl hover:bg-indigo-700 transition flex items-center justify-center gap-1 cursor-pointer"
+            className="w-full py-3 bg-indigo-600 text-white font-extrabold text-xs rounded-2xl hover:bg-indigo-700 transition flex items-center justify-center gap-1 cursor-pointer shadow-xs"
           >
-            <Save size={14} /> 저장하기
+            <Save size={14} /> 설정 저장하기
           </button>
         </div>
       )}
-
-      {/* 3. 근무 카운트 상세 카드 */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs space-y-3">
-        <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
-          <CalendarCheck size={16} className="text-indigo-600" /> 이번 달 근무 집계
-        </h3>
-        <div className="grid grid-cols-4 gap-2 text-center text-xs">
-          <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
-            <span className="text-[10px] font-bold text-amber-600 block">Day</span>
-            <span className="text-lg font-black text-amber-900">{shiftCounts.D}</span>
-          </div>
-          <div className="p-3 bg-orange-50 border border-orange-100 rounded-xl">
-            <span className="text-[10px] font-bold text-orange-600 block">Evening</span>
-            <span className="text-lg font-black text-orange-900">{shiftCounts.E}</span>
-          </div>
-          <div className="p-3 bg-sky-50 border border-sky-100 rounded-xl">
-            <span className="text-[10px] font-bold text-sky-600 block">Night</span>
-            <span className="text-lg font-black text-sky-900">{shiftCounts.N}</span>
-          </div>
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            <span className="text-[10px] font-bold text-slate-500 block">휴무</span>
-            <span className="text-lg font-black text-slate-700">{shiftCounts.OFF}</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
