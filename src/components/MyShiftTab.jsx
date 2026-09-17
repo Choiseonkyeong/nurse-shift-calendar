@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Edit3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit2, Bell } from 'lucide-react';
 import { toDateKey, splitDateKey } from '../utils/dateUtils';
 
 export default function MyShiftTab({
@@ -9,27 +9,40 @@ export default function MyShiftTab({
   setMyShifts,
   shiftConfigs = {}
 }) {
-  // 안전한 객체 보장
   const safeShifts = myShifts || {};
-  const safeConfigs = shiftConfigs || {};
-
   const normalizedSelectedDate = toDateKey(selectedDate || new Date());
   const { year: initYear, month: initMonth } = splitDateKey(normalizedSelectedDate);
 
   const [currentYear, setCurrentYear] = useState(initYear || 2026);
   const [currentMonth, setCurrentMonth] = useState(initMonth || 9);
 
-  // 달력 날짜 생성
+  // 이번 달 근무 카운트 (D, E, N, M, OFF, 연차 6종)
+  const currentMonthPrefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+  const shiftCounts = { D: 0, E: 0, N: 0, M: 0, OFF: 0, 연차: 0 };
+
+  Object.entries(safeShifts).forEach(([dateKey, code]) => {
+    if (dateKey.startsWith(currentMonthPrefix) && code) {
+      if (shiftCounts[code] !== undefined) {
+        shiftCounts[code] += 1;
+      }
+    }
+  });
+
   const calendarDays = useMemo(() => {
     const firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
     const lastDate = new Date(currentYear, currentMonth, 0).getDate();
     const days = [];
 
-    for (let i = 0; i < firstDay; i++) days.push(null);
+    const prevLastDate = new Date(currentYear, currentMonth - 1, 0).getDate();
+    for (let i = firstDay - 1; i >= 0; i--) {
+      days.push({ dayNum: prevLastDate - i, isCurrentMonth: false });
+    }
+
     for (let d = 1; d <= lastDate; d++) {
       const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      days.push({ dayNum: d, dateStr });
+      days.push({ dayNum: d, dateStr, isCurrentMonth: true });
     }
+
     return days;
   }, [currentYear, currentMonth]);
 
@@ -43,7 +56,6 @@ export default function MyShiftTab({
     else setCurrentMonth(currentMonth + 1);
   };
 
-  // 근무 변경 클릭 핸들러 (방어 코드 적용)
   const handleShiftSelect = (code) => {
     if (!setSelectedDate || !normalizedSelectedDate) return;
     setMyShifts((prev) => {
@@ -57,105 +69,134 @@ export default function MyShiftTab({
     });
   };
 
-  // 선택된 날짜의 현재 근무 코드 (안전 접근)
-  const currentSelectedShiftCode = safeShifts[normalizedSelectedDate] || 'OFF';
+  const currentShiftCode = safeShifts[normalizedSelectedDate] || 'OFF';
 
   return (
-    <div className="space-y-4 font-sans max-w-md mx-auto">
-      {/* 1. 달력 헤더 및 메타 */}
-      <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-100 space-y-3">
-        <div className="flex justify-between items-center px-1">
-          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded-lg transition">
-            <ChevronLeft size={18} />
+    <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
+      {/* 1. 상단 월 선택 & 6종 카운트 배지 카드 */}
+      <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-4">
+        <div className="flex justify-center items-center gap-3">
+          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded-lg text-slate-600">
+            <ChevronLeft size={20} />
           </button>
-          <h2 className="font-extrabold text-base text-slate-900">
-            {currentYear}년 {currentMonth}월 내 근무
+          <h2 className="text-xl font-black text-slate-900">
+            {currentYear}년 {currentMonth}월
           </h2>
-          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded-lg transition">
-            <ChevronRight size={18} />
+          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded-lg text-slate-600">
+            <ChevronRight size={20} />
           </button>
         </div>
 
-        {/* 요일 헤더 */}
-        <div className="grid grid-cols-7 text-center text-xs font-bold text-slate-400 border-b pb-1">
+        <div className="grid grid-cols-6 gap-1.5 text-center">
+          <div className="bg-amber-100/80 p-2 rounded-2xl">
+            <span className="text-[11px] font-bold text-amber-800 block">D</span>
+            <span className="text-sm font-black text-amber-950">{shiftCounts.D}</span>
+          </div>
+          <div className="bg-orange-100/80 p-2 rounded-2xl">
+            <span className="text-[11px] font-bold text-orange-800 block">E</span>
+            <span className="text-sm font-black text-orange-950">{shiftCounts.E}</span>
+          </div>
+          <div className="bg-sky-100/80 p-2 rounded-2xl">
+            <span className="text-[11px] font-bold text-sky-800 block">N</span>
+            <span className="text-sm font-black text-sky-950">{shiftCounts.N}</span>
+          </div>
+          <div className="bg-purple-100/80 p-2 rounded-2xl">
+            <span className="text-[11px] font-bold text-purple-800 block">M</span>
+            <span className="text-sm font-black text-purple-950">{shiftCounts.M}</span>
+          </div>
+          <div className="bg-slate-100 p-2 rounded-2xl">
+            <span className="text-[11px] font-bold text-slate-600 block">OFF</span>
+            <span className="text-sm font-black text-slate-800">{shiftCounts.OFF}</span>
+          </div>
+          <div className="bg-pink-100/80 p-2 rounded-2xl">
+            <span className="text-[11px] font-bold text-pink-700 block">연차</span>
+            <span className="text-sm font-black text-pink-950">{shiftCounts.연차}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. 메인 달력 */}
+      <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+        <div className="grid grid-cols-7 text-center text-xs font-black border-b pb-2">
           <span className="text-rose-500">일</span>
-          <span>월</span>
-          <span>화</span>
-          <span>수</span>
-          <span>목</span>
-          <span>금</span>
+          <span className="text-slate-400">월</span>
+          <span className="text-slate-400">화</span>
+          <span className="text-slate-400">수</span>
+          <span className="text-slate-400">목</span>
+          <span className="text-slate-400">금</span>
           <span className="text-sky-500">토</span>
         </div>
 
-        {/* 달력 날짜 그리드 */}
-        <div className="grid grid-cols-7 gap-1 text-xs">
+        <div className="grid grid-cols-7 gap-1.5 text-center">
           {calendarDays.map((item, idx) => {
-            if (!item) return <div key={idx} className="h-12 bg-slate-50/50 rounded-xl"></div>;
+            if (!item.isCurrentMonth) {
+              return (
+                <div key={idx} className="p-1 text-slate-300 opacity-40">
+                  <span className="text-[11px] block font-semibold">{item.dayNum}</span>
+                </div>
+              );
+            }
 
             const isSelected = normalizedSelectedDate === item.dateStr;
             const shiftCode = safeShifts[item.dateStr] || 'OFF';
-            const config = safeConfigs[shiftCode] || { color: '#94A3B8', name: '휴무' };
 
             return (
               <div
                 key={idx}
                 onClick={() => setSelectedDate && setSelectedDate(item.dateStr)}
-                style={{
-                  borderColor: isSelected ? '#4F46E5' : '#E2E8F0',
-                  borderWidth: isSelected ? '2px' : '1px'
-                }}
-                className={`h-12 p-1 rounded-xl transition cursor-pointer flex flex-col justify-between ${
-                  isSelected ? 'bg-indigo-50/50 shadow-2xs' : 'bg-white hover:bg-slate-50'
+                className={`p-1.5 rounded-2xl transition cursor-pointer flex flex-col items-center justify-between min-h-[56px] ${
+                  isSelected ? 'ring-2 ring-indigo-600 bg-indigo-50/20' : 'hover:bg-slate-50'
                 }`}
               >
-                <span className="text-[10px] font-extrabold text-slate-700">{item.dayNum}</span>
-                {shiftCode !== 'OFF' && (
-                  <span
-                    style={{ backgroundColor: config.color || '#4F46E5' }}
-                    className="text-[9px] font-black text-white text-center rounded py-0.5 leading-none"
-                  >
-                    {shiftCode}
-                  </span>
-                )}
+                <span className="text-[11px] font-extrabold text-slate-700 block mb-0.5">{item.dayNum}</span>
+                <span
+                  className={`text-[10px] font-black w-8 h-8 rounded-full flex items-center justify-center ${
+                    shiftCode === 'D' ? 'bg-amber-100 text-amber-900' :
+                    shiftCode === 'E' ? 'bg-orange-200 text-orange-950 font-black' :
+                    shiftCode === 'N' ? 'bg-sky-100 text-sky-900' :
+                    shiftCode === 'M' ? 'bg-purple-200 text-purple-950 font-black' :
+                    shiftCode === '연차' ? 'bg-pink-100 text-pink-900' : 'text-slate-500 bg-slate-100'
+                  }`}
+                >
+                  {shiftCode}
+                </span>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* 2. 선택한 날짜 근무 입력 패널 */}
-      <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-100 space-y-3">
-        <div className="flex justify-between items-center border-b pb-2">
-          <span className="text-xs font-black text-slate-800 flex items-center gap-1">
-            <Edit3 size={14} className="text-indigo-600" /> {normalizedSelectedDate} 근무 변경
+      {/* 3. 선택일 근무 지정 패널 */}
+      <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+        <div className="flex justify-between items-center text-xs">
+          <span className="font-extrabold text-slate-800 flex items-center gap-1">
+            <Edit2 size={14} className="text-indigo-600" /> {normalizedSelectedDate} 근무 지정
           </span>
-          <span className="text-xs font-extrabold text-indigo-600">
-            현재: {currentSelectedShiftCode}
-          </span>
+          <span className="font-bold text-indigo-600">{currentShiftCode}</span>
         </div>
 
-        {/* 근무 선택 버튼 4종 */}
-        <div className="grid grid-cols-4 gap-2">
-          {['D', 'E', 'N', 'OFF'].map((code) => {
-            const conf = safeConfigs[code] || { name: code };
-            const isCurrent = currentSelectedShiftCode === code;
-
+        <div className="flex justify-between items-center gap-1">
+          {['D', 'E', 'N', 'M', 'OFF', '연차'].map((code) => {
+            const isSel = currentShiftCode === code;
             return (
               <button
                 key={code}
                 onClick={() => handleShiftSelect(code)}
-                style={{
-                  backgroundColor: isCurrent ? (conf.color || '#4F46E5') : '#F8FAFC',
-                  color: isCurrent ? '#FFFFFF' : '#334155'
-                }}
-                className={`py-2.5 rounded-xl font-black text-xs transition border cursor-pointer ${
-                  isCurrent ? 'border-transparent shadow-xs scale-105' : 'border-slate-200 hover:bg-slate-100'
+                className={`flex-1 py-2 rounded-full font-black text-xs transition border cursor-pointer ${
+                  isSel
+                    ? 'border-indigo-600 bg-orange-100 text-orange-950 shadow-2xs'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                {code} ({conf.name})
+                {code}
               </button>
             );
           })}
+        </div>
+
+        <div className="pt-2 border-t border-slate-100 flex items-center gap-1 text-xs font-bold text-slate-700">
+          <Bell size={14} className="text-indigo-600" />
+          <span>일정 및 메모 등록</span>
         </div>
       </div>
     </div>
