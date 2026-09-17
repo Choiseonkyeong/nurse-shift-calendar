@@ -28,6 +28,7 @@ export default function MyShiftTab({
     }
   });
 
+  // 달력 날짜 계산
   const calendarDays = useMemo(() => {
     const firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
     const lastDate = new Date(currentYear, currentMonth, 0).getDate();
@@ -73,50 +74,53 @@ export default function MyShiftTab({
 
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
-      {/* 1. 상단 월 선택 & 6종 카운트 배지 카드 */}
+      {/* 1. 상단 월 이동 & 요약 배지 카드 */}
       <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-4">
+        {/* 화살표와 월 표시 */}
         <div className="flex justify-center items-center gap-3">
-          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded-lg text-slate-600">
+          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded-lg text-slate-600 transition">
             <ChevronLeft size={20} />
           </button>
           <h2 className="text-xl font-black text-slate-900">
             {currentYear}년 {currentMonth}월
           </h2>
-          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded-lg text-slate-600">
+          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded-lg text-slate-600 transition">
             <ChevronRight size={20} />
           </button>
         </div>
 
-        <div className="grid grid-cols-6 gap-1.5 text-center">
-          <div className="bg-amber-100/80 p-2 rounded-2xl">
-            <span className="text-[11px] font-bold text-amber-800 block">D</span>
-            <span className="text-sm font-black text-amber-950">{shiftCounts.D}</span>
+        {/* 원본 파스텔 요약 배지 (D E N M OFF 연차) */}
+        <div className="grid grid-cols-6 gap-1 text-center">
+          <div>
+            <span className="text-xs font-bold text-amber-600 block">D</span>
+            <span className="text-sm font-black text-slate-800">{shiftCounts.D}</span>
           </div>
-          <div className="bg-orange-100/80 p-2 rounded-2xl">
-            <span className="text-[11px] font-bold text-orange-800 block">E</span>
-            <span className="text-sm font-black text-orange-950">{shiftCounts.E}</span>
+          <div>
+            <span className="text-xs font-bold text-orange-600 block">E</span>
+            <span className="text-sm font-black text-slate-800">{shiftCounts.E}</span>
           </div>
-          <div className="bg-sky-100/80 p-2 rounded-2xl">
-            <span className="text-[11px] font-bold text-sky-800 block">N</span>
-            <span className="text-sm font-black text-sky-950">{shiftCounts.N}</span>
+          <div>
+            <span className="text-xs font-bold text-sky-600 block">N</span>
+            <span className="text-sm font-black text-slate-800">{shiftCounts.N}</span>
           </div>
-          <div className="bg-purple-100/80 p-2 rounded-2xl">
-            <span className="text-[11px] font-bold text-purple-800 block">M</span>
-            <span className="text-sm font-black text-purple-950">{shiftCounts.M}</span>
+          <div>
+            <span className="text-xs font-bold text-purple-600 block">M</span>
+            <span className="text-sm font-black text-slate-800">{shiftCounts.M}</span>
           </div>
-          <div className="bg-slate-100 p-2 rounded-2xl">
-            <span className="text-[11px] font-bold text-slate-600 block">OFF</span>
+          <div>
+            <span className="text-xs font-bold text-slate-500 block">OFF</span>
             <span className="text-sm font-black text-slate-800">{shiftCounts.OFF}</span>
           </div>
-          <div className="bg-pink-100/80 p-2 rounded-2xl">
-            <span className="text-[11px] font-bold text-pink-700 block">연차</span>
-            <span className="text-sm font-black text-pink-950">{shiftCounts.연차}</span>
+          <div>
+            <span className="text-xs font-bold text-pink-500 block">연차</span>
+            <span className="text-sm font-black text-slate-800">{shiftCounts.연차}</span>
           </div>
         </div>
       </div>
 
-      {/* 2. 메인 달력 */}
+      {/* 2. 캘린더 (원본 폰트/간격) */}
       <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+        {/* 요일 헤더 */}
         <div className="grid grid-cols-7 text-center text-xs font-black border-b pb-2">
           <span className="text-rose-500">일</span>
           <span className="text-slate-400">월</span>
@@ -127,12 +131,13 @@ export default function MyShiftTab({
           <span className="text-sky-500">토</span>
         </div>
 
-        <div className="grid grid-cols-7 gap-1.5 text-center">
+        {/* 날짜 그리드 (숫자 + 아래 텍스트 근무 코드) */}
+        <div className="grid grid-cols-7 gap-y-3 gap-x-1 text-center">
           {calendarDays.map((item, idx) => {
             if (!item.isCurrentMonth) {
               return (
                 <div key={idx} className="p-1 text-slate-300 opacity-40">
-                  <span className="text-[11px] block font-semibold">{item.dayNum}</span>
+                  <span className="text-xs block font-semibold">{item.dayNum}</span>
                 </div>
               );
             }
@@ -144,18 +149,18 @@ export default function MyShiftTab({
               <div
                 key={idx}
                 onClick={() => setSelectedDate && setSelectedDate(item.dateStr)}
-                className={`p-1.5 rounded-2xl transition cursor-pointer flex flex-col items-center justify-between min-h-[56px] ${
-                  isSelected ? 'ring-2 ring-indigo-600 bg-indigo-50/20' : 'hover:bg-slate-50'
+                className={`py-1 rounded-2xl transition cursor-pointer flex flex-col items-center justify-center min-h-[50px] ${
+                  isSelected ? 'border-2 border-indigo-600 font-extrabold' : 'hover:bg-slate-50'
                 }`}
               >
-                <span className="text-[11px] font-extrabold text-slate-700 block mb-0.5">{item.dayNum}</span>
+                <span className="text-xs font-extrabold text-slate-800 block">{item.dayNum}</span>
                 <span
-                  className={`text-[10px] font-black w-8 h-8 rounded-full flex items-center justify-center ${
-                    shiftCode === 'D' ? 'bg-amber-100 text-amber-900' :
-                    shiftCode === 'E' ? 'bg-orange-200 text-orange-950 font-black' :
-                    shiftCode === 'N' ? 'bg-sky-100 text-sky-900' :
-                    shiftCode === 'M' ? 'bg-purple-200 text-purple-950 font-black' :
-                    shiftCode === '연차' ? 'bg-pink-100 text-pink-900' : 'text-slate-500 bg-slate-100'
+                  className={`text-[11px] font-black mt-0.5 block ${
+                    shiftCode === 'D' ? 'text-amber-600' :
+                    shiftCode === 'E' ? 'text-orange-600' :
+                    shiftCode === 'N' ? 'text-sky-600' :
+                    shiftCode === 'M' ? 'text-purple-600' :
+                    shiftCode === '연차' ? 'text-pink-600' : 'text-slate-800'
                   }`}
                 >
                   {shiftCode}
@@ -163,40 +168,6 @@ export default function MyShiftTab({
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* 3. 선택일 근무 지정 패널 */}
-      <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-3">
-        <div className="flex justify-between items-center text-xs">
-          <span className="font-extrabold text-slate-800 flex items-center gap-1">
-            <Edit2 size={14} className="text-indigo-600" /> {normalizedSelectedDate} 근무 지정
-          </span>
-          <span className="font-bold text-indigo-600">{currentShiftCode}</span>
-        </div>
-
-        <div className="flex justify-between items-center gap-1">
-          {['D', 'E', 'N', 'M', 'OFF', '연차'].map((code) => {
-            const isSel = currentShiftCode === code;
-            return (
-              <button
-                key={code}
-                onClick={() => handleShiftSelect(code)}
-                className={`flex-1 py-2 rounded-full font-black text-xs transition border cursor-pointer ${
-                  isSel
-                    ? 'border-indigo-600 bg-orange-100 text-orange-950 shadow-2xs'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                {code}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="pt-2 border-t border-slate-100 flex items-center gap-1 text-xs font-bold text-slate-700">
-          <Bell size={14} className="text-indigo-600" />
-          <span>일정 및 메모 등록</span>
         </div>
       </div>
     </div>
