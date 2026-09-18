@@ -103,12 +103,12 @@ export default function MyShiftTab({
     }
   });
 
-  const currentShift = myShifts[selectedDate] || 'OFF';
+  const currentShift = myShifts[selectedDate] || '';
   const currentMemos = memos[selectedDate] || [];
 
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto">
-      {/* 월 선택 및 6종 파스텔 배지 카드 */}
+      {/* 1. 월 선택 및 6종 파스텔 배지 요약 카드 */}
       <div className="bg-white p-5 rounded-3xl shadow-2xs border border-slate-100 space-y-4">
         <div className="flex justify-center items-center gap-4">
           <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded-full transition text-slate-600 cursor-pointer">
@@ -150,7 +150,7 @@ export default function MyShiftTab({
         </div>
       </div>
 
-      {/* 메인 달력 카드 */}
+      {/* 2. 메인 캘린더 (근무가 없는 날은 회색 배경 없이 흰색으로 표시) */}
       <div className="bg-white p-5 rounded-3xl shadow-2xs border border-slate-100 space-y-3">
         <div className="grid grid-cols-7 text-center text-xs font-black pb-2 border-b border-slate-100">
           <span className="text-rose-500">일</span>
@@ -162,7 +162,7 @@ export default function MyShiftTab({
           <span className="text-sky-500">토</span>
         </div>
 
-        <div className="grid grid-cols-7 gap-2 text-center">
+        <div className="grid grid-cols-7 gap-y-3 gap-x-1 text-center">
           {calendarDays.map((item, idx) => {
             if (!item.isCurrentMonth) {
               return (
@@ -173,44 +173,48 @@ export default function MyShiftTab({
             }
 
             const isSelected = selectedDate === item.dateStr;
-            const shiftCode = myShifts[item.dateStr] || '';
-
-            let bgColor = '#F8FAFC';
-            let textColor = '#475569';
-
-            if (shiftCode === 'D') { bgColor = '#FEF08A'; textColor = '#713F12'; }
-            else if (shiftCode === 'E') { bgColor = '#FFEDD5'; textColor = '#7C2D12'; }
-            else if (shiftCode === 'N') { bgColor = '#E0F2FE'; textColor = '#0C4A6E'; }
-            else if (shiftCode === 'M') { bgColor = '#F3E8FF'; textColor = '#581C87'; }
-            else if (shiftCode === '연차') { bgColor = '#FCE7F3'; textColor = '#831843'; }
-            else { bgColor = '#F1F5F9'; textColor = '#334155'; }
+            const shiftCode = myShifts[item.dateStr]; // 없으면 undefined
 
             return (
               <div
                 key={idx}
                 onClick={() => setSelectedDate(item.dateStr)}
-                style={{ backgroundColor: bgColor }}
-                className={`py-2 px-1 rounded-2xl transition cursor-pointer flex flex-col items-center justify-center min-h-[58px] ${
-                  isSelected ? 'ring-2 ring-indigo-600 scale-105 shadow-xs' : ''
+                className={`py-1.5 rounded-full transition cursor-pointer flex flex-col items-center justify-between min-h-[62px] ${
+                  isSelected ? 'ring-2 ring-indigo-600 bg-indigo-50/20' : 'hover:bg-slate-50'
                 }`}
               >
-                <span className="text-[11px] font-bold opacity-70 block">{item.dayNum}</span>
-                <span style={{ color: textColor }} className="text-xs font-black mt-0.5 block">
-                  {shiftCode}
-                </span>
+                <span className="text-[11px] font-black text-slate-700">{item.dayNum}</span>
+                
+                {/* 근무가 있는 경우에만 배경 알약 배치 */}
+                {shiftCode ? (
+                  <span
+                    className={`text-[10px] font-black w-8 h-8 rounded-full flex items-center justify-center ${
+                      shiftCode === 'D' ? 'bg-amber-200 text-amber-950' :
+                      shiftCode === 'E' ? 'bg-orange-200 text-orange-950 font-black' :
+                      shiftCode === 'N' ? 'bg-sky-200 text-sky-950' :
+                      shiftCode === 'M' ? 'bg-purple-200 text-purple-950 font-black' :
+                      shiftCode === '연차' ? 'bg-pink-200 text-pink-950' :
+                      shiftCode === 'OFF' ? 'bg-slate-100 text-slate-700' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {shiftCode}
+                  </span>
+                ) : (
+                  <span className="w-8 h-8"></span>
+                )}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* 선택일 근무 지정 및 메모 */}
+      {/* 3. 선택일 근무 지정 및 메모 */}
       <div className="bg-white p-5 rounded-3xl shadow-2xs border border-slate-100 space-y-4">
         <div className="flex justify-between items-center text-xs">
           <span className="font-extrabold text-slate-800 flex items-center gap-1.5">
             <Edit3 size={15} className="text-indigo-600" /> {selectedDate} 근무 지정
           </span>
-          <span className="font-black text-indigo-600">{currentShift}</span>
+          <span className="font-black text-indigo-600">{currentShift || '미지정'}</span>
         </div>
 
         <div className="flex justify-between items-center gap-1.5">
@@ -231,7 +235,7 @@ export default function MyShiftTab({
             );
           })}
           <button
-            onClick={() => handleShiftChange('OFF')}
+            onClick={() => handleShiftChange('')}
             className="p-2 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition cursor-pointer"
             title="초기화"
           >
