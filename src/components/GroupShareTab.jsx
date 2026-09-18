@@ -31,7 +31,6 @@ export default function GroupShareTab({
 
   const checkIsMe = useCallback((targetName) => isSamePerson(targetName, userName), [userName]);
 
-  // 방어 코드가 강화된 멤버 근무 조회 (undefined 터짐 원천 차단)
   const getShiftCodeForMember = useCallback((member, rawDateKey) => {
     if (!member) return 'OFF';
     const stdKey = toDateKey(rawDateKey);
@@ -53,8 +52,8 @@ export default function GroupShareTab({
     return 'OFF';
   }, [checkIsMe, safeMyShifts]);
 
-  // [Pull] DB 그룹 가져오기
-  const pullGroupData = useCallback(async (targetCode, targetName = '공유 그룹', isJoining = false) => {
+  // DB 그룹 데이터 가져오기 (DB에 저장된 실제 방 이름을 우선 사용하도록 보완)
+  const pullGroupData = useCallback(async (targetCode, targetName, isJoining = false) => {
     const cleanCode = targetCode?.trim().toUpperCase();
     if (!cleanCode || !supabase) return false;
 
@@ -69,7 +68,11 @@ export default function GroupShareTab({
       if (selectErr) return false;
 
       if (data && data.length > 0) {
-        const dbGroupName = data[0].group_name || targetName;
+        // DB에 저장된 실제 그룹 이름 우선 적용 (공유 그룹으로 덮어쓰지 않음)
+        const dbGroupName = data[0].group_name && data[0].group_name !== '공유 그룹' 
+          ? data[0].group_name 
+          : (targetName || '공유 그룹');
+
         const dbMembers = data.map(item => ({
           name: item.user_name,
           shifts: item.shifts || {},
@@ -85,7 +88,7 @@ export default function GroupShareTab({
             resolvedGroupId = existingGroup.id;
             return prevList.map(g => 
               g.code === cleanCode 
-                ? { ...g, name: existingGroup.name || dbGroupName, members: dbMembers } 
+                ? { ...g, name: (existingGroup.name && existingGroup.name !== '공유 그룹') ? existingGroup.name : dbGroupName, members: dbMembers } 
                 : g
             );
           } else {
@@ -114,12 +117,16 @@ export default function GroupShareTab({
     }
   }, [userName, setGroups, setActiveGroupId]);
 
-  // [Push] 내 근무 DB 전송
-  const pushMyShiftsToSupabase = useCallback(async (targetCode, targetName = '공유 그룹') => {
+  // 내 근무 DB 전송 (기존 방 이름을 보존하는 finalGroupName 로직 적용)
+  const pushMyShiftsToSupabase = useCallback(async (targetCode, targetName) => {
     const cleanCode = targetCode?.trim().toUpperCase();
     const myCleanName = cleanDisplayName(userName);
 
     if (!cleanCode || !myCleanName || !supabase) return false;
+
+    const finalGroupName = (targetName && targetName !== '공유 그룹')
+      ? targetName
+      : (currentName || '공유 그룹');
 
     try {
       const { error: upsertErr } = await supabase
@@ -127,7 +134,7 @@ export default function GroupShareTab({
         .upsert(
           {
             group_code: cleanCode,
-            group_name: targetName,
+            group_name: finalGroupName,
             user_name: userName.trim(),
             shifts: safeMyShifts,
             updated_at: new Date().toISOString()
@@ -140,9 +147,9 @@ export default function GroupShareTab({
       console.error('Group push error:', err);
       return false;
     }
-  }, [userName, safeMyShifts]);
+  }, [userName, safeMyShifts, currentName]);
 
-  const syncWithSupabase = useCallback(async (targetCode, targetName = '공유 그룹', isJoining = false) => {
+  const syncWithSupabase = useCallback(async (targetCode, targetName, isJoining = false) => {
     await pushMyShiftsToSupabase(targetCode, targetName);
     return pullGroupData(targetCode, targetName, isJoining);
   }, [pushMyShiftsToSupabase, pullGroupData]);
@@ -151,10 +158,8 @@ export default function GroupShareTab({
     if (currentCode && userName) {
       syncWithSupabase(currentCode, currentName, false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCode, userName]);
 
-  // Realtime 구독 (Push 없이 Pull만 수신하여 자가발화 방지)
   useEffect(() => {
     if (currentCode && userName && supabase) {
       const channel = supabase
@@ -168,10 +173,8 @@ export default function GroupShareTab({
 
       return () => supabase.removeChannel(channel);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCode, userName]);
 
-  // 800ms 디바운스 Push
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) {
@@ -185,7 +188,6 @@ export default function GroupShareTab({
     }, 800);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myShifts]);
 
   const handleCreateGroupAction = async () => {
@@ -202,7 +204,7 @@ export default function GroupShareTab({
     const code = joinCodeInput.trim().toUpperCase();
     if (!code) return alert('초대 코드를 입력해 주세요.');
     setJoinCodeInput('');
-    if (await syncWithSupabase(code, '공유 그룹', true)) {
+    if (await syncWithSupabase(code, null, true)) {
       alert(`🎉 초대 코드 [ ${code} ] 그룹에 연결되었습니다!`);
     }
   };
@@ -217,15 +219,13 @@ export default function GroupShareTab({
 
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
-      {/* 1. 어플 내 공유 그룹 관리 섹션 (원본 디자인) */}
+      {/* 어플 내 공유 그룹 관리 카드 */}
       <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
         <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-950">
           <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
         </h2>
 
-        {/* 새 그룹 생성 / 코드 입장 2열 카드 */}
         <div className="grid grid-cols-2 gap-2 text-xs">
-          {/* 새 그룹 생성 */}
           <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-2">
             <p className="font-bold text-indigo-950 flex items-center gap-1">
               <PlusCircle size={14} className="text-indigo-600" /> 새 그룹 생성
@@ -246,7 +246,6 @@ export default function GroupShareTab({
             </button>
           </div>
 
-          {/* 코드 입장 */}
           <div className="p-3.5 bg-amber-50/50 border border-amber-100 rounded-2xl space-y-2">
             <p className="font-bold text-amber-950 flex items-center gap-1">
               <UserCheck size={14} className="text-amber-600" /> 코드 입장
@@ -268,7 +267,6 @@ export default function GroupShareTab({
           </div>
         </div>
 
-        {/* 참여 중인 그룹 목록 둥근 탭 배지 */}
         <div className="pt-2 border-t border-slate-100 space-y-2">
           <span className="text-xs font-bold text-slate-400 block">참여 중인 그룹 목록</span>
           <div className="flex flex-wrap gap-2">
@@ -296,10 +294,9 @@ export default function GroupShareTab({
         </div>
       </div>
 
-      {/* 2. 선택된 그룹 상세 현황 카드 (원본 디자인) */}
+      {/* 상세 그룹 현황 카드 */}
       {activeGroup && (
         <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
-          {/* 그룹 타이틀 및 초대 코드 복사 배지 */}
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-lg font-black text-slate-900">{activeGroup.name}</h3>
@@ -317,7 +314,6 @@ export default function GroupShareTab({
           </div>
 
           <div className="border-t border-slate-100 pt-3 space-y-3">
-            {/* 서브 헤더 (선택된 날짜 및 동기화) */}
             <div className="flex justify-between items-center text-xs">
               <span className="font-extrabold text-slate-800 flex items-center gap-1">
                 📅 {normalizedSelectedDate} 그룹 멤버 근무 상황
@@ -331,7 +327,6 @@ export default function GroupShareTab({
               </button>
             </div>
 
-            {/* 그룹 멤버별 근무 상태 박스 뷰 */}
             <div className="space-y-2">
               {memberList.map((m, idx) => {
                 const shiftCode = getShiftCodeForMember(m, normalizedSelectedDate);
