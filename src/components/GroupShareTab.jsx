@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Users, PlusCircle, UserCheck, RefreshCw, Copy } from 'lucide-react';
+import { Users, PlusCircle, UserCheck, RefreshCw, Copy, LogOut, Trash2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { toDateKey, cleanDisplayName, isSamePerson } from '../utils/dateUtils';
 
@@ -52,7 +52,7 @@ export default function GroupShareTab({
     return 'OFF';
   }, [checkIsMe, safeMyShifts]);
 
-  // DB 그룹 데이터 가져오기 (DB에 저장된 실제 방 이름을 우선 사용하도록 보완)
+  // DB 그룹 데이터 가져오기 (DB에 저장된 실제 방 이름 유지)
   const pullGroupData = useCallback(async (targetCode, targetName, isJoining = false) => {
     const cleanCode = targetCode?.trim().toUpperCase();
     if (!cleanCode || !supabase) return false;
@@ -68,7 +68,6 @@ export default function GroupShareTab({
       if (selectErr) return false;
 
       if (data && data.length > 0) {
-        // DB에 저장된 실제 그룹 이름 우선 적용 (공유 그룹으로 덮어쓰지 않음)
         const dbGroupName = data[0].group_name && data[0].group_name !== '공유 그룹' 
           ? data[0].group_name 
           : (targetName || '공유 그룹');
@@ -117,7 +116,7 @@ export default function GroupShareTab({
     }
   }, [userName, setGroups, setActiveGroupId]);
 
-  // 내 근무 DB 전송 (기존 방 이름을 보존하는 finalGroupName 로직 적용)
+  // 내 근무 DB 전송
   const pushMyShiftsToSupabase = useCallback(async (targetCode, targetName) => {
     const cleanCode = targetCode?.trim().toUpperCase();
     const myCleanName = cleanDisplayName(userName);
@@ -214,12 +213,45 @@ export default function GroupShareTab({
     alert(`초대 코드 [ ${code} ]가 복사되었습니다!`);
   };
 
+  // 그룹 나가기 로직
+  const handleLeaveGroup = async () => {
+    if (!activeGroup) return;
+    if (window.confirm(`'${activeGroup.name}' 그룹에서 나가시겠습니까?`)) {
+      if (supabase && userName) {
+        await supabase
+          .from('group_shifts')
+          .delete()
+          .eq('group_code', activeGroup.code)
+          .eq('user_name', userName.trim());
+      }
+      const updated = safeGroups.filter(g => g.id !== activeGroup.id);
+      setGroups(updated);
+      setActiveGroupId(updated.length > 0 ? updated[0].id : null);
+    }
+  };
+
+  // 그룹 완전 삭제 로직
+  const handleDeleteGroup = async () => {
+    if (!activeGroup) return;
+    if (window.confirm(`⚠️ '${activeGroup.name}' 그룹을 완전히 삭제하시겠습니까?`)) {
+      if (supabase) {
+        await supabase
+          .from('group_shifts')
+          .delete()
+          .eq('group_code', activeGroup.code);
+      }
+      const updated = safeGroups.filter(g => g.id !== activeGroup.id);
+      setGroups(updated);
+      setActiveGroupId(updated.length > 0 ? updated[0].id : null);
+    }
+  };
+
   const activeGroup = currentGroup || safeGroups[0] || null;
   const memberList = activeGroup?.members || [];
 
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
-      {/* 어플 내 공유 그룹 관리 카드 */}
+      {/* 1. 어플 내 공유 그룹 관리 카드 */}
       <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
         <h2 className="font-extrabold text-base flex items-center gap-2 text-indigo-950">
           <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
@@ -294,26 +326,47 @@ export default function GroupShareTab({
         </div>
       </div>
 
-      {/* 상세 그룹 현황 카드 */}
+      {/* 2. 상세 그룹 현황 카드 (나가기 / 삭제 버튼 포함) */}
       {activeGroup && (
         <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start border-b border-slate-100 pb-3">
             <div>
               <h3 className="text-lg font-black text-slate-900">{activeGroup.name}</h3>
               <p className="text-[11px] font-medium text-slate-400 mt-0.5">
                 초대 코드를 동료에게 전달해 그룹에 참여시키세요!
               </p>
             </div>
-            <button
-              onClick={() => handleCopyCode(activeGroup.code)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-2xl transition border border-indigo-100 cursor-pointer"
-            >
-              <Copy size={13} />
-              <span>코드: {activeGroup.code}</span>
-            </button>
+
+            {/* 상단 우측 초대코드 + 나가기/삭제 버튼 그룹 */}
+            <div className="flex flex-col items-end gap-1.5">
+              <button
+                onClick={() => handleCopyCode(activeGroup.code)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-2xl transition border border-indigo-100 cursor-pointer"
+              >
+                <Copy size={13} />
+                <span>코드: {activeGroup.code}</span>
+              </button>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleLeaveGroup}
+                  className="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-600 font-extrabold text-[11px] rounded-xl transition border border-slate-200 cursor-pointer flex items-center gap-1"
+                >
+                  <LogOut size={12} />
+                  <span>나가기</span>
+                </button>
+                <button
+                  onClick={handleDeleteGroup}
+                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold text-[11px] rounded-xl transition border border-rose-200 cursor-pointer flex items-center gap-1"
+                >
+                  <Trash2 size={12} />
+                  <span>삭제</span>
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="border-t border-slate-100 pt-3 space-y-3">
+          <div className="pt-1 space-y-3">
             <div className="flex justify-between items-center text-xs">
               <span className="font-extrabold text-slate-800 flex items-center gap-1">
                 📅 {normalizedSelectedDate} 그룹 멤버 근무 상황
