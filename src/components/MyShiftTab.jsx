@@ -173,7 +173,7 @@ export default function MyShiftTab({
             }
 
             const isSelected = selectedDate === item.dateStr;
-            const shiftCode = myShifts[item.dateStr] || 'OFF';
+            const shiftCode = myShifts[item.dateStr] || '';
 
             let bgColor = '#F8FAFC';
             let textColor = '#475569';
