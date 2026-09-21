@@ -213,7 +213,7 @@ export default function GroupShareTab({
     alert(`초대 코드 [ ${code} ]가 복사되었습니다!`);
   };
 
-  // 그룹 나가기 로직
+  // 그룹 나가기
   const handleLeaveGroup = async () => {
     if (!activeGroup) return;
     if (window.confirm(`'${activeGroup.name}' 그룹에서 나가시겠습니까?`)) {
@@ -230,7 +230,7 @@ export default function GroupShareTab({
     }
   };
 
-  // 그룹 완전 삭제 로직
+  // 그룹 삭제
   const handleDeleteGroup = async () => {
     if (!activeGroup) return;
     if (window.confirm(`⚠️ '${activeGroup.name}' 그룹을 완전히 삭제하시겠습니까?`)) {
@@ -326,43 +326,42 @@ export default function GroupShareTab({
         </div>
       </div>
 
-      {/* 2. 상세 그룹 현황 카드 (나가기 / 삭제 버튼 포함) */}
+      {/* 2. 상세 그룹 현황 카드 (우측 상단 3개 버튼 한 줄 배치 수정을 적용한 부분) */}
       {activeGroup && (
         <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
-          <div className="flex justify-between items-start border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-lg font-black text-slate-900">{activeGroup.name}</h3>
+          <div className="flex justify-between items-start gap-2 border-b border-slate-100 pb-3">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-black text-slate-900 truncate">{activeGroup.name}</h3>
               <p className="text-[11px] font-medium text-slate-400 mt-0.5">
                 초대 코드를 동료에게 전달해 그룹에 참여시키세요!
               </p>
             </div>
 
-            {/* 상단 우측 초대코드 + 나가기/삭제 버튼 그룹 */}
-            <div className="flex flex-col items-end gap-1.5">
+            {/* 초대코드, 나가기, 삭제 버튼을 가로 한 줄로 배치 및 줄바꿈 방지 */}
+            <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
               <button
                 onClick={() => handleCopyCode(activeGroup.code)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-2xl transition border border-indigo-100 cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-xl transition border border-indigo-100 cursor-pointer whitespace-nowrap"
               >
                 <Copy size={13} />
                 <span>코드: {activeGroup.code}</span>
               </button>
 
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={handleLeaveGroup}
-                  className="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-600 font-extrabold text-[11px] rounded-xl transition border border-slate-200 cursor-pointer flex items-center gap-1"
-                >
-                  <LogOut size={12} />
-                  <span>나가기</span>
-                </button>
-                <button
-                  onClick={handleDeleteGroup}
-                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold text-[11px] rounded-xl transition border border-rose-200 cursor-pointer flex items-center gap-1"
-                >
-                  <Trash2 size={12} />
-                  <span>삭제</span>
-                </button>
-              </div>
+              <button
+                onClick={handleLeaveGroup}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 font-extrabold text-xs rounded-xl transition border border-slate-200 cursor-pointer whitespace-nowrap"
+              >
+                <LogOut size={13} />
+                <span>나가기</span>
+              </button>
+
+              <button
+                onClick={handleDeleteGroup}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold text-xs rounded-xl transition border border-rose-200 cursor-pointer whitespace-nowrap"
+              >
+                <Trash2 size={13} />
+                <span>삭제</span>
+              </button>
             </div>
           </div>
 
