@@ -32,13 +32,13 @@ export default function ImportTab({
     });
   };
 
-  // 병원 엑셀 표 정밀 파싱 (전월 26일~ 당월 구조 대응)
+  // 병원 엑셀 표 정밀 원본 파서 (셀 직접 순회)
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setIsProcessing(true);
-    setStatusMessage('⏳ 병원 근무표 양식 분석 중...');
+    setStatusMessage('⏳ 병원 엑셀 근무표 정밀 분석 중...');
 
     try {
       await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
@@ -51,85 +51,100 @@ export default function ImportTab({
           const workbook = XLSX.read(bstr, { type: 'binary' });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
-          const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-          if (!jsonRows || jsonRows.length === 0) {
-            alert('읽을 수 없는 엑셀 파일입니다.');
-            return;
+          // 셀 주소 범위 확인
+          const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:Z100');
+          
+          // 2차원 배열 형태로 모든 셀 데이터 정밀 매핑 (빈 셀도 null로 유지)
+          const matrix = [];
+          for (let R = range.s.r; R <= range.e.r; ++R) {
+            const row = [];
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+              const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+              const cell = worksheet[cellAddress];
+              row.push(cell ? String(cell.v).trim() : '');
+            }
+            matrix.push(row);
           }
 
-          // 1. 날짜 헤더 행 탐색 (숫자 행)
-          let dateHeaderIdx = -1;
-          let dateRow = [];
+          // 1. 날짜 행(1~31) 및 당월 1일 위치 정밀 탐색
+          let dateRowIdx = -1;
+          const colToDayMap = {}; // { colIndex: dayNumber }
+          const [targetYear, targetMonth] = currentYearMonth.split('-').map(Number);
 
-          for (let r = 0; r < jsonRows.length; r++) {
-            const row = jsonRows[r];
-            if (!Array.isArray(row)) continue;
-            const numbers = row.map(v => parseInt(v, 10)).filter(v => !isNaN(v) && v >= 1 && v <= 31);
-            if (numbers.length >= 15) {
-              dateHeaderIdx = r;
-              dateRow = row;
+          for (let r = 0; r < matrix.length; r++) {
+            const row = matrix[r];
+            const numberCols = [];
+
+            row.forEach((val, c) => {
+              const num = parseInt(val, 10);
+              if (!isNaN(num) && num >= 1 && num <= 31) {
+                numberCols.push({ col: c, day: num });
+              }
+            });
+
+            if (numberCols.length >= 15) {
+              dateRowIdx = r;
+              let isCurrentMonthPart = false;
+
+              numberCols.forEach(({ col, day }) => {
+                if (day === 1) isCurrentMonthPart = true;
+                if (isCurrentMonthPart) {
+                  colToDayMap[col] = day;
+                }
+              });
               break;
             }
           }
 
-          if (dateHeaderIdx === -1) {
+          if (dateRowIdx === -1) {
             alert('엑셀 파일에서 날짜 행을 찾을 수 없습니다.');
+            setIsProcessing(false);
             return;
           }
 
-          // 2. 컬럼별 실제 날짜(YYYY-MM-DD) 매핑
-          const colToDateMap = {};
-          const [targetYear, targetMonth] = currentYearMonth.split('-').map(Number);
-          
-          let foundMonthStart = false; // 당월 1일 등장 여부
+          // 2. 전체 간호사 이름 및 날짜별 근무 데이터 매핑
+          const nameMap = {};
+          const excludeKeywords = ['분당', '병동', '날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', '비고', '합계'];
 
-          dateRow.forEach((cellVal, colIdx) => {
-            const dayNum = parseInt(cellVal, 10);
-            if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 31) {
-              if (dayNum === 1) foundMonthStart = true;
+          for (let r = dateRowIdx + 1; r < matrix.length; r++) {
+            const row = matrix[r];
+            if (!row || row.length === 0) continue;
 
-              // 1일 이후 숫자는 선택한 해당 달의 날짜로 인식
-              if (foundMonthStart) {
-                const formattedDay = String(dayNum).padStart(2, '0');
-                const formattedMonth = String(targetMonth).padStart(2, '0');
-                colToDateMap[colIdx] = `${targetYear}-${formattedMonth}-${formattedDay}`;
+            // 앞쪽 3개 컬럼(A, B, C열)에서 이름 탐색
+            let foundName = '';
+            for (let c = 0; c < Math.min(3, row.length); c++) {
+              const val = row[c];
+              if (val && val.length >= 2 && val.length <= 5 && !excludeKeywords.some(k => val.includes(k))) {
+                foundName = val;
+                break;
               }
             }
-          });
 
-          // 3. 간호사별 행 파싱
-          const nameMap = {};
-
-          for (let r = dateHeaderIdx + 1; r < jsonRows.length; r++) {
-            const row = jsonRows[r];
-            if (!Array.isArray(row) || row.length < 2) continue;
-
-            // 이름 찾기
-            const nameCandidate = String(row[0] || row[1] || '').trim();
-            if (nameCandidate && nameCandidate.length >= 2 && nameCandidate.length <= 5 &&
-                !['토', '일', '월', '화', '수', '목', '금', '분당', '병동', '비고'].some(k => nameCandidate.includes(k))) {
-              
+            if (foundName) {
               const personShifts = {};
 
-              Object.keys(colToDateMap).forEach(colIdx => {
-                const rawShift = String(row[colIdx] || '').trim().toUpperCase();
-                
-                let shiftCode = '';
+              Object.entries(colToDayMap).forEach(([colStr, dayNum]) => {
+                const c = parseInt(colStr, 10);
+                let rawShift = String(row[c] || '').trim().toUpperCase();
+
+                let finalShift = '';
                 if (['D', 'E', 'N', 'M', 'OFF', '연차'].includes(rawShift)) {
-                  shiftCode = rawShift;
+                  finalShift = rawShift;
                 } else if (rawShift.includes('OFF') || rawShift === '오프') {
-                  shiftCode = 'OFF';
+                  finalShift = 'OFF';
                 }
 
-                if (shiftCode) {
-                  const dateKey = colToDateMap[colIdx];
-                  personShifts[dateKey] = shiftCode;
+                if (finalShift) {
+                  const formattedDay = String(dayNum).padStart(2, '0');
+                  const formattedMonth = String(targetMonth).padStart(2, '0');
+                  const dateKey = `${targetYear}-${formattedMonth}-${formattedDay}`;
+                  personShifts[dateKey] = finalShift;
                 }
               });
 
               if (Object.keys(personShifts).length > 0) {
-                nameMap[nameCandidate] = personShifts;
+                nameMap[foundName] = personShifts;
               }
             }
           }
@@ -137,19 +152,21 @@ export default function ImportTab({
           const foundNames = Object.keys(nameMap);
 
           if (foundNames.length === 0) {
-            alert('이름 및 근무 데이터를 파싱하지 못했습니다.');
-            setStatusMessage('❌ 파싱 실패');
+            alert('엑셀에서 간호사 이름 목록을 추출하지 못했습니다. 파일 구조를 확인하세요.');
+            setStatusMessage('❌ 이름 추출 실패');
+            setIsProcessing(false);
             return;
           }
 
+          // 추출된 전체 간호사 이름 및 파싱 데이터 설정
           setParsedDataByName(nameMap);
           setExtractedNames(foundNames);
           setShowNameModal(true);
-          setStatusMessage(`✅ [${foundNames.join(', ')}] 쌤의 데이터가 정밀 분석되었습니다.`);
+          setStatusMessage(`✅ 총 ${foundNames.length}명( ${foundNames.join(', ')} )의 근무표 추출 완료!`);
 
         } catch (err) {
           console.error(err);
-          setStatusMessage('❌ 엑셀 분석 오류가 발생했습니다.');
+          setStatusMessage('❌ 엑셀 분석 중 오류가 발생했습니다.');
         } finally {
           setIsProcessing(false);
         }
@@ -167,7 +184,7 @@ export default function ImportTab({
     if (!file) return;
 
     setIsProcessing(true);
-    setStatusMessage('📷 근무표 이미지 분석 중...');
+    setStatusMessage('📷 이미지 파싱 진행 중...');
 
     setTimeout(() => {
       const activeUser = userName || '최수민';
@@ -175,10 +192,9 @@ export default function ImportTab({
       const lastDay = new Date(y, m, 0).getDate();
       const parsedShifts = {};
 
-      const samplePattern = ['OFF', 'OFF', 'D', 'D', 'D', 'D', 'OFF', 'OFF', 'D', 'D', 'D', 'D', 'D', 'OFF', 'D', 'E', 'E', 'E', 'E', 'OFF', 'N', 'N', 'OFF', 'OFF', 'D', 'D', 'D', 'D', 'OFF', 'OFF'];
       for (let d = 1; d <= lastDay; d++) {
         const dateKey = `${currentYearMonth}-${String(d).padStart(2, '0')}`;
-        parsedShifts[dateKey] = samplePattern[(d - 1) % samplePattern.length];
+        parsedShifts[dateKey] = 'OFF';
       }
 
       const map = { [activeUser]: parsedShifts };
@@ -205,7 +221,7 @@ export default function ImportTab({
     }
 
     setShowNameModal(false);
-    setStatusMessage(`🎉 [${selectedName}] 쌤의 원본 근무표가 내 달력에 정확히 저장되었습니다.`);
+    setStatusMessage(`🎉 [${selectedName}] 쌤의 근무표가 내 달력에 정확히 등록되었습니다.`);
   };
 
   return (
@@ -215,7 +231,7 @@ export default function ImportTab({
           <Upload size={18} className="text-indigo-600" /> 스마트 근무표 & 캘린더 가져오기
         </h2>
 
-        {/* 엑셀 파일 선택 */}
+        {/* 1. 엑셀 근무표 선택 */}
         <div style={{ borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
           <div style={{ backgroundColor: '#D1FAE5', color: '#059669' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto font-black">
             <FileSpreadsheet size={20} />
@@ -245,7 +261,7 @@ export default function ImportTab({
           </label>
         </div>
 
-        {/* 근무표 사진 / 카메라 촬영 */}
+        {/* 2. 근무표 사진 / 카메라 촬영 */}
         <div style={{ borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
           <div style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto">
             <Camera size={20} />
@@ -290,7 +306,7 @@ export default function ImportTab({
           </div>
         </div>
 
-        {/* 폰 캘린더 */}
+        {/* 3. 폰 캘린더 (.ics) */}
         <div style={{ borderColor: '#BAE6FD', backgroundColor: '#F0F9FF' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
           <div style={{ backgroundColor: '#E0F2FE', color: '#0284C7' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto">
             <Smartphone size={20} />
@@ -318,7 +334,7 @@ export default function ImportTab({
           </label>
         </div>
 
-        {/* 상태 메세지 */}
+        {/* 상태 메시지 */}
         {statusMessage && (
           <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
             <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
@@ -342,7 +358,7 @@ export default function ImportTab({
         </div>
       </div>
 
-      {/* 본인 이름 선택 모달 */}
+      {/* 추출된 전체 간호사 목록 선택 모달 */}
       {showNameModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
@@ -353,7 +369,7 @@ export default function ImportTab({
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              파싱된 간호사 목록입니다. 본인 이름을 선택하시면 엑셀의 근무표가 달력에 동일하게 반영됩니다.
+              엑셀에서 추출된 간호사 목록입니다. 본인 이름을 클릭하시면 해당 근무표가 내 달력에 즉시 반영됩니다.
             </p>
             <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
               {extractedNames.map((name) => (
