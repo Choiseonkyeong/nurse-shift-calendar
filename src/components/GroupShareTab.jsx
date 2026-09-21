@@ -52,7 +52,7 @@ export default function GroupShareTab({
     return 'OFF';
   }, [checkIsMe, safeMyShifts]);
 
-  // DB 그룹 데이터 가져오기 (DB에 저장된 실제 방 이름 유지)
+  // DB 그룹 데이터 가져오기 (그룹명 보존 강화)
   const pullGroupData = useCallback(async (targetCode, targetName, isJoining = false) => {
     const cleanCode = targetCode?.trim().toUpperCase();
     if (!cleanCode || !supabase) return false;
@@ -68,9 +68,9 @@ export default function GroupShareTab({
       if (selectErr) return false;
 
       if (data && data.length > 0) {
-        const dbGroupName = data[0].group_name && data[0].group_name !== '공유 그룹' 
-          ? data[0].group_name 
-          : (targetName || '공유 그룹');
+        // DB에 저장된 실제 방 이름 중 유효한 이름 추출
+        const foundDbName = data.find(d => d.group_name && d.group_name !== '공유 그룹')?.group_name;
+        const dbGroupName = foundDbName || targetName || '공유 그룹';
 
         const dbMembers = data.map(item => ({
           name: item.user_name,
@@ -85,9 +85,14 @@ export default function GroupShareTab({
           const existingGroup = prevList.find(g => g.code === cleanCode);
           if (existingGroup) {
             resolvedGroupId = existingGroup.id;
+            // 기존에 설정된 유효한 방 이름을 최우선 유지
+            const finalName = (existingGroup.name && existingGroup.name !== '공유 그룹') 
+              ? existingGroup.name 
+              : dbGroupName;
+
             return prevList.map(g => 
               g.code === cleanCode 
-                ? { ...g, name: (existingGroup.name && existingGroup.name !== '공유 그룹') ? existingGroup.name : dbGroupName, members: dbMembers } 
+                ? { ...g, name: finalName, members: dbMembers } 
                 : g
             );
           } else {
@@ -125,7 +130,7 @@ export default function GroupShareTab({
 
     const finalGroupName = (targetName && targetName !== '공유 그룹')
       ? targetName
-      : (currentName || '공유 그룹');
+      : (currentName && currentName !== '공유 그룹' ? currentName : '공유 그룹');
 
     try {
       const { error: upsertErr } = await supabase
@@ -213,7 +218,6 @@ export default function GroupShareTab({
     alert(`초대 코드 [ ${code} ]가 복사되었습니다!`);
   };
 
-  // 그룹 나가기
   const handleLeaveGroup = async () => {
     if (!activeGroup) return;
     if (window.confirm(`'${activeGroup.name}' 그룹에서 나가시겠습니까?`)) {
@@ -230,7 +234,6 @@ export default function GroupShareTab({
     }
   };
 
-  // 그룹 삭제
   const handleDeleteGroup = async () => {
     if (!activeGroup) return;
     if (window.confirm(`⚠️ '${activeGroup.name}' 그룹을 완전히 삭제하시겠습니까?`)) {
@@ -257,42 +260,47 @@ export default function GroupShareTab({
           <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
         </h2>
 
+        {/* 새 그룹 생성 & 코드 입장 (버튼 안 잘리게 flex-col 구조 정리) */}
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-2">
-            <p className="font-bold text-indigo-950 flex items-center gap-1">
-              <PlusCircle size={14} className="text-indigo-600" /> 새 그룹 생성
-            </p>
-            <input 
-              type="text" 
-              placeholder="예: 81병동 동기" 
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateGroupAction()}
-              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-indigo-400"
-            />
+          <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-col justify-between space-y-2">
+            <div>
+              <p className="font-bold text-indigo-950 flex items-center gap-1 mb-2">
+                <PlusCircle size={14} className="text-indigo-600" /> 새 그룹 생성
+              </p>
+              <input 
+                type="text" 
+                placeholder="예: 81병동 동기" 
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateGroupAction()}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-indigo-400"
+              />
+            </div>
             <button 
               onClick={handleCreateGroupAction} 
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2 rounded-xl transition cursor-pointer shadow-2xs"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2 rounded-xl transition cursor-pointer shadow-2xs mt-2"
             >
               그룹 만들기
             </button>
           </div>
 
-          <div className="p-3.5 bg-amber-50/50 border border-amber-100 rounded-2xl space-y-2">
-            <p className="font-bold text-amber-950 flex items-center gap-1">
-              <UserCheck size={14} className="text-amber-600" /> 코드 입장
-            </p>
-            <input 
-              type="text" 
-              placeholder="6자리 코드 입력" 
-              value={joinCodeInput}
-              onChange={(e) => setJoinCodeInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleJoinGroupAction()}
-              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold uppercase text-center outline-none focus:border-amber-400"
-            />
+          <div className="p-3.5 bg-amber-50/50 border border-amber-100 rounded-2xl flex flex-col justify-between space-y-2">
+            <div>
+              <p className="font-bold text-amber-950 flex items-center gap-1 mb-2">
+                <UserCheck size={14} className="text-amber-600" /> 코드 입장
+              </p>
+              <input 
+                type="text" 
+                placeholder="6자리 코드 입력" 
+                value={joinCodeInput}
+                onChange={(e) => setJoinCodeInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleJoinGroupAction()}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold uppercase text-center outline-none focus:border-amber-400"
+              />
+            </div>
             <button 
               onClick={handleJoinGroupAction} 
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-2 rounded-xl transition cursor-pointer shadow-2xs"
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-2 rounded-xl transition cursor-pointer shadow-2xs mt-2"
             >
               참여하기
             </button>
@@ -326,43 +334,45 @@ export default function GroupShareTab({
         </div>
       </div>
 
-      {/* 2. 상세 그룹 현황 카드 (우측 상단 3개 버튼 한 줄 배치 수정을 적용한 부분) */}
+      {/* 2. 상세 그룹 현황 카드 (유동적 flex 레이아웃으로 텍스트 세로 잘림 완벽 해결) */}
       {activeGroup && (
         <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
-          <div className="flex justify-between items-start gap-2 border-b border-slate-100 pb-3">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-black text-slate-900 truncate">{activeGroup.name}</h3>
-              <p className="text-[11px] font-medium text-slate-400 mt-0.5">
-                초대 코드를 동료에게 전달해 그룹에 참여시키세요!
-              </p>
+          <div className="border-b border-slate-100 pb-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-lg font-black text-slate-900 min-w-[100px]">
+                {activeGroup.name}
+              </h3>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => handleCopyCode(activeGroup.code)}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-xl transition border border-indigo-100 cursor-pointer whitespace-nowrap"
+                >
+                  <Copy size={13} />
+                  <span>코드: {activeGroup.code}</span>
+                </button>
+
+                <button
+                  onClick={handleLeaveGroup}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-600 font-extrabold text-xs rounded-xl transition border border-slate-200 cursor-pointer whitespace-nowrap"
+                >
+                  <LogOut size={13} />
+                  <span>나가기</span>
+                </button>
+
+                <button
+                  onClick={handleDeleteGroup}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold text-xs rounded-xl transition border border-rose-200 cursor-pointer whitespace-nowrap"
+                >
+                  <Trash2 size={13} />
+                  <span>삭제</span>
+                </button>
+              </div>
             </div>
 
-            {/* 초대코드, 나가기, 삭제 버튼을 가로 한 줄로 배치 및 줄바꿈 방지 */}
-            <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
-              <button
-                onClick={() => handleCopyCode(activeGroup.code)}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-xl transition border border-indigo-100 cursor-pointer whitespace-nowrap"
-              >
-                <Copy size={13} />
-                <span>코드: {activeGroup.code}</span>
-              </button>
-
-              <button
-                onClick={handleLeaveGroup}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 font-extrabold text-xs rounded-xl transition border border-slate-200 cursor-pointer whitespace-nowrap"
-              >
-                <LogOut size={13} />
-                <span>나가기</span>
-              </button>
-
-              <button
-                onClick={handleDeleteGroup}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold text-xs rounded-xl transition border border-rose-200 cursor-pointer whitespace-nowrap"
-              >
-                <Trash2 size={13} />
-                <span>삭제</span>
-              </button>
-            </div>
+            <p className="text-[11px] font-medium text-slate-400 block w-full pt-1">
+              초대 코드를 동료에게 전달해 그룹에 참여시키세요!
+            </p>
           </div>
 
           <div className="pt-1 space-y-3">
