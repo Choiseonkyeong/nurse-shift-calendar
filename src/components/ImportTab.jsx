@@ -16,8 +16,6 @@ export default function ImportTab({
   const [parsedDataByName, setParsedDataByName] = useState({});
   const [extractedNames, setExtractedNames] = useState([]);
 
-  const currentYearMonth = selectedDate ? selectedDate.substring(0, 7) : '2026-09';
-
   const loadScript = (src) => {
     return new Promise((resolve, reject) => {
       if (document.querySelector(`script[src="${src}"]`)) {
@@ -32,13 +30,13 @@ export default function ImportTab({
     });
   };
 
-  // 교대 근무표 엑셀 정밀 파서 (모든 교대 직군 지원)
+  // 엑셀 헤더 연/월 및 날짜 정밀 파서
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setIsProcessing(true);
-    setStatusMessage('⏳ 교대 근무표 엑셀 분석 중...');
+    setStatusMessage('⏳ 엑셀 근무표 연도/월 및 데이터 분석 중...');
 
     try {
       await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
@@ -65,10 +63,37 @@ export default function ImportTab({
             matrix.push(row);
           }
 
-          // 1. 날짜 행(1~31) 탐색
+          // 1. 엑셀 상단 타이틀에서 연도(YYYY)와 월(MM) 추출 (예: "2026년 10월 근무표")
+          let parsedYear = 2026;
+          let parsedMonth = 10;
+          let foundHeaderYearMonth = false;
+
+          for (let r = 0; r < Math.min(5, matrix.length); r++) {
+            const rowStr = matrix[r].join(' ');
+            const match = rowStr.match(/(\20\d{2}|\d{4})\s*년\s*(\d{1,2})\s*월/);
+            if (match) {
+              parsedYear = parseInt(match[1], 10);
+              parsedMonth = parseInt(match[2], 10);
+              foundHeaderYearMonth = true;
+              break;
+            }
+          }
+
+          // 만약 타이틀 파싱 실패 시 선택된 날짜 기준 사용
+          if (!foundHeaderYearMonth && selectedDate) {
+            const [sYear, sMonth] = selectedDate.split('-').map(Number);
+            parsedYear = sYear;
+            parsedMonth = sMonth;
+          }
+
+          // 전월(Previous Month) 계산
+          const prevDateObj = new Date(parsedYear, parsedMonth - 2, 1);
+          const prevYear = prevDateObj.getFullYear();
+          const prevMonth = prevDateObj.getMonth() + 1;
+
+          // 2. 날짜 행(1~31) 탐색
           let dateRowIdx = -1;
-          const colToDayMap = {};
-          const [targetYear, targetMonth] = currentYearMonth.split('-').map(Number);
+          const colToDateMap = {}; // { colIndex: 'YYYY-MM-DD' }
 
           for (let r = 0; r < matrix.length; r++) {
             const row = matrix[r];
@@ -87,8 +112,17 @@ export default function ImportTab({
 
               numberCols.forEach(({ col, day }) => {
                 if (day === 1) isCurrentMonthPart = true;
-                if (isCurrentMonthPart) {
-                  colToDayMap[col] = day;
+
+                if (!isCurrentMonthPart) {
+                  // 1일 이전 숫자는 전월 날짜 (예: 9월 26일~30일)
+                  const formattedMonth = String(prevMonth).padStart(2, '0');
+                  const formattedDay = String(day).padStart(2, '0');
+                  colToDateMap[col] = `${prevYear}-${formattedMonth}-${formattedDay}`;
+                } else {
+                  // 1일 및 그 이후 숫자는 당월 날짜 (예: 10월 1일~25일)
+                  const formattedMonth = String(parsedMonth).padStart(2, '0');
+                  const formattedDay = String(day).padStart(2, '0');
+                  colToDateMap[col] = `${parsedYear}-${formattedMonth}-${formattedDay}`;
                 }
               });
               break;
@@ -96,21 +130,21 @@ export default function ImportTab({
           }
 
           if (dateRowIdx === -1) {
-            alert('엑셀 파일에서 날짜 행을 찾을 수 없습니다.');
+            alert('엑셀 파일에서 날짜 행을 찾지 못했습니다.');
             setIsProcessing(false);
             return;
           }
 
-          // 2. 전체 근무자 이름 및 날짜별 근무 코드 매핑
+          // 3. 간호사/근무자별 행 데이터 매핑
           const nameMap = {};
-          const excludeKeywords = ['날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', '비고', '합계', '부서', '팀'];
+          const excludeKeywords = ['날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', '비고', '합계', '부서', '팀', 'HN', 'CN', 'RN', 'OFF'];
 
           for (let r = dateRowIdx + 1; r < matrix.length; r++) {
             const row = matrix[r];
             if (!row || row.length === 0) continue;
 
             let foundName = '';
-            for (let c = 0; c < Math.min(3, row.length); c++) {
+            for (let c = 0; c < Math.min(4, row.length); c++) {
               const val = row[c];
               if (val && val.length >= 2 && val.length <= 5 && !excludeKeywords.some(k => val.includes(k))) {
                 foundName = val;
@@ -121,7 +155,7 @@ export default function ImportTab({
             if (foundName) {
               const personShifts = {};
 
-              Object.entries(colToDayMap).forEach(([colStr, dayNum]) => {
+              Object.entries(colToDateMap).forEach(([colStr, dateKey]) => {
                 const c = parseInt(colStr, 10);
                 let rawShift = String(row[c] || '').trim().toUpperCase();
 
@@ -133,9 +167,6 @@ export default function ImportTab({
                 }
 
                 if (finalShift) {
-                  const formattedDay = String(dayNum).padStart(2, '0');
-                  const formattedMonth = String(targetMonth).padStart(2, '0');
-                  const dateKey = `${targetYear}-${formattedMonth}-${formattedDay}`;
                   personShifts[dateKey] = finalShift;
                 }
               });
@@ -149,7 +180,7 @@ export default function ImportTab({
           const foundNames = Object.keys(nameMap);
 
           if (foundNames.length === 0) {
-            alert('엑셀에서 근무자 이름 목록을 추출하지 못했습니다. 파일 구조를 확인하세요.');
+            alert('엑셀 파일에서 근무자 이름 목록을 읽지 못했습니다.');
             setStatusMessage('❌ 파싱 실패');
             setIsProcessing(false);
             return;
@@ -158,11 +189,11 @@ export default function ImportTab({
           setParsedDataByName(nameMap);
           setExtractedNames(foundNames);
           setShowNameModal(true);
-          setStatusMessage(`✅ 총 ${foundNames.length}명( ${foundNames.join(', ')} )의 근무표 추출 완료!`);
+          setStatusMessage(`✅ [${parsedYear}년 ${parsedMonth}월] 근무표 분석 완료! 본인 이름을 선택해 주세요.`);
 
         } catch (err) {
           console.error(err);
-          setStatusMessage('❌ 엑셀 분석 중 오류가 발생했습니다.');
+          setStatusMessage('❌ 엑셀 파일 분석 오류가 발생했습니다.');
         } finally {
           setIsProcessing(false);
         }
@@ -170,7 +201,7 @@ export default function ImportTab({
       reader.readAsBinaryString(file);
     } catch (err) {
       console.error(err);
-      setStatusMessage('❌ 라이브러리 로드 실패');
+      setStatusMessage('❌ 파서 로드 실패');
       setIsProcessing(false);
     }
   };
@@ -184,12 +215,12 @@ export default function ImportTab({
 
     setTimeout(() => {
       const activeUser = userName || '최수민';
-      const [y, m] = currentYearMonth.split('-');
+      const [y, m] = (selectedDate || '2026-10-01').split('-');
       const lastDay = new Date(y, m, 0).getDate();
       const parsedShifts = {};
 
       for (let d = 1; d <= lastDay; d++) {
-        const dateKey = `${currentYearMonth}-${String(d).padStart(2, '0')}`;
+        const dateKey = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         parsedShifts[dateKey] = 'OFF';
       }
 
@@ -217,7 +248,7 @@ export default function ImportTab({
     }
 
     setShowNameModal(false);
-    setStatusMessage(`🎉 [${selectedName}] 님의 근무표가 내 달력에 정확히 등록되었습니다.`);
+    setStatusMessage(`🎉 [${selectedName}] 님의 근무표가 달력에 정확히 등록되었습니다.`);
   };
 
   return (
@@ -330,7 +361,7 @@ export default function ImportTab({
           </label>
         </div>
 
-        {/* 상태 메세지 */}
+        {/* 상태 메시지 */}
         {statusMessage && (
           <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
             <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
