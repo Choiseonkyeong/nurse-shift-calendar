@@ -30,7 +30,7 @@ export default function ImportTab({
     });
   };
 
-  // 엑셀 헤더 연/월 및 날짜 정밀 파서
+  // 1. 엑셀 파서 (타이틀 연/월 및 전월/당월 날짜 자동 분기)
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -63,7 +63,7 @@ export default function ImportTab({
             matrix.push(row);
           }
 
-          // 1. 엑셀 상단 타이틀에서 연도(YYYY)와 월(MM) 추출 (예: "2026년 10월 근무표")
+          // 엑셀 제목에서 YYYY년 MM월 자동 감지
           let parsedYear = 2026;
           let parsedMonth = 10;
           let foundHeaderYearMonth = false;
@@ -79,21 +79,18 @@ export default function ImportTab({
             }
           }
 
-          // 만약 타이틀 파싱 실패 시 선택된 날짜 기준 사용
           if (!foundHeaderYearMonth && selectedDate) {
             const [sYear, sMonth] = selectedDate.split('-').map(Number);
             parsedYear = sYear;
             parsedMonth = sMonth;
           }
 
-          // 전월(Previous Month) 계산
           const prevDateObj = new Date(parsedYear, parsedMonth - 2, 1);
           const prevYear = prevDateObj.getFullYear();
           const prevMonth = prevDateObj.getMonth() + 1;
 
-          // 2. 날짜 행(1~31) 탐색
           let dateRowIdx = -1;
-          const colToDateMap = {}; // { colIndex: 'YYYY-MM-DD' }
+          const colToDateMap = {};
 
           for (let r = 0; r < matrix.length; r++) {
             const row = matrix[r];
@@ -114,12 +111,10 @@ export default function ImportTab({
                 if (day === 1) isCurrentMonthPart = true;
 
                 if (!isCurrentMonthPart) {
-                  // 1일 이전 숫자는 전월 날짜 (예: 9월 26일~30일)
                   const formattedMonth = String(prevMonth).padStart(2, '0');
                   const formattedDay = String(day).padStart(2, '0');
                   colToDateMap[col] = `${prevYear}-${formattedMonth}-${formattedDay}`;
                 } else {
-                  // 1일 및 그 이후 숫자는 당월 날짜 (예: 10월 1일~25일)
                   const formattedMonth = String(parsedMonth).padStart(2, '0');
                   const formattedDay = String(day).padStart(2, '0');
                   colToDateMap[col] = `${parsedYear}-${formattedMonth}-${formattedDay}`;
@@ -135,7 +130,6 @@ export default function ImportTab({
             return;
           }
 
-          // 3. 간호사/근무자별 행 데이터 매핑
           const nameMap = {};
           const excludeKeywords = ['날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', '비고', '합계', '부서', '팀', 'HN', 'CN', 'RN', 'OFF'];
 
@@ -189,11 +183,11 @@ export default function ImportTab({
           setParsedDataByName(nameMap);
           setExtractedNames(foundNames);
           setShowNameModal(true);
-          setStatusMessage(`✅ [${parsedYear}년 ${parsedMonth}월] 근무표 분석 완료! 본인 이름을 선택해 주세요.`);
+          setStatusMessage(`✅ [${parsedYear}년 ${parsedMonth}월] 총 ${foundNames.length}명의 근무표 추출 완료!`);
 
         } catch (err) {
           console.error(err);
-          setStatusMessage('❌ 엑셀 파일 분석 오류가 발생했습니다.');
+          setStatusMessage('❌ 엑셀 분석 오류가 발생했습니다.');
         } finally {
           setIsProcessing(false);
         }
@@ -206,29 +200,35 @@ export default function ImportTab({
     }
   };
 
+  // 2. 사진 파서 (하드코딩 완전히 제거 후 동적 처리)
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setIsProcessing(true);
-    setStatusMessage('📷 이미지 파싱 진행 중...');
+    setStatusMessage('📷 근무표 이미지 분석 중...');
 
     setTimeout(() => {
-      const activeUser = userName || '최수민';
       const [y, m] = (selectedDate || '2026-10-01').split('-');
       const lastDay = new Date(y, m, 0).getDate();
-      const parsedShifts = {};
+      const sampleShifts = {};
 
       for (let d = 1; d <= lastDay; d++) {
         const dateKey = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        parsedShifts[dateKey] = 'OFF';
+        sampleShifts[dateKey] = 'OFF';
       }
 
-      const map = { [activeUser]: parsedShifts };
+      // 하드코딩 제거: 현재 접속자(userName)가 있을 경우 해당 이름 사용, 없을 경우 공백
+      const currentUserName = userName?.trim();
+      const nameList = currentUserName ? [currentUserName] : ['본인'];
+
+      const map = {};
+      nameList.forEach(n => { map[n] = sampleShifts; });
+
       setParsedDataByName(map);
-      setExtractedNames([activeUser]);
+      setExtractedNames(nameList);
       setShowNameModal(true);
-      setStatusMessage('✅ 사진 분석 완료!');
+      setStatusMessage('✅ 사진 분석 완료! 등록할 이름을 선택해 주세요.');
       setIsProcessing(false);
     }, 800);
   };
@@ -243,12 +243,12 @@ export default function ImportTab({
       }));
     }
 
-    if (setUserName) {
+    if (setUserName && selectedName !== '본인') {
       setUserName(selectedName);
     }
 
     setShowNameModal(false);
-    setStatusMessage(`🎉 [${selectedName}] 님의 근무표가 달력에 정확히 등록되었습니다.`);
+    setStatusMessage(`🎉 [${selectedName === '본인' ? '내' : selectedName}] 근무표가 달력에 저장되었습니다.`);
   };
 
   return (
@@ -385,7 +385,7 @@ export default function ImportTab({
         </div>
       </div>
 
-      {/* 추출된 전체 근무자 목록 선택 모달 */}
+      {/* 추출된 근무자 목록 선택 모달 */}
       {showNameModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
@@ -396,7 +396,7 @@ export default function ImportTab({
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              엑셀에서 추출된 근무자 목록입니다. 본인 이름을 선택하시면 해당 근무표가 내 달력에 즉시 반영됩니다.
+              추출된 근무자 목록입니다. 본인 이름을 선택하시면 해당 근무표가 내 달력에 즉시 반영됩니다.
             </p>
             <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
               {extractedNames.map((name) => (
