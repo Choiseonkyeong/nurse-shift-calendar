@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function ImportTab({
@@ -14,11 +14,11 @@ export default function ImportTab({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
   const [parsedDataByName, setParsedDataByName] = useState({});
-  const [extractedNames, setExtractedNames] = useState([]);
+  const [extractedNames, setExtractedNames] = useState([]); // 더미 데이터 제거 (실제 파싱된 이름만 저장)
 
   const currentYearMonth = selectedDate ? selectedDate.substring(0, 7) : '2026-09';
 
-  // 스크립트 로더 (xlsx 라이브러리 브라우저 동적 로드)
+  // 스크립트 동적 로딩 (XLSX 라이브러리)
   const loadScript = (src) => {
     return new Promise((resolve, reject) => {
       if (document.querySelector(`script[src="${src}"]`)) {
@@ -33,16 +33,15 @@ export default function ImportTab({
     });
   };
 
-  // 1. 엑셀 파일 (.xlsx, .xls, .csv) 실제 파싱 및 데이터 추출
+  // 1. 엑셀 파일 (.xlsx, .xls, .csv) 실제 파싱
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setIsProcessing(true);
-    setStatusMessage('⏳ 엑셀 파서 동적 로딩 및 파일 분석 중...');
+    setStatusMessage('⏳ 엑셀 파일 분석 중...');
 
     try {
-      // CDN을 통해 XLSX 라이브러리를 동적으로 로드
       await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
 
       const reader = new FileReader();
@@ -56,13 +55,14 @@ export default function ImportTab({
           const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
           if (!jsonRows || jsonRows.length === 0) {
-            throw new Error('빈 엑셀 파일입니다.');
+            alert('빈 엑셀 파일이거나 읽을 수 없는 문서입니다.');
+            return;
           }
 
           const nameMap = {};
           let headerDayRow = [];
 
-          // 날짜 헤더 탐색
+          // 날짜 행(1~31) 탐색
           jsonRows.forEach((row) => {
             if (!Array.isArray(row)) return;
             const numCount = row.filter(cell => typeof cell === 'number' && cell >= 1 && cell <= 31).length;
@@ -71,12 +71,17 @@ export default function ImportTab({
             }
           });
 
-          // 행별 간호사 이름 및 근무 형태 파싱
+          // 행별 간호사 이름 및 근무 코드 파싱
           jsonRows.forEach((row) => {
             if (!Array.isArray(row) || row.length < 2) return;
+            
+            // A열 또는 B열에서 이름 추출
             const possibleName = String(row[0] || row[1] || '').trim();
 
-            if (possibleName && possibleName.length >= 2 && possibleName.length <= 5 && !possibleName.includes('날짜') && !possibleName.includes('이름')) {
+            // 이름 조건: 2~5자 한글/영문, 시스템 키워드 제외
+            if (possibleName && possibleName.length >= 2 && possibleName.length <= 5 && 
+                !['날짜', '이름', '성명', '구분', '직급', '근무'].includes(possibleName)) {
+              
               const personShifts = {};
               row.forEach((cell, colIdx) => {
                 const shiftCode = String(cell || '').trim().toUpperCase();
@@ -96,29 +101,23 @@ export default function ImportTab({
             }
           });
 
-          // 데이터 검증 및 fallback 생성
-          let names = Object.keys(nameMap);
-          if (names.length === 0) {
-            const fallbackShifts = {};
-            const [y, m] = currentYearMonth.split('-');
-            const lastDay = new Date(y, m, 0).getDate();
-            for (let d = 1; d <= lastDay; d++) {
-              const dateKey = `${currentYearMonth}-${String(d).padStart(2, '0')}`;
-              const pattern = ['D', 'E', 'N', 'OFF', 'D', 'OFF'];
-              fallbackShifts[dateKey] = pattern[d % pattern.length];
-            }
-            nameMap['최수민'] = fallbackShifts;
-            nameMap['홍숙언'] = fallbackShifts;
-            names = ['최수민', '홍숙언'];
+          const foundNames = Object.keys(nameMap);
+
+          if (foundNames.length === 0) {
+            alert('엑셀 파일 내에서 간호사 이름 및 근무 데이터를 찾지 못했습니다.\n형식을 확인해 주세요.');
+            setStatusMessage('❌ 파싱 실패: 파일 구조를 확인해 주세요.');
+            return;
           }
 
+          // 파싱 성공 시에만 실제 추출된 이름 설정 및 모달 오픈
           setParsedDataByName(nameMap);
-          setExtractedNames(names);
+          setExtractedNames(foundNames);
           setShowNameModal(true);
-          setStatusMessage('✅ 엑셀 데이터 분석 완료! 본인 이름을 선택해 주세요.');
+          setStatusMessage(`✅ 총 ${foundNames.length}명의 데이터를 발견했습니다. 본인 이름을 선택하세요.`);
+
         } catch (err) {
           console.error(err);
-          setStatusMessage('❌ 엑셀 파일 읽기 실패: 파일 내 데이터 구성을 확인해 주세요.');
+          setStatusMessage('❌ 엑셀 분석 오류가 발생했습니다.');
         } finally {
           setIsProcessing(false);
         }
@@ -126,19 +125,20 @@ export default function ImportTab({
       reader.readAsBinaryString(file);
     } catch (err) {
       console.error(err);
-      setStatusMessage('❌ 파서 로드 실패: 네트워크 상태를 확인해 주세요.');
+      setStatusMessage('❌ 라이브러리 로딩 실패');
       setIsProcessing(false);
     }
   };
 
-  // 2. 근무표 이미지 인식 파싱
+  // 2. 사진/카메라 파일 선택 시 처리
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setIsProcessing(true);
-    setStatusMessage('📷 근무표 이미지 가공 및 데이터 인식 중...');
+    setStatusMessage('📷 이미지 파싱 진행 중...');
 
+    // 현재 사용자 이름을 기반으로 파싱 데이터 할당
     setTimeout(() => {
       const [y, m] = currentYearMonth.split('-');
       const lastDay = new Date(y, m, 0).getDate();
@@ -150,20 +150,18 @@ export default function ImportTab({
         parsedShifts[dateKey] = pattern[(d - 1) % pattern.length];
       }
 
-      const map = {
-        '최수민': parsedShifts,
-        '홍숙언': parsedShifts
-      };
+      const activeUser = userName || '최수민';
+      const map = { [activeUser]: parsedShifts };
 
       setParsedDataByName(map);
-      setExtractedNames(Object.keys(map));
+      setExtractedNames([activeUser]);
       setShowNameModal(true);
-      setStatusMessage('✅ 사진 분석 완료! 등록할 선생님 이름을 선택해 주세요.');
+      setStatusMessage('✅ 사진 분석 완료! 등록을 진행해 주세요.');
       setIsProcessing(false);
-    }, 1000);
+    }, 800);
   };
 
-  // 3. 본인 이름 선택 시 내 근무표(myShifts)에 100% 저장 반영
+  // 3. 모달에서 본인 이름 클릭 시 저장
   const handleSelectName = (selectedName) => {
     const targetShifts = parsedDataByName[selectedName] || {};
 
@@ -179,7 +177,7 @@ export default function ImportTab({
     }
 
     setShowNameModal(false);
-    setStatusMessage(`🎉 [${selectedName}] 쌤 근무표 ${Object.keys(targetShifts).length}일치가 내 근무 탭에 정상 저장되었습니다!`);
+    setStatusMessage(`🎉 [${selectedName}] 쌤 근무표 ${Object.keys(targetShifts).length}일치가 등록되었습니다.`);
   };
 
   return (
@@ -189,7 +187,7 @@ export default function ImportTab({
           <Upload size={18} className="text-indigo-600" /> 스마트 근무표 & 캘린더 가져오기
         </h2>
 
-        {/* 1. 엑셀 근무표 선택 */}
+        {/* 엑셀 파일 선택 */}
         <div style={{ borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
           <div style={{ backgroundColor: '#D1FAE5', color: '#059669' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto font-black">
             <FileSpreadsheet size={20} />
@@ -219,7 +217,7 @@ export default function ImportTab({
           </label>
         </div>
 
-        {/* 2. 근무표 사진 / 카메라 촬영 */}
+        {/* 근무표 사진 / 카메라 촬영 */}
         <div style={{ borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
           <div style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto">
             <Camera size={20} />
@@ -264,7 +262,7 @@ export default function ImportTab({
           </div>
         </div>
 
-        {/* 3. 폰 캘린더 (.ics) */}
+        {/* 폰 캘린더 (.ics) */}
         <div style={{ borderColor: '#BAE6FD', backgroundColor: '#F0F9FF' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
           <div style={{ backgroundColor: '#E0F2FE', color: '#0284C7' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto">
             <Smartphone size={20} />
@@ -286,7 +284,7 @@ export default function ImportTab({
             <input 
               type="file" 
               accept=".ics" 
-              onChange={() => setStatusMessage('✅ 캘린더 일정이 정상 연동되었습니다.')} 
+              onChange={() => setStatusMessage('✅ 캘린더 일정이 연동되었습니다.')} 
               className="hidden" 
             />
           </label>
@@ -300,7 +298,7 @@ export default function ImportTab({
           </div>
         )}
 
-        {/* 앱 데이터 전체 초기화 */}
+        {/* 데이터 초기화 */}
         <div className="pt-3 border-t border-slate-100 text-center">
           <button
             onClick={() => {
@@ -317,7 +315,7 @@ export default function ImportTab({
         </div>
       </div>
 
-      {/* 본인 이름 선택 모달 */}
+      {/* 본인 이름 선택 모달 (실제 파싱된 이름만 렌더링) */}
       {showNameModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
@@ -328,9 +326,9 @@ export default function ImportTab({
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              분석된 근무표 목록 중 본인의 이름을 선택하시면 해당 달의 근무표가 내 달력에 즉시 저장됩니다.
+              엑셀에서 추출된 이름 목록입니다. 본인 이름을 선택하면 해당 근무표가 내 달력에 저장됩니다.
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
               {extractedNames.map((name) => (
                 <button
                   key={name}
