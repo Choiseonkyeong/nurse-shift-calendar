@@ -32,13 +32,13 @@ export default function ImportTab({
     });
   };
 
-  // 병원 엑셀 표 정밀 원본 파서 (셀 직접 순회)
+  // 교대 근무표 엑셀 정밀 파서 (모든 교대 직군 지원)
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setIsProcessing(true);
-    setStatusMessage('⏳ 병원 엑셀 근무표 정밀 분석 중...');
+    setStatusMessage('⏳ 교대 근무표 엑셀 분석 중...');
 
     try {
       await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
@@ -52,10 +52,8 @@ export default function ImportTab({
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
 
-          // 셀 주소 범위 확인
           const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:Z100');
           
-          // 2차원 배열 형태로 모든 셀 데이터 정밀 매핑 (빈 셀도 null로 유지)
           const matrix = [];
           for (let R = range.s.r; R <= range.e.r; ++R) {
             const row = [];
@@ -67,9 +65,9 @@ export default function ImportTab({
             matrix.push(row);
           }
 
-          // 1. 날짜 행(1~31) 및 당월 1일 위치 정밀 탐색
+          // 1. 날짜 행(1~31) 탐색
           let dateRowIdx = -1;
-          const colToDayMap = {}; // { colIndex: dayNumber }
+          const colToDayMap = {};
           const [targetYear, targetMonth] = currentYearMonth.split('-').map(Number);
 
           for (let r = 0; r < matrix.length; r++) {
@@ -103,15 +101,14 @@ export default function ImportTab({
             return;
           }
 
-          // 2. 전체 간호사 이름 및 날짜별 근무 데이터 매핑
+          // 2. 전체 근무자 이름 및 날짜별 근무 코드 매핑
           const nameMap = {};
-          const excludeKeywords = ['분당', '병동', '날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', '비고', '합계'];
+          const excludeKeywords = ['날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', '비고', '합계', '부서', '팀'];
 
           for (let r = dateRowIdx + 1; r < matrix.length; r++) {
             const row = matrix[r];
             if (!row || row.length === 0) continue;
 
-            // 앞쪽 3개 컬럼(A, B, C열)에서 이름 탐색
             let foundName = '';
             for (let c = 0; c < Math.min(3, row.length); c++) {
               const val = row[c];
@@ -129,9 +126,9 @@ export default function ImportTab({
                 let rawShift = String(row[c] || '').trim().toUpperCase();
 
                 let finalShift = '';
-                if (['D', 'E', 'N', 'M', 'OFF', '연차'].includes(rawShift)) {
+                if (['D', 'E', 'N', 'M', 'OFF', '연차', '주', '야', '휴'].includes(rawShift)) {
                   finalShift = rawShift;
-                } else if (rawShift.includes('OFF') || rawShift === '오프') {
+                } else if (rawShift.includes('OFF') || rawShift === '오프' || rawShift === '휴무') {
                   finalShift = 'OFF';
                 }
 
@@ -152,13 +149,12 @@ export default function ImportTab({
           const foundNames = Object.keys(nameMap);
 
           if (foundNames.length === 0) {
-            alert('엑셀에서 간호사 이름 목록을 추출하지 못했습니다. 파일 구조를 확인하세요.');
-            setStatusMessage('❌ 이름 추출 실패');
+            alert('엑셀에서 근무자 이름 목록을 추출하지 못했습니다. 파일 구조를 확인하세요.');
+            setStatusMessage('❌ 파싱 실패');
             setIsProcessing(false);
             return;
           }
 
-          // 추출된 전체 간호사 이름 및 파싱 데이터 설정
           setParsedDataByName(nameMap);
           setExtractedNames(foundNames);
           setShowNameModal(true);
@@ -221,7 +217,7 @@ export default function ImportTab({
     }
 
     setShowNameModal(false);
-    setStatusMessage(`🎉 [${selectedName}] 쌤의 근무표가 내 달력에 정확히 등록되었습니다.`);
+    setStatusMessage(`🎉 [${selectedName}] 님의 근무표가 내 달력에 정확히 등록되었습니다.`);
   };
 
   return (
@@ -241,7 +237,7 @@ export default function ImportTab({
               엑셀 근무표 파일(.xlsx, .csv) 가져오기
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              병원에서 받은 엑셀 근무표 파일을 올려주세요.
+              공유받은 엑셀 근무표 파일을 올려주세요.
             </p>
           </div>
 
@@ -271,7 +267,7 @@ export default function ImportTab({
               근무표 사진 / 카메라 촬영 인식
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              종이 근무표 사진을 찍거나 갤러리 이미지를 올려주세요.
+              근무표 사진을 찍거나 갤러리 이미지를 올려주세요.
             </p>
           </div>
 
@@ -306,7 +302,7 @@ export default function ImportTab({
           </div>
         </div>
 
-        {/* 3. 폰 캘린더 (.ics) */}
+        {/* 3. 폰 캘린더 */}
         <div style={{ borderColor: '#BAE6FD', backgroundColor: '#F0F9FF' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
           <div style={{ backgroundColor: '#E0F2FE', color: '#0284C7' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto">
             <Smartphone size={20} />
@@ -334,7 +330,7 @@ export default function ImportTab({
           </label>
         </div>
 
-        {/* 상태 메시지 */}
+        {/* 상태 메세지 */}
         {statusMessage && (
           <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
             <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
@@ -358,7 +354,7 @@ export default function ImportTab({
         </div>
       </div>
 
-      {/* 추출된 전체 간호사 목록 선택 모달 */}
+      {/* 추출된 전체 근무자 목록 선택 모달 */}
       {showNameModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
@@ -369,7 +365,7 @@ export default function ImportTab({
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              엑셀에서 추출된 간호사 목록입니다. 본인 이름을 클릭하시면 해당 근무표가 내 달력에 즉시 반영됩니다.
+              엑셀에서 추출된 근무자 목록입니다. 본인 이름을 선택하시면 해당 근무표가 내 달력에 즉시 반영됩니다.
             </p>
             <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
               {extractedNames.map((name) => (
@@ -378,7 +374,7 @@ export default function ImportTab({
                   onClick={() => handleSelectName(name)}
                   className="py-2.5 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 font-extrabold text-xs rounded-2xl transition cursor-pointer"
                 >
-                  {name} 쌤
+                  {name}
                 </button>
               ))}
             </div>
