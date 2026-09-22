@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Plus, LogIn, ChevronLeft, Copy, LogOut, Trash2, RotateCcw } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 export default function GroupShareTab({
   newGroupName,
@@ -17,10 +18,32 @@ export default function GroupShareTab({
 }) {
   const [selectedDayKey, setSelectedDayKey] = useState(selectedDate || '2026-09-07');
   const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
+  const [loading, setLoading] = useState(false);
+
   const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
 
-  // 1. 새 그룹 생성
-  const handleCreateGroup = () => {
+  // DB에서 그룹 목록 불러오기
+  const fetchGroupsFromDB = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.from('groups').select('*');
+      if (error) throw error;
+      if (data) {
+        setGroups(data);
+      }
+    } catch (err) {
+      console.error('Supabase fetch error:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGroupsFromDB();
+  }, []);
+
+  // 1. 새 그룹 생성 (Supabase DB 연결)
+  const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
       alert('그룹 이름을 입력해 주세요.');
       return;
@@ -38,37 +61,75 @@ export default function GroupShareTab({
         }
       ]
     };
-    const updated = [...(groups || []), newGroup];
-    setGroups(updated);
-    setActiveGroupId(newGroup.id);
-    setNewGroupName('');
+
+    try {
+      setLoading(true);
+      const { error } = await supabase.from('groups').insert([newGroup]);
+      if (error) throw error;
+
+      await fetchGroupsFromDB();
+      setActiveGroupId(newGroup.id);
+      setNewGroupName('');
+      alert(`🎉 '${newGroup.name}' 그룹이 생성되었습니다!`);
+    } catch (err) {
+      alert(`그룹 생성 실패: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // 2. 코드로 그룹 입장
-  const handleJoinGroup = () => {
+  // 2. 코드로 그룹 입장 (Supabase DB 연결)
+  const handleJoinGroup = async () => {
     if (!joinCodeInput.trim()) {
       alert('초대 코드를 입력해 주세요.');
       return;
     }
     const code = joinCodeInput.trim().toUpperCase();
-    const targetGroup = (groups || []).find((g) => g.code === code);
 
-    if (!targetGroup) {
-      alert('해당 초대 코드와 일치하는 그룹이 없습니다.');
-      return;
-    }
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('code', code)
+        .maybeSingle();
 
-    const isMember = targetGroup.members?.some((m) => m.name === userName);
-    if (!isMember) {
-      targetGroup.members.push({
-        id: `user_${Date.now()}`,
-        name: userName || '최수민',
-        shifts: myShifts || {}
-      });
-      setGroups([...groups]);
+      if (error || !data) {
+        alert('해당 초대 코드와 일치하는 그룹이 없습니다.');
+        return;
+      }
+
+      const existingMembers = data.members || [];
+      const isMember = existingMembers.some((m) => m.name === userName);
+
+      let updatedMembers = existingMembers;
+      if (!isMember) {
+        updatedMembers = [
+          ...existingMembers,
+          {
+            id: `user_${Date.now()}`,
+            name: userName || '최수민',
+            shifts: myShifts || {}
+          }
+        ];
+
+        const { error: updateError } = await supabase
+          .from('groups')
+          .update({ members: updatedMembers })
+          .eq('id', data.id);
+
+        if (updateError) throw updateError;
+      }
+
+      await fetchGroupsFromDB();
+      setActiveGroupId(data.id);
+      setJoinCodeInput('');
+      alert(`🎉 '${data.name}' 그룹에 참여했습니다!`);
+    } catch (err) {
+      alert(`그룹 참여 실패: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
-    setActiveGroupId(targetGroup.id);
-    setJoinCodeInput('');
   };
 
   // 3. 코드 복사
@@ -77,25 +138,38 @@ export default function GroupShareTab({
     alert(`초대 코드 [ ${code} ] 가 클립보드에 복사되었습니다!`);
   };
 
-  // 4. 그룹 나가기
-  const handleLeaveGroup = (groupId) => {
+  // 4. 그룹 나가기 (Supabase DB 연결)
+  const handleLeaveGroup = async (groupId) => {
     if (!window.confirm('정말 이 그룹에서 나가시겠습니까?')) return;
-    const updated = (groups || []).map((g) => {
-      if (g.id === groupId) {
-        return { ...g, members: g.members.filter((m) => m.name !== userName) };
-      }
-      return g;
-    });
-    setGroups(updated);
-    setActiveGroupId(null);
+    try {
+      const target = groups.find((g) => g.id === groupId);
+      if (!target) return;
+
+      const updatedMembers = (target.members || []).filter((m) => m.name !== userName);
+      const { error } = await supabase
+        .from('groups')
+        .update({ members: updatedMembers })
+        .eq('id', groupId);
+
+      if (error) throw error;
+      await fetchGroupsFromDB();
+      setActiveGroupId(null);
+    } catch (err) {
+      alert(`그룹 나가기 실패: ${err.message}`);
+    }
   };
 
-  // 5. 그룹 삭제
-  const handleDeleteGroup = (groupId) => {
+  // 5. 그룹 삭제 (Supabase DB 연결)
+  const handleDeleteGroup = async (groupId) => {
     if (!window.confirm('정말 이 그룹을 삭제하시겠습니까?')) return;
-    const updated = (groups || []).filter((g) => g.id !== groupId);
-    setGroups(updated);
-    setActiveGroupId(null);
+    try {
+      const { error } = await supabase.from('groups').delete().eq('id', groupId);
+      if (error) throw error;
+      await fetchGroupsFromDB();
+      setActiveGroupId(null);
+    } catch (err) {
+      alert(`그룹 삭제 실패: ${err.message}`);
+    }
   };
 
   // 달력 날짜 생성
@@ -135,9 +209,17 @@ export default function GroupShareTab({
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
             
             {/* 타이틀 */}
-            <h2 className="text-base font-black text-indigo-950 flex items-center gap-2">
-              <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
-            </h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-base font-black text-indigo-950 flex items-center gap-2">
+                <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
+              </h2>
+              <button
+                onClick={fetchGroupsFromDB}
+                className="text-xs font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw size={12} /> 동기화
+              </button>
+            </div>
 
             {/* 카드 2개 레이아웃 */}
             <div className="grid grid-cols-2 gap-3">
@@ -157,11 +239,12 @@ export default function GroupShareTab({
                 </div>
                 <button
                   type="button"
+                  disabled={loading}
                   onClick={handleCreateGroup}
                   style={{ backgroundColor: '#6366F1' }}
                   className="w-full py-2.5 text-white font-black text-xs rounded-2xl hover:bg-indigo-600 transition cursor-pointer shadow-xs"
                 >
-                  그룹 만들기
+                  {loading ? '처리 중...' : '그룹 만들기'}
                 </button>
               </div>
 
@@ -181,11 +264,12 @@ export default function GroupShareTab({
                 </div>
                 <button
                   type="button"
+                  disabled={loading}
                   onClick={handleJoinGroup}
                   style={{ backgroundColor: '#4F46E5' }}
                   className="w-full py-2.5 text-white font-black text-xs rounded-2xl hover:bg-indigo-700 transition cursor-pointer shadow-xs"
                 >
-                  그룹 참여하기
+                  {loading ? '조회 중...' : '그룹 참여하기'}
                 </button>
               </div>
             </div>
@@ -268,7 +352,7 @@ export default function GroupShareTab({
               <h3 className="font-black text-base text-slate-900">
                 {year}년 {month}월 그룹 근무표
               </h3>
-              <button className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer">
+              <button onClick={fetchGroupsFromDB} className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer">
                 <RotateCcw size={12} /> 동기화
               </button>
             </div>
