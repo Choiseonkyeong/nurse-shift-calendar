@@ -88,11 +88,11 @@ export default function App() {
   const currentGroup = (groups || []).find(g => g.id === activeGroupId) || (groups || [])[0] || null;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex justify-center items-start sm:py-6 font-sans">
-      <div className="w-full max-w-md bg-white min-h-screen sm:min-h-0 sm:rounded-3xl sm:shadow-xl flex flex-col justify-between overflow-hidden relative border border-slate-100">
+    <div className="min-h-screen bg-slate-100 flex justify-center items-start sm:py-6 font-sans">
+      <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[840px] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
         
-        {/* 상단 프로필 헤더 */}
-        <div className="bg-white px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+        {/* 1. 상단 프로필 헤더 */}
+        <div className="bg-white px-5 py-4 border-b border-slate-100 flex justify-between items-center z-10 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-sm shadow-2xs">
               {userName.substring(0, 1)}
@@ -138,8 +138,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* 탭 메인 컨텐츠 영역 */}
-        <div className="p-4 flex-1 pb-24 overflow-y-auto bg-slate-50/50">
+        {/* 2. 탭 메인 컨텐츠 영역 (하단 패딩 확보) */}
+        <div className="p-4 flex-1 overflow-y-auto bg-slate-50/50 pb-20">
           {activeTab === 'myShift' && (
             <MyShiftTab
               selectedDate={selectedDate}
@@ -192,8 +192,8 @@ export default function App() {
           )}
         </div>
 
-        {/* 하단 네비게이션 탭 (인라인 스타일로 둥근 알약 배경 100% 적용) */}
-        <div className="fixed bottom-0 max-w-md w-full bg-white border-t border-slate-100 px-3 py-2 flex justify-around items-center z-50 rounded-t-3xl shadow-lg">
+        {/* 3. 프레임 바닥에 완벽 밀착시킨 하단 네비게이션 탭 */}
+        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-3 py-2 flex justify-around items-center z-50">
           <button
             onClick={() => setActiveTab('myShift')}
             style={
