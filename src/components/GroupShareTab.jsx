@@ -19,20 +19,14 @@ export default function GroupShareTab({
   const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
   const [loading, setLoading] = useState(false);
 
-  // 그룹 테마 색상 팔레트 정의
-  const COLOR_PALETTE = [
-    { id: 'indigo', name: '인디고', bg: '#6366F1', lightBg: '#EEF2FF', border: '#C7D2FE', text: '#4338CA' },
-    { id: 'purple', name: '보라', bg: '#A855F7', lightBg: '#F3E8FF', border: '#E9D5FF', text: '#6B21A8' },
-    { id: 'emerald', name: '에메랄드', bg: '#10B981', lightBg: '#ECFDF5', border: '#A7F3D0', text: '#047857' },
-    { id: 'rose', name: '로즈', bg: '#F43F5E', lightBg: '#FFF1F2', border: '#FECDD3', text: '#BE123C' },
-    { id: 'amber', name: '앰버', bg: '#F59E0B', lightBg: '#FFFBEB', border: '#FDE68A', text: '#B45309' }
-  ];
-
-  // 새 그룹 생성 시 기본선택 색상
-  const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]);
+  // 기본 추천 색상 5종 + 무한 커스텀 컬러 선택
+  const DEFAULT_COLORS = ['#6366F1', '#A855F7', '#10B981', '#F43F5E', '#F59E0B', '#0284C7', '#EC4899'];
+  
+  // 새 그룹 생성 시 기본선택 커스텀 색상
+  const [selectedColor, setSelectedColor] = useState('#6366F1');
 
   const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
-  const currentTheme = COLOR_PALETTE.find((c) => c.id === currentGroup?.color) || COLOR_PALETTE[0];
+  const currentThemeBg = currentGroup?.color || '#6366F1';
 
   // 내가 참여 중인 그룹 목록 DB 조회
   const fetchMyGroupsFromDB = async () => {
@@ -70,7 +64,7 @@ export default function GroupShareTab({
               id: code,
               name: row.group_name,
               code: code,
-              color: row.color || 'indigo', // DB에 연동되는 색상 컬럼
+              color: row.color || '#6366F1', // 자유 HEX 코드 연동
               members: []
             };
           }
@@ -94,7 +88,7 @@ export default function GroupShareTab({
     fetchMyGroupsFromDB();
   }, [userName]);
 
-  // 1. 새 그룹 생성 (선택된 색상 포함 저장)
+  // 1. 새 그룹 생성
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
       alert('그룹 이름을 입력해 주세요.');
@@ -107,7 +101,7 @@ export default function GroupShareTab({
       group_name: newGroupName.trim(),
       user_name: userName || '홍숙언',
       shifts: myShifts || {},
-      color: selectedColor.id
+      color: selectedColor
     };
 
     try {
@@ -148,7 +142,7 @@ export default function GroupShareTab({
       }
 
       const groupName = data[0].group_name;
-      const groupColor = data[0].color || 'indigo';
+      const groupColor = data[0].color || '#6366F1';
       const isAlreadyMember = data.some((m) => m.user_name === userName);
 
       if (!isAlreadyMember) {
@@ -175,13 +169,13 @@ export default function GroupShareTab({
     }
   };
 
-  // 3. 기존 그룹 색상 변경
-  const handleChangeGroupColor = async (groupCode, colorId) => {
+  // 3. 기존 그룹 색상 커스텀 변경
+  const handleChangeGroupColor = async (groupCode, hexColor) => {
     try {
       setLoading(true);
       const { error } = await supabase
         .from('group_shifts')
-        .update({ color: colorId })
+        .update({ color: hexColor })
         .eq('group_code', groupCode);
 
       if (error) throw error;
@@ -281,7 +275,7 @@ export default function GroupShareTab({
 
             <div className="grid grid-cols-2 gap-3 items-stretch">
               
-              {/* 새 그룹 생성 (색상 선택 추가) */}
+              {/* 새 그룹 생성 (무한 커스텀 컬러 선택기) */}
               <div className="p-4 border border-indigo-100 bg-white rounded-3xl space-y-3 flex flex-col justify-between shadow-xs">
                 <div className="space-y-2">
                   <span className="font-extrabold text-xs text-indigo-950 flex items-center gap-1">
@@ -295,19 +289,32 @@ export default function GroupShareTab({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200/60 rounded-2xl text-xs font-bold outline-none"
                   />
 
-                  {/* 색상 픽커 */}
-                  <div className="flex items-center justify-around pt-1">
-                    {COLOR_PALETTE.map((color) => (
-                      <button
-                        key={color.id}
-                        type="button"
-                        onClick={() => setSelectedColor(color)}
-                        style={{ backgroundColor: color.bg }}
-                        className={`w-5 h-5 rounded-full transition cursor-pointer ${
-                          selectedColor.id === color.id ? 'ring-2 ring-offset-2 ring-slate-800 scale-110' : 'opacity-70 hover:opacity-100'
-                        }`}
+                  {/* 추천 색상 + 무한 팔레트 (컬러 피커) */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-1">
+                      {DEFAULT_COLORS.slice(0, 4).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setSelectedColor(c)}
+                          style={{ backgroundColor: c }}
+                          className={`w-4 h-4 rounded-full transition cursor-pointer ${
+                            selectedColor === c ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' : 'opacity-70'
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    {/* 무한 커스텀 컬러 피커 버튼 */}
+                    <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-slate-200 shadow-2xs cursor-pointer hover:scale-105 transition" style={{ backgroundColor: selectedColor }}>
+                      <Palette size={11} className="text-white drop-shadow-md" />
+                      <input
+                        type="color"
+                        value={selectedColor}
+                        onChange={(e) => setSelectedColor(e.target.value)}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                       />
-                    ))}
+                    </label>
                   </div>
                 </div>
 
@@ -315,7 +322,7 @@ export default function GroupShareTab({
                   type="button"
                   disabled={loading}
                   onClick={handleCreateGroup}
-                  style={{ backgroundColor: selectedColor.bg }}
+                  style={{ backgroundColor: selectedColor }}
                   className="w-full py-2.5 text-white font-black text-xs rounded-2xl transition cursor-pointer shadow-xs"
                 >
                   {loading ? '처리 중...' : '그룹 만들기'}
@@ -348,25 +355,22 @@ export default function GroupShareTab({
               </div>
             </div>
 
-            {/* 참여 중인 그룹 목록 (각 그룹별 지정 색상 반영) */}
+            {/* 참여 중인 그룹 목록 */}
             <div className="pt-3 border-t border-slate-100 space-y-2">
               <h3 className="font-black text-xs text-slate-700">참여 중인 그룹 목록</h3>
               {groups && groups.length > 0 ? (
                 <div className="space-y-2">
-                  {groups.map((g) => {
-                    const theme = COLOR_PALETTE.find((c) => c.id === g.color) || COLOR_PALETTE[0];
-                    return (
-                      <div
-                        key={g.id}
-                        onClick={() => setActiveGroupId(g.id)}
-                        style={{ backgroundColor: theme.bg }}
-                        className="p-3.5 text-white rounded-2xl flex items-center justify-between cursor-pointer shadow-xs transition hover:opacity-95"
-                      >
-                        <span className="font-black text-sm">{g.name} ({g.members?.length || 1}명)</span>
-                        <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">입장하기 &gt;</span>
-                      </div>
-                    );
-                  })}
+                  {groups.map((g) => (
+                    <div
+                      key={g.id}
+                      onClick={() => setActiveGroupId(g.id)}
+                      style={{ backgroundColor: g.color || '#6366F1' }}
+                      className="p-3.5 text-white rounded-2xl flex items-center justify-between cursor-pointer shadow-xs transition hover:opacity-95"
+                    >
+                      <span className="font-black text-sm">{g.name} ({g.members?.length || 1}명)</span>
+                      <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">입장하기 &gt;</span>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="p-4 bg-slate-50 text-center rounded-2xl text-xs font-bold text-slate-400">
@@ -379,38 +383,35 @@ export default function GroupShareTab({
         </div>
       )}
 
-      {/* 2. 그룹 상세 스케줄 비교 화면 (상단 동적 색상 변경 지원) */}
+      {/* 2. 그룹 상세 스케줄 비교 화면 */}
       {currentGroup && (
         <div className="space-y-4">
           
           <button
             onClick={() => setActiveGroupId(null)}
-            style={{ color: currentTheme.text }}
+            style={{ color: currentThemeBg }}
             className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200/80 rounded-2xl text-xs font-black hover:bg-slate-50 transition shadow-2xs cursor-pointer"
           >
             <ChevronLeft size={16} /> 전체 그룹 목록으로 돌아가기
           </button>
 
-          {/* 그룹 헤더 카드 (색상 테마 실시간 변경 기능) */}
+          {/* 그룹 상세 헤더 (무한 팔레트 색상 동적 스위치) */}
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
             <div className="flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-xl font-black text-slate-900">{currentGroup.name}</h2>
-                  {/* 색상 선택 팔레트 바 */}
-                  <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-full border border-slate-100">
-                    {COLOR_PALETTE.map((color) => (
-                      <button
-                        key={color.id}
-                        type="button"
-                        onClick={() => handleChangeGroupColor(currentGroup.code, color.id)}
-                        style={{ backgroundColor: color.bg }}
-                        className={`w-3.5 h-3.5 rounded-full transition cursor-pointer ${
-                          currentTheme.id === color.id ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' : 'opacity-60 hover:opacity-100'
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  
+                  {/* 무한 팔레트 커스텀 스위치 */}
+                  <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-slate-200 shadow-2xs cursor-pointer hover:scale-110 transition" style={{ backgroundColor: currentThemeBg }}>
+                    <Palette size={11} className="text-white drop-shadow-md" />
+                    <input
+                      type="color"
+                      value={currentThemeBg}
+                      onChange={(e) => handleChangeGroupColor(currentGroup.code, e.target.value)}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </label>
                 </div>
                 <p className="text-xs font-bold text-slate-400 mt-0.5">초대 코드: {currentGroup.code}</p>
               </div>
@@ -433,7 +434,7 @@ export default function GroupShareTab({
 
             <button
               onClick={() => handleCopyCode(currentGroup.code)}
-              style={{ backgroundColor: currentTheme.lightBg, borderColor: currentTheme.border, color: currentTheme.text }}
+              style={{ backgroundColor: `${currentThemeBg}15`, color: currentThemeBg, borderColor: `${currentThemeBg}30` }}
               className="w-full py-2.5 border rounded-2xl flex items-center justify-center gap-1.5 text-xs font-extrabold cursor-pointer"
             >
               <Copy size={13} /> 코드: {currentGroup.code} 복사하기
@@ -471,7 +472,7 @@ export default function GroupShareTab({
                     onClick={() => setSelectedDayKey(item.dateKey)}
                     style={
                       isSelected
-                        ? { borderColor: currentTheme.bg, backgroundColor: currentTheme.lightBg }
+                        ? { borderColor: currentThemeBg, backgroundColor: `${currentThemeBg}15` }
                         : {}
                     }
                     className={`min-h-[70px] p-1 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
@@ -508,7 +509,7 @@ export default function GroupShareTab({
 
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
             <h4 className="font-black text-xs text-slate-800 flex items-center gap-1">
-              📌 <span style={{ color: currentTheme.text }}>{selectedDayKey}</span> 선택 일자 상세 근무
+              📌 <span style={{ color: currentThemeBg }}>{selectedDayKey}</span> 선택 일자 상세 근무
             </h4>
 
             <div className="grid grid-cols-2 gap-2">
