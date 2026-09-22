@@ -91,7 +91,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 flex justify-center items-start sm:py-6 font-sans">
       <div className="w-full max-w-md bg-white min-h-screen sm:min-h-0 sm:rounded-3xl sm:shadow-xl flex flex-col justify-between overflow-hidden relative border border-slate-100">
         
-        {/* 최상단 프로필 헤더 */}
+        {/* 상단 프로필 헤더 */}
         <div className="bg-white px-5 py-4 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-sm shadow-2xs">
@@ -192,54 +192,58 @@ export default function App() {
           )}
         </div>
 
-        {/* 원본 UI 톤앤매너 완벽 매칭 하단 네비게이션 탭 */}
-        <div className="fixed bottom-0 max-w-md w-full bg-white/95 backdrop-blur-md border-t border-slate-100 px-4 py-2.5 flex justify-around items-center z-50 rounded-t-3xl shadow-lg">
+        {/* 하단 네비게이션 탭 (인라인 스타일로 둥근 알약 배경 100% 적용) */}
+        <div className="fixed bottom-0 max-w-md w-full bg-white border-t border-slate-100 px-3 py-2 flex justify-around items-center z-50 rounded-t-3xl shadow-lg">
           <button
             onClick={() => setActiveTab('myShift')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'myShift' 
-                ? 'bg-indigo-50/80 text-indigo-600 font-black' 
-                : 'text-slate-400 font-bold hover:text-slate-600'
-            }`}
+            style={
+              activeTab === 'myShift'
+                ? { backgroundColor: '#EEF2FF', color: '#4F46E5', borderRadius: '16px' }
+                : { color: '#94A3B8' }
+            }
+            className="flex flex-col items-center justify-center py-1.5 px-4 transition-all cursor-pointer"
           >
-            <Calendar size={19} className={activeTab === 'myShift' ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className="text-[11px]">내 근무</span>
+            <Calendar size={18} className={activeTab === 'myShift' ? 'stroke-[2.5]' : 'stroke-2'} />
+            <span className="text-[11px] font-black mt-0.5">내 근무</span>
           </button>
 
           <button
             onClick={() => setActiveTab('allowance')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'allowance' 
-                ? 'bg-indigo-50/80 text-indigo-600 font-black' 
-                : 'text-slate-400 font-bold hover:text-slate-600'
-            }`}
+            style={
+              activeTab === 'allowance'
+                ? { backgroundColor: '#EEF2FF', color: '#4F46E5', borderRadius: '16px' }
+                : { color: '#94A3B8' }
+            }
+            className="flex flex-col items-center justify-center py-1.5 px-4 transition-all cursor-pointer"
           >
-            <DollarSign size={19} className={activeTab === 'allowance' ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className="text-[11px]">연차/수당</span>
+            <DollarSign size={18} className={activeTab === 'allowance' ? 'stroke-[2.5]' : 'stroke-2'} />
+            <span className="text-[11px] font-black mt-0.5">연차/수당</span>
           </button>
 
           <button
             onClick={() => setActiveTab('groupShare')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'groupShare' 
-                ? 'bg-indigo-50/80 text-indigo-600 font-black' 
-                : 'text-slate-400 font-bold hover:text-slate-600'
-            }`}
+            style={
+              activeTab === 'groupShare'
+                ? { backgroundColor: '#EEF2FF', color: '#4F46E5', borderRadius: '16px' }
+                : { color: '#94A3B8' }
+            }
+            className="flex flex-col items-center justify-center py-1.5 px-4 transition-all cursor-pointer"
           >
-            <Users size={19} className={activeTab === 'groupShare' ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className="text-[11px]">동료 비교</span>
+            <Users size={18} className={activeTab === 'groupShare' ? 'stroke-[2.5]' : 'stroke-2'} />
+            <span className="text-[11px] font-black mt-0.5">동료 비교</span>
           </button>
 
           <button
             onClick={() => setActiveTab('import')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'import' 
-                ? 'bg-indigo-50/80 text-indigo-600 font-black' 
-                : 'text-slate-400 font-bold hover:text-slate-600'
-            }`}
+            style={
+              activeTab === 'import'
+                ? { backgroundColor: '#EEF2FF', color: '#4F46E5', borderRadius: '16px' }
+                : { color: '#94A3B8' }
+            }
+            className="flex flex-col items-center justify-center py-1.5 px-4 transition-all cursor-pointer"
           >
-            <Upload size={19} className={activeTab === 'import' ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className="text-[11px]">등록</span>
+            <Upload size={18} className={activeTab === 'import' ? 'stroke-[2.5]' : 'stroke-2'} />
+            <span className="text-[11px] font-black mt-0.5">등록</span>
           </button>
         </div>
 
