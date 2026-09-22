@@ -25,7 +25,7 @@ export default function MyShiftTab({
     setSelectedDate(`${y}-${m}-01`);
   };
 
-  // 1. 근무 통계
+  // 1. 근무 통계 집계
   const shiftCounts = { D: 0, E: 0, N: 0, M: 0, OFF: 0, 연차: 0 };
   Object.entries(myShifts).forEach(([dateStr, shift]) => {
     if (dateStr.startsWith(`${currentYear}-${String(currentMonth).padStart(2, '0')}`)) {
@@ -63,19 +63,19 @@ export default function MyShiftTab({
     });
   }
 
-  // 3. 마이시프트 감성의 소프트 파스텔 타일 컬러
+  // 3. 근무 코드별 타일 컬러
   const getTileConfig = (shift) => {
     switch (shift) {
       case 'D':
-        return { style: { backgroundColor: '#818CF8', color: '#FFFFFF' }, label: 'D' }; // 소프트 인디고
+        return { style: { backgroundColor: '#818CF8', color: '#FFFFFF' }, label: 'D' }; // 인디고
       case 'E':
-        return { style: { backgroundColor: '#C084FC', color: '#FFFFFF' }, label: 'E' }; // 소프트 퍼플
+        return { style: { backgroundColor: '#C084FC', color: '#FFFFFF' }, label: 'E' }; // 퍼플
       case 'N':
-        return { style: { backgroundColor: '#34D399', color: '#064E3B' }, label: 'N' }; // 소프트 민트
+        return { style: { backgroundColor: '#34D399', color: '#064E3B' }, label: 'N' }; // 민트
       case 'M':
-        return { style: { backgroundColor: '#FBBF24', color: '#78350F' }, label: 'M' }; // 소프트 옐로우
+        return { style: { backgroundColor: '#FBBF24', color: '#78350F' }, label: 'M' }; // 옐로우
       case 'OFF':
-        return { style: { backgroundColor: '#FB7185', color: '#FFFFFF' }, isOff: true, label: 'OFF' }; // 코랄 오프
+        return { style: { backgroundColor: '#FB7185', color: '#FFFFFF' }, isOff: true, label: 'OFF' }; // 코랄
       case '연차':
         return { style: { backgroundColor: '#F472B6', color: '#FFFFFF' }, label: '연차' };
       default:
@@ -85,7 +85,7 @@ export default function MyShiftTab({
 
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
-      {/* 화이트 바탕과 자연스럽게 연결되는 캘린더 카드 */}
+      {/* 캘린더 메인 카드 */}
       <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
         
         {/* 상단 연/월 헤더 및 컨트롤 */}
@@ -121,12 +121,8 @@ export default function MyShiftTab({
           </div>
         </div>
 
-        {/* 미니멀 레전드 카운터 */}
-        <div className="flex items-center gap-3.5 px-3 py-2 bg-slate-50/80 rounded-2xl border border-slate-100 text-xs font-bold text-slate-600 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#34D399' }}></span>
-            <span>N {shiftCounts.N}</span>
-          </div>
+        {/* 상단 미니멀 레전드 카운터 (D -> E -> N -> M -> OFF 순서 적용) */}
+        <div className="flex items-center justify-between px-3 py-2 bg-slate-50/80 rounded-2xl border border-slate-100 text-xs font-black text-slate-600 overflow-x-auto no-scrollbar">
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#818CF8' }}></span>
             <span>D {shiftCounts.D}</span>
@@ -136,13 +132,23 @@ export default function MyShiftTab({
             <span>E {shiftCounts.E}</span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#FB7185' }}></span>
-            <span>OFF {shiftCounts.OFF}</span>
+            <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#34D399' }}></span>
+            <span>N {shiftCounts.N}</span>
           </div>
           {shiftCounts.M > 0 && (
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#FBBF24' }}></span>
               <span>M {shiftCounts.M}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#FB7185' }}></span>
+            <span>OFF {shiftCounts.OFF}</span>
+          </div>
+          {shiftCounts.연차 > 0 && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#F472B6' }}></span>
+              <span>연차 {shiftCounts.연차}</span>
             </div>
           )}
         </div>
