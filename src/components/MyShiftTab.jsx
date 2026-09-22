@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Heart } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function MyShiftTab({
   selectedDate,
@@ -27,7 +27,7 @@ export default function MyShiftTab({
 
   // 1. 근무 통계 집계
   const shiftCounts = { D: 0, E: 0, N: 0, M: 0, OFF: 0, 연차: 0 };
-  Object.entries(myShifts).forEach(([dateStr, shift]) => {
+  Object.entries(myShifts || {}).forEach(([dateStr, shift]) => {
     if (dateStr.startsWith(`${currentYear}-${String(currentMonth).padStart(2, '0')}`)) {
       if (shiftCounts[shift] !== undefined) {
         shiftCounts[shift] += 1;
@@ -63,21 +63,21 @@ export default function MyShiftTab({
     });
   }
 
-  // 3. 근무 코드별 타일 컬러
-  const getTileConfig = (shift) => {
+  // 3. 원본 이미지 컬러 패밀리 맵 (파스텔 톤)
+  const getTileStyle = (shift) => {
     switch (shift) {
       case 'D':
-        return { style: { backgroundColor: '#818CF8', color: '#FFFFFF' }, label: 'D' }; // 인디고
+        return { backgroundColor: '#FEF08A', color: '#854D0E', label: 'D' }; // 소프트 옐로우
       case 'E':
-        return { style: { backgroundColor: '#C084FC', color: '#FFFFFF' }, label: 'E' }; // 퍼플
+        return { backgroundColor: '#FFEDD5', color: '#9A3412', label: 'E' }; // 소프트 피치/주황
       case 'N':
-        return { style: { backgroundColor: '#34D399', color: '#064E3B' }, label: 'N' }; // 민트
+        return { backgroundColor: '#E0F2FE', color: '#0369A1', label: 'N' }; // 소프트 스카이
       case 'M':
-        return { style: { backgroundColor: '#FBBF24', color: '#78350F' }, label: 'M' }; // 옐로우
+        return { backgroundColor: '#F3E8FF', color: '#6B21A8', label: 'M' }; // 소프트 퍼플
       case 'OFF':
-        return { style: { backgroundColor: '#FB7185', color: '#FFFFFF' }, isOff: true, label: 'OFF' }; // 코랄
+        return { backgroundColor: '#F1F5F9', color: '#475569', label: 'OFF' }; // 소프트 회색
       case '연차':
-        return { style: { backgroundColor: '#F472B6', color: '#FFFFFF' }, label: '연차' };
+        return { backgroundColor: '#FCE7F3', color: '#9D174D', label: '연차' }; // 소프트 분홍
       default:
         return null;
     }
@@ -85,139 +85,121 @@ export default function MyShiftTab({
 
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
-      {/* 캘린더 메인 카드 */}
+      
+      {/* 1. 상단 월 이동 및 요약 통계 카드 */}
       <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
-        
-        {/* 상단 연/월 헤더 및 컨트롤 */}
-        <div className="flex items-center justify-between px-1">
+        {/* 연/월 타이틀 */}
+        <div className="flex items-center justify-center gap-4 py-1">
+          <button
+            onClick={handlePrevMonth}
+            className="p-1 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer"
+          >
+            <ChevronLeft size={22} />
+          </button>
           <h2 className="text-xl font-black text-slate-900 tracking-tight">
-            {currentYear}년 {String(currentMonth).padStart(2, '0')}월
+            {currentYear}년 {currentMonth}월
           </h2>
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                const today = new Date();
-                const y = today.getFullYear();
-                const m = String(today.getMonth() + 1).padStart(2, '0');
-                setSelectedDate(`${y}-${m}-01`);
-              }}
-              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl transition cursor-pointer"
-            >
-              오늘
-            </button>
-            <button
-              onClick={handlePrevMonth}
-              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              onClick={handleNextMonth}
-              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer"
-            >
-              <ChevronRight size={20} />
-            </button>
-          </div>
+          <button
+            onClick={handleNextMonth}
+            className="p-1 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer"
+          >
+            <ChevronRight size={22} />
+          </button>
         </div>
 
-        {/* 상단 미니멀 레전드 카운터 (D -> E -> N -> M -> OFF 순서 적용) */}
-        <div className="flex items-center justify-between px-3 py-2 bg-slate-50/80 rounded-2xl border border-slate-100 text-xs font-black text-slate-600 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#818CF8' }}></span>
-            <span>D {shiftCounts.D}</span>
+        {/* 원본 요약 카운터 칩 (D, E, N, M, OFF, 연차) */}
+        <div className="grid grid-cols-6 gap-1.5 pt-1">
+          <div style={{ backgroundColor: '#FEF08A' }} className="p-2.5 rounded-2xl text-center space-y-0.5">
+            <span style={{ color: '#854D0E' }} className="block text-xs font-black">D</span>
+            <span style={{ color: '#854D0E' }} className="text-sm font-black">{shiftCounts.D}</span>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#C084FC' }}></span>
-            <span>E {shiftCounts.E}</span>
+          <div style={{ backgroundColor: '#FFEDD5' }} className="p-2.5 rounded-2xl text-center space-y-0.5">
+            <span style={{ color: '#9A3412' }} className="block text-xs font-black">E</span>
+            <span style={{ color: '#9A3412' }} className="text-sm font-black">{shiftCounts.E}</span>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#34D399' }}></span>
-            <span>N {shiftCounts.N}</span>
+          <div style={{ backgroundColor: '#E0F2FE' }} className="p-2.5 rounded-2xl text-center space-y-0.5">
+            <span style={{ color: '#0369A1' }} className="block text-xs font-black">N</span>
+            <span style={{ color: '#0369A1' }} className="text-sm font-black">{shiftCounts.N}</span>
           </div>
-          {shiftCounts.M > 0 && (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#FBBF24' }}></span>
-              <span>M {shiftCounts.M}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#FB7185' }}></span>
-            <span>OFF {shiftCounts.OFF}</span>
+          <div style={{ backgroundColor: '#F3E8FF' }} className="p-2.5 rounded-2xl text-center space-y-0.5">
+            <span style={{ color: '#6B21A8' }} className="block text-xs font-black">M</span>
+            <span style={{ color: '#6B21A8' }} className="text-sm font-black">{shiftCounts.M}</span>
           </div>
-          {shiftCounts.연차 > 0 && (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#F472B6' }}></span>
-              <span>연차 {shiftCounts.연차}</span>
-            </div>
-          )}
+          <div style={{ backgroundColor: '#F1F5F9' }} className="p-2.5 rounded-2xl text-center space-y-0.5">
+            <span style={{ color: '#475569' }} className="block text-xs font-black">OFF</span>
+            <span style={{ color: '#475569' }} className="text-sm font-black">{shiftCounts.OFF}</span>
+          </div>
+          <div style={{ backgroundColor: '#FCE7F3' }} className="p-2.5 rounded-2xl text-center space-y-0.5">
+            <span style={{ color: '#9D174D' }} className="block text-xs font-black">연차</span>
+            <span style={{ color: '#9D174D' }} className="text-sm font-black">{shiftCounts.연차}</span>
+          </div>
         </div>
+      </div>
 
-        {/* 요일 구분선 */}
-        <div className="grid grid-cols-7 text-center font-black text-xs text-slate-400 py-1.5 border-b border-slate-100">
+      {/* 2. 메인 달력 그리드 카드 */}
+      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+        {/* 요일 헤더 */}
+        <div className="grid grid-cols-7 text-center font-bold text-xs py-1">
           <span className="text-rose-500">일</span>
-          <span>월</span>
-          <span>화</span>
-          <span>수</span>
-          <span>목</span>
-          <span>금</span>
+          <span className="text-slate-400">월</span>
+          <span className="text-slate-400">화</span>
+          <span className="text-slate-400">수</span>
+          <span className="text-slate-400">목</span>
+          <span className="text-slate-400">금</span>
           <span className="text-sky-500">토</span>
         </div>
 
-        {/* 타일 그리드 */}
-        <div className="grid grid-cols-7 gap-1 pt-1">
+        {/* 달력 날짜 셀 타일 */}
+        <div className="grid grid-cols-7 gap-1.5 pt-1">
           {calendarDays.map((item, index) => {
             const shift = item.dateKey ? myShifts[item.dateKey] : null;
-            const tileConfig = shift ? getTileConfig(shift) : null;
-            const isToday =
-              item.dateKey ===
-              `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+            const tileStyle = shift ? getTileStyle(shift) : null;
 
             return (
               <div
                 key={index}
-                className={`min-h-[66px] rounded-2xl flex flex-col justify-between p-1 transition border ${
-                  isToday
-                    ? 'border-indigo-500 bg-indigo-50/20'
-                    : 'border-slate-50 bg-slate-50/40'
-                } ${!item.isCurrentMonth ? 'opacity-25' : ''}`}
+                style={item.isCurrentMonth && tileStyle ? { backgroundColor: tileStyle.backgroundColor } : {}}
+                className={`min-h-[58px] p-2 rounded-2xl flex flex-col justify-between transition ${
+                  item.isCurrentMonth
+                    ? shift
+                      ? 'shadow-2xs'
+                      : 'bg-slate-50/50'
+                    : 'opacity-20'
+                }`}
               >
-                {/* 날짜 숫자 */}
-                <div className="flex justify-between items-center px-1 pt-0.5">
-                  <span
-                    className={`text-[11px] font-black ${
-                      index % 7 === 0
+                {/* 상단 날짜 숫자 */}
+                <span
+                  style={item.isCurrentMonth && tileStyle ? { color: tileStyle.color } : {}}
+                  className={`text-[11px] font-black leading-none ${
+                    !tileStyle
+                      ? index % 7 === 0
                         ? 'text-rose-500'
                         : index % 7 === 6
                         ? 'text-sky-500'
-                        : 'text-slate-700'
-                    }`}
-                  >
-                    {item.day}
-                  </span>
-                </div>
+                        : 'text-slate-400'
+                      : ''
+                  }`}
+                >
+                  {item.day}
+                </span>
 
-                {/* 둥근 직사각형 근무 타일 */}
-                {item.isCurrentMonth && shift && tileConfig ? (
-                  <div
-                    style={tileConfig.style}
-                    className="w-full h-8 rounded-xl flex items-center justify-center font-black text-xs shadow-2xs transition"
+                {/* 중앙 근무 텍스트 */}
+                {item.isCurrentMonth && shift && tileStyle ? (
+                  <span
+                    style={{ color: tileStyle.color }}
+                    className="text-center font-black text-xs block pt-1"
                   >
-                    {tileConfig.isOff ? (
-                      <Heart size={14} className="fill-current text-white" />
-                    ) : (
-                      <span>{tileConfig.label}</span>
-                    )}
-                  </div>
+                    {tileStyle.label}
+                  </span>
                 ) : (
-                  <div className="h-8"></div>
+                  <div className="h-4"></div>
                 )}
               </div>
             );
           })}
         </div>
-
       </div>
+
     </div>
   );
 }
