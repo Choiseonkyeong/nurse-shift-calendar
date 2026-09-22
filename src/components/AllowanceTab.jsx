@@ -1,265 +1,191 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, Settings, Save, Calendar, Clock, Calculator } from 'lucide-react';
+import React, { useState } from 'react';
 
 export default function AllowanceTab({
   myShifts = {},
+  selectedDate,
   shiftConfigs = {},
-  setShiftConfigs,
-  selectedDate
+  setShiftConfigs
 }) {
-  const [activeSubTab, setActiveSubTab] = useState('allowance');
-
-  // 근무별 기본 야간시간 및 단가 설정 (N: 8시간, E: 0.5시간 기본 보장)
-  const defaultConfigs = {
-    D: { pay: 0, nightHours: 0 },
-    E: { pay: 10000, nightHours: 0.5 },
-    N: { pay: 60000, nightHours: 8 },
-    M: { pay: 0, nightHours: 0 },
-    hourlyWage: 13000
-  };
-
-  // 기존 shiftConfigs와 defaultConfigs 병합 (nightHours 유실 방지)
-  const mergedConfigs = {
-    hourlyWage: shiftConfigs?.hourlyWage || defaultConfigs.hourlyWage,
-    D: { ...defaultConfigs.D, ...(shiftConfigs?.D || {}) },
-    E: { ...defaultConfigs.E, ...(shiftConfigs?.E || {}) },
-    N: { ...defaultConfigs.N, ...(shiftConfigs?.N || {}) },
-    M: { ...defaultConfigs.M, ...(shiftConfigs?.M || {}) }
-  };
-
-  const [tempConfigs, setTempConfigs] = useState(mergedConfigs);
-
-  // shiftConfigs가 상위에서 업데이트될 때 상태 동기화
-  useEffect(() => {
-    setTempConfigs({
-      hourlyWage: shiftConfigs?.hourlyWage || defaultConfigs.hourlyWage,
-      D: { ...defaultConfigs.D, ...(shiftConfigs?.D || {}) },
-      E: { ...defaultConfigs.E, ...(shiftConfigs?.E || {}) },
-      N: { ...defaultConfigs.N, ...(shiftConfigs?.N || {}) },
-      M: { ...defaultConfigs.M, ...(shiftConfigs?.M || {}) }
-    });
-  }, [shiftConfigs]);
-
-  const [year, month] = selectedDate ? selectedDate.split('-').map(Number) : [2026, 9];
+  const [year, month] = selectedDate ? selectedDate.split('-').map(Number) : [2026, 8];
   const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
 
-  // 근무 횟수 집계 및 총 수당 정산
-  const shiftCounts = { D: 0, E: 0, N: 0, M: 0, OFF: 0, 연차: 0 };
-  let totalAllowance = 0;
-  let totalNightHours = 0;
+  // 1. 근무별 시간 및 야간 인정시간 (고정값 없이 사용자 입력/상위 props 연동)
+  const [shiftTimes, setShiftTimes] = useState(
+    shiftConfigs.shiftTimes || {
+      M: { time: '', nightHours: 0 },
+      D: { time: '', nightHours: 0 },
+      E: { time: '', nightHours: 0 },
+      N: { time: '', nightHours: 0 }
+    }
+  );
 
+  // 2. 연차 현황 상태
+  const [vacation, setVacation] = useState(
+    shiftConfigs.vacation || {
+      total: 15,
+      used: 0
+    }
+  );
+
+  // 3. 통상 시급 상태
+  const [hourlyWage, setHourlyWage] = useState(shiftConfigs.hourlyWage || 0);
+
+  // 값 변경 시 상위 상태 업데이트 헬퍼
+  const updateShiftTimes = (code, field, value) => {
+    const updated = {
+      ...shiftTimes,
+      [code]: { ...shiftTimes[code], [field]: value }
+    };
+    setShiftTimes(updated);
+    if (setShiftConfigs) {
+      setShiftConfigs({ ...shiftConfigs, shiftTimes: updated, vacation, hourlyWage });
+    }
+  };
+
+  // 4. 근무 횟수 집계
+  const shiftCounts = { D: 0, E: 0, N: 0, M: 0, OFF: 0, 연차: 0 };
   Object.entries(myShifts || {}).forEach(([dateKey, code]) => {
     if (dateKey.startsWith(monthPrefix) && code) {
       if (shiftCounts[code] !== undefined) {
         shiftCounts[code] += 1;
       }
-      const pay = mergedConfigs[code]?.pay ?? 0;
-      // N은 8시간, E는 0.5시간 기본값 적용
-      const nightH = mergedConfigs[code]?.nightHours ?? defaultConfigs[code]?.nightHours ?? 0;
-
-      totalAllowance += Number(pay);
-      totalNightHours += Number(nightH);
     }
   });
 
-  // 법정 야간 가산 수당 (시급 × 50% × 총 야간시간)
-  const hourlyWage = Number(mergedConfigs.hourlyWage || 13000);
-  const nightExtraPay = Math.round(totalNightHours * hourlyWage * 0.5);
-  const grandTotalPay = totalAllowance + nightExtraPay;
+  // 입력된 야간 인정시간 기반 총 야간시간 및 수당 자동 계산
+  const totalNightHours =
+    shiftCounts.N * (Number(shiftTimes.N?.nightHours) || 0) +
+    shiftCounts.E * (Number(shiftTimes.E?.nightHours) || 0) +
+    shiftCounts.M * (Number(shiftTimes.M?.nightHours) || 0) +
+    shiftCounts.D * (Number(shiftTimes.D?.nightHours) || 0);
 
-  const formatMoney = (val) => {
-    const num = Number(val);
-    return isNaN(num) ? '0' : num.toLocaleString();
-  };
-
-  const handleSaveConfigs = () => {
-    if (setShiftConfigs) {
-      setShiftConfigs(tempConfigs);
-    }
-    setActiveSubTab('allowance');
-  };
-
-  // 야간 가산수당 자동 계산 헬퍼
-  const autoCalculateNightPay = (code) => {
-    const nightH = Number(tempConfigs[code]?.nightHours ?? defaultConfigs[code]?.nightHours ?? 0);
-    const wage = Number(tempConfigs.hourlyWage || 13000);
-    const calculatedPay = Math.round(nightH * wage * 0.5);
-
-    setTempConfigs({
-      ...tempConfigs,
-      [code]: { ...(tempConfigs[code] || {}), pay: calculatedPay }
-    });
-  };
+  const totalNightPay = Math.round(totalNightHours * Number(hourlyWage || 0) * 0.5);
+  const remainingVacation = Number(vacation.total || 0) - Number(vacation.used || 0);
 
   return (
-    <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
-      {/* 서브 탭 이동 바 */}
-      <div className="flex bg-slate-200/70 p-1 rounded-2xl text-xs font-extrabold">
-        <button
-          onClick={() => setActiveSubTab('allowance')}
-          className={`flex-1 py-2 rounded-xl transition cursor-pointer ${
-            activeSubTab === 'allowance' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500'
-          }`}
-        >
-          수당 / 연차 현황
-        </button>
-        <button
-          onClick={() => {
-            setTempConfigs(mergedConfigs);
-            setActiveSubTab('config');
-          }}
-          className={`flex-1 py-2 rounded-xl transition cursor-pointer ${
-            activeSubTab === 'config' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500'
-          }`}
-        >
-          수당 단가 설정
-        </button>
+    <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
+      
+      {/* 1. 상단 근무시간 입력 세션 */}
+      <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-2">
+        {['M', 'D', 'E', 'N'].map((code) => (
+          <div key={code} className="flex items-center gap-2">
+            <span className="font-black text-xs text-indigo-950 w-5 text-center">{code}</span>
+            <input
+              type="text"
+              placeholder="00:00 - 00:00"
+              value={shiftTimes[code]?.time || ''}
+              onChange={(e) => updateShiftTimes(code, 'time', e.target.value)}
+              className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-xs font-bold text-center outline-none focus:border-indigo-400"
+            />
+            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 border border-slate-200/60 rounded-2xl">
+              <span className="text-[10px] font-bold text-slate-400">야간인정:</span>
+              <input
+                type="number"
+                value={shiftTimes[code]?.nightHours ?? 0}
+                onChange={(e) => updateShiftTimes(code, 'nightHours', Number(e.target.value) || 0)}
+                className="w-7 text-center font-black text-xs bg-transparent outline-none text-indigo-600"
+              />
+              <span className="text-[10px] font-bold text-slate-400">시간</span>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* 1. 수당 현황 탭 */}
-      {activeSubTab === 'allowance' && (
-        <div className="space-y-4">
-          {/* 총 수당 카드 */}
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-5 rounded-3xl shadow-md space-y-2">
-            <span className="text-xs font-extrabold opacity-80 flex items-center gap-1">
-              <DollarSign size={16} /> {year}년 {month}월 예상 근무 수당
+      {/* 2. 연차(휴가) 현황 세션 */}
+      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+        <h3 className="font-black text-sm text-rose-500 flex items-center gap-1.5">
+          <span>🌴</span> 연차(휴가) 현황
+        </h3>
+
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="p-3 bg-rose-50/50 border border-rose-100 rounded-2xl">
+            <span className="text-[10px] font-extrabold text-rose-400 block mb-1">총 부여 연차</span>
+            <div className="flex items-center justify-center gap-0.5">
+              <input
+                type="number"
+                value={vacation.total}
+                onChange={(e) => {
+                  const val = { ...vacation, total: Number(e.target.value) || 0 };
+                  setVacation(val);
+                  if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
+                }}
+                className="w-8 text-center text-lg font-black text-rose-950 bg-transparent outline-none"
+              />
+              <span className="text-xs font-bold text-rose-900">개</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl">
+            <span className="text-[10px] font-extrabold text-slate-400 block mb-1">사용 연차</span>
+            <div className="flex items-center justify-center gap-0.5">
+              <input
+                type="number"
+                value={vacation.used}
+                onChange={(e) => {
+                  const val = { ...vacation, used: Number(e.target.value) || 0 };
+                  setVacation(val);
+                  if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
+                }}
+                className="w-8 text-center text-lg font-black text-slate-800 bg-transparent outline-none"
+              />
+              <span className="text-xs font-bold text-slate-700">개</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl">
+            <span className="text-[10px] font-extrabold text-indigo-400 block mb-1">잔여 연차</span>
+            <div className="text-lg font-black text-indigo-950">
+              {remainingVacation} <span className="text-xs font-bold">개</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. 월 야간근로수당 계산기 세션 */}
+      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
+        <h3 className="font-black text-sm text-indigo-900 flex items-center gap-1.5">
+          <span>🧮</span> {month}월 야간근로수당 계산기
+        </h3>
+
+        <div className="p-4 bg-indigo-50/30 rounded-3xl border border-indigo-100 space-y-3 text-xs">
+          <div className="flex justify-between items-center font-bold text-slate-600">
+            <span>Night(N) 근무:</span>
+            <span className="font-black text-indigo-950 text-sm">
+              {shiftCounts.N} 회 ({shiftCounts.N * (Number(shiftTimes.N?.nightHours) || 0)}시간)
             </span>
-            <div className="text-3xl font-black">
-              {formatMoney(grandTotalPay)} <span className="text-base font-bold">원</span>
-            </div>
-            <div className="pt-2 text-[11px] opacity-90 space-y-1 border-t border-white/20">
-              <div className="flex justify-between">
-                <span>• 건당 고정 수당 합계:</span>
-                <span className="font-black">{formatMoney(totalAllowance)}원</span>
-              </div>
-              <div className="flex justify-between">
-                <span>• 법정 야간 가산수당 ({totalNightHours}시간 인정):</span>
-                <span className="font-black">+{formatMoney(nightExtraPay)}원</span>
-              </div>
-            </div>
           </div>
 
-          {/* 월 근무 집계 */}
-          <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs space-y-3">
-            <h3 className="text-xs font-black text-slate-800 flex items-center gap-1">
-              <Calendar size={14} className="text-indigo-600" /> {month}월 근무 집계
-            </h3>
-            <div className="grid grid-cols-5 gap-1.5 text-center text-xs">
-              <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-2xl">
-                <span className="text-[10px] font-bold text-indigo-600 block">Day</span>
-                <span className="text-sm font-black text-indigo-900">{shiftCounts.D}회</span>
-              </div>
-              <div className="p-2 bg-purple-50 border border-purple-100 rounded-2xl">
-                <span className="text-[10px] font-bold text-purple-600 block">Evening</span>
-                <span className="text-sm font-black text-purple-900">{shiftCounts.E}회</span>
-              </div>
-              <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-2xl">
-                <span className="text-[10px] font-bold text-emerald-600 block">Night</span>
-                <span className="text-sm font-black text-emerald-900">{shiftCounts.N}회</span>
-              </div>
-              <div className="p-2 bg-amber-50 border border-amber-100 rounded-2xl">
-                <span className="text-[10px] font-bold text-amber-600 block">Mid</span>
-                <span className="text-sm font-black text-amber-900">{shiftCounts.M}회</span>
-              </div>
-              <div className="p-2 bg-slate-50 border border-slate-200 rounded-2xl">
-                <span className="text-[10px] font-bold text-slate-500 block">OFF</span>
-                <span className="text-sm font-black text-slate-700">{shiftCounts.OFF}회</span>
-              </div>
-            </div>
+          <div className="flex justify-between items-center font-bold text-slate-600">
+            <span>Evening(E) 근무:</span>
+            <span className="font-black text-indigo-950 text-sm">
+              {shiftCounts.E} 회 ({shiftCounts.E * (Number(shiftTimes.E?.nightHours) || 0)}시간)
+            </span>
+          </div>
+
+          <div className="pt-2 border-t border-indigo-100/60 flex justify-between items-center">
+            <span className="font-extrabold text-slate-700">통상 시급 (원):</span>
+            <input
+              type="number"
+              placeholder="시급 입력"
+              value={hourlyWage || ''}
+              onChange={(e) => {
+                const val = Number(e.target.value) || 0;
+                setHourlyWage(val);
+                if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, hourlyWage: val });
+              }}
+              className="w-28 py-1.5 px-3 bg-white border border-slate-200 rounded-xl font-black text-right text-slate-900 outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="pt-3 border-t border-indigo-100/80 flex justify-between items-center">
+            <span className="font-black text-slate-900 text-sm">{month}월 총 야간수당:</span>
+            <span className="text-2xl font-black text-indigo-600">
+              {totalNightPay.toLocaleString()} <span className="text-base">원</span>
+            </span>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* 2. 단가 설정 탭 */}
-      {activeSubTab === 'config' && (
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-4">
-          <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5 border-b pb-2">
-            <Settings size={16} className="text-indigo-600" /> 근무별 수당 및 시급 설정
-          </h3>
-
-          <div className="space-y-3">
-            {/* 시급 설정 */}
-            <div className="p-3 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center justify-between">
-              <span className="font-extrabold text-xs text-indigo-950 flex items-center gap-1">
-                <Clock size={14} className="text-indigo-600" /> 통상 시급
-              </span>
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  value={tempConfigs.hourlyWage ?? 13000}
-                  onChange={(e) =>
-                    setTempConfigs({ ...tempConfigs, hourlyWage: Number(e.target.value) || 0 })
-                  }
-                  className="w-24 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-right outline-none focus:border-indigo-500"
-                />
-                <span className="text-xs font-bold text-slate-500">원</span>
-              </div>
-            </div>
-
-            {/* D / E / N / M 근무별 수당 및 야간시간 */}
-            {['D', 'E', 'N', 'M'].map((code) => (
-              <div key={code} className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-xs text-slate-800">{code} 근무 설정</span>
-                  <button
-                    type="button"
-                    onClick={() => autoCalculateNightPay(code)}
-                    className="text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-200 transition cursor-pointer flex items-center gap-0.5"
-                  >
-                    <Calculator size={10} /> 야간수당 자동계산
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-bold block mb-0.5">야간시간(22시~06시)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={tempConfigs[code]?.nightHours ?? defaultConfigs[code]?.nightHours ?? 0}
-                        onChange={(e) =>
-                          setTempConfigs({
-                            ...tempConfigs,
-                            [code]: { ...(tempConfigs[code] || {}), nightHours: Number(e.target.value) || 0 }
-                          })
-                        }
-                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-xl font-bold text-right outline-none"
-                      />
-                      <span className="text-[11px] font-bold text-slate-500">시간</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-bold block mb-0.5">건당 고정수당</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={tempConfigs[code]?.pay ?? 0}
-                        onChange={(e) =>
-                          setTempConfigs({
-                            ...tempConfigs,
-                            [code]: { ...(tempConfigs[code] || {}), pay: Number(e.target.value) || 0 }
-                          })
-                        }
-                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-xl font-bold text-right outline-none"
-                      />
-                      <span className="text-[11px] font-bold text-slate-500">원</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <button
-            onClick={handleSaveConfigs}
-            className="w-full py-3 bg-indigo-600 text-white font-extrabold text-xs rounded-2xl hover:bg-indigo-700 transition flex items-center justify-center gap-1 cursor-pointer shadow-xs"
-          >
-            <Save size={14} /> 설정 저장하기
-          </button>
-        </div>
-      )}
     </div>
   );
 }
