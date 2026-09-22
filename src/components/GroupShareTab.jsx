@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Plus, LogIn, Share2, Trash2 } from 'lucide-react';
+import { Users, Plus, LogIn } from 'lucide-react';
 
 export default function GroupShareTab({
   newGroupName,
@@ -10,13 +10,8 @@ export default function GroupShareTab({
   setGroups,
   activeGroupId,
   setActiveGroupId,
-  currentGroup,
-  selectedDate,
-  setSelectedDate,
-  shiftConfigs,
   userName,
-  myShifts = {},
-  privacyBlur
+  myShifts = {}
 }) {
   // 1. 새 그룹 생성
   const handleCreateGroup = () => {
@@ -61,7 +56,6 @@ export default function GroupShareTab({
       return;
     }
 
-    // 이미 참여한 그룹인지 체크
     const isMember = targetGroup.members?.some((m) => m.name === userName);
     if (!isMember) {
       targetGroup.members.push({
@@ -86,8 +80,8 @@ export default function GroupShareTab({
           <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
         </h2>
 
-        {/* 그룹 생성 & 코드 입장 Grid */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* 그룹 생성 & 코드 입장 Grid (높이 자동 균등 정렬) */}
+        <div className="grid grid-cols-2 gap-3 items-stretch">
           
           {/* 1. 새 그룹 생성 카드 */}
           <div className="p-4 border border-indigo-100 bg-indigo-50/20 rounded-3xl space-y-3 flex flex-col justify-between">
@@ -105,14 +99,16 @@ export default function GroupShareTab({
               />
             </div>
             <button
+              type="button"
               onClick={handleCreateGroup}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-2xl transition cursor-pointer shadow-xs"
+              style={{ backgroundColor: '#4F46E5', color: '#FFFFFF' }}
+              className="w-full py-2.5 font-extrabold text-xs rounded-2xl transition cursor-pointer shadow-xs block text-center mt-2"
             >
               그룹 만들기
             </button>
           </div>
 
-          {/* 2. 코드 입장 카드 (버튼 추가 보완) */}
+          {/* 2. 코드 입장 카드 */}
           <div className="p-4 border border-slate-200 bg-slate-50/50 rounded-3xl space-y-3 flex flex-col justify-between">
             <div className="space-y-2">
               <span className="font-extrabold text-xs text-slate-800 flex items-center gap-1">
@@ -128,8 +124,10 @@ export default function GroupShareTab({
               />
             </div>
             <button
+              type="button"
               onClick={handleJoinGroup}
-              className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs rounded-2xl transition cursor-pointer shadow-xs"
+              style={{ backgroundColor: '#1E293B', color: '#FFFFFF' }}
+              className="w-full py-2.5 font-extrabold text-xs rounded-2xl transition cursor-pointer shadow-xs block text-center mt-2"
             >
               그룹 참여하기
             </button>
