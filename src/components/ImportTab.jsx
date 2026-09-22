@@ -31,7 +31,7 @@ export default function ImportTab({
     });
   };
 
-  // 1. 엑셀 파서 (2026년 10월 표 기준 전월 9/26~9/30 및 당월 10/1~10/25 분기)
+  // 1. 엑셀 파서 (이름 필터링 엄격 적용 및 연도/월 정밀 분기)
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -63,8 +63,10 @@ export default function ImportTab({
             matrix.push(row);
           }
 
+          // 엑셀 상단 타이틀에서 YYYY년 MM월 자동 감지
           let parsedYear = 2026;
           let parsedMonth = 10;
+          let foundHeaderYearMonth = false;
 
           for (let r = 0; r < Math.min(5, matrix.length); r++) {
             const rowStr = matrix[r].join(' ');
@@ -72,8 +74,15 @@ export default function ImportTab({
             if (match) {
               parsedYear = parseInt(match[1], 10);
               parsedMonth = parseInt(match[2], 10);
+              foundHeaderYearMonth = true;
               break;
             }
+          }
+
+          if (!foundHeaderYearMonth && selectedDate) {
+            const [sYear, sMonth] = selectedDate.split('-').map(Number);
+            parsedYear = sYear;
+            parsedMonth = sMonth;
           }
 
           const targetYM = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`;
@@ -83,6 +92,7 @@ export default function ImportTab({
           const prevYear = prevDateObj.getFullYear();
           const prevMonth = prevDateObj.getMonth() + 1;
 
+          // 날짜 행(1~31) 탐색
           let dateRowIdx = -1;
           const colToDateMap = {};
 
@@ -125,16 +135,35 @@ export default function ImportTab({
           }
 
           const nameMap = {};
-          const excludeKeywords = ['날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', '비고', '합계', '부서', '팀', 'HN', 'CN', 'RN', 'OFF'];
+          
+          // 시스템 및 근무 형태 관련 제외 키워드
+          const excludeKeywords = [
+            '날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', 
+            '비고', '합계', '부서', '팀', 'HN', 'CN', 'RN', 'OFF', '오프', '휴무', '연차'
+          ];
 
           for (let r = dateRowIdx + 1; r < matrix.length; r++) {
             const row = matrix[r];
             if (!row || row.length === 0) continue;
 
             let foundName = '';
+            
+            // A열~D열(앞쪽 4개 열) 내에서만 이름 탐색
             for (let c = 0; c < Math.min(4, row.length); c++) {
-              const val = row[c];
-              if (val && val.length >= 2 && val.length <= 5 && !excludeKeywords.some(k => val.includes(k))) {
+              const val = String(row[c] || '').trim();
+
+              // 1. 근무 코드가 연속된 문자열(DD, DDEE 등)은 이름에서 제외
+              const isShiftPattern = /^[DENMOF연차휴주야\s\/]+$/i.test(val);
+              
+              // 2. 한글 2~4자 순수 이름 조건 체크
+              const isKoreanName = /^[가-힣]{2,4}$/.test(val);
+
+              if (
+                val && 
+                isKoreanName && 
+                !isShiftPattern && 
+                !excludeKeywords.some(k => val.includes(k))
+              ) {
                 foundName = val;
                 break;
               }
@@ -168,7 +197,7 @@ export default function ImportTab({
           const foundNames = Object.keys(nameMap);
 
           if (foundNames.length === 0) {
-            alert('엑셀 파일에서 근무자 이름 목록을 읽지 못했습니다.');
+            alert('엑셀 파일에서 근무자 이름 목록을 정밀하게 읽지 못했습니다.');
             setStatusMessage('❌ 파싱 실패');
             setIsProcessing(false);
             return;
@@ -177,7 +206,7 @@ export default function ImportTab({
           setParsedDataByName(nameMap);
           setExtractedNames(foundNames);
           setShowNameModal(true);
-          setStatusMessage(`✅ [${parsedYear}년 ${parsedMonth}월] 총 ${foundNames.length}명의 근무표 추출 완료!`);
+          setStatusMessage(`✅ [${parsedYear}년 ${parsedMonth}월] 총 ${foundNames.length}명의 근무자 추출 완료!`);
 
         } catch (err) {
           console.error(err);
@@ -189,12 +218,12 @@ export default function ImportTab({
       reader.readAsBinaryString(file);
     } catch (err) {
       console.error(err);
-      setStatusMessage('❌ 라이브러리 로드 실패');
+      setStatusMessage('❌ 파서 로드 실패');
       setIsProcessing(false);
     }
   };
 
-  // 2. 이미지 파서 (실제 근무표 데이터 정밀 매핑)
+  // 2. 사진 파서 (2026년 10월 표 기준 매핑)
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -203,11 +232,9 @@ export default function ImportTab({
     setStatusMessage('📷 근무표 이미지 분석 중...');
 
     setTimeout(() => {
-      // 2026년 10월 기준 이미지 데이터 세트
       const targetYM = '2026-10';
       setDetectedYearMonth(targetYM);
 
-      // 원본 이미지 그대로 정밀 매핑된 근무 패턴
       const map = {
         '강인경': {
           '2026-09-26': 'OFF', '2026-09-27': 'OFF', '2026-09-28': 'D', '2026-09-29': 'D', '2026-09-30': 'D',
@@ -260,7 +287,7 @@ export default function ImportTab({
     }, 800);
   };
 
-  // 3. 본인 이름 선택 시 저장 및 해당 연/월 달력으로 자동 이동
+  // 3. 본인 이름 선택 시 내 근무표 등록 및 해당 달력 위치로 자동 이동
   const handleSelectName = (selectedName) => {
     const targetShifts = parsedDataByName[selectedName] || {};
 
@@ -275,7 +302,6 @@ export default function ImportTab({
       setUserName(selectedName);
     }
 
-    // 근무표 연/월에 맞춰 달력 위치 자동 이동 (예: 2026-10-01)
     if (setSelectedDate && detectedYearMonth) {
       setSelectedDate(`${detectedYearMonth}-01`);
     }
