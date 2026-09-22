@@ -6,14 +6,14 @@ export default function AllowanceTab({
   shiftConfigs = {},
   setShiftConfigs
 }) {
-  const [year, month] = selectedDate ? selectedDate.split('-').map(Number) : [2026, 8];
+  const [year, month] = selectedDate ? selectedDate.split('-').map(Number) : [2026, 9];
   const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
 
-  // 1. 근무별 시간 및 야간 인정시간 (고정값 없이 사용자 입력/상위 props 연동)
+  // 1. 근무별 시간 및 야간 인정시간 (D -> M -> E -> N 순서, D에는 야간인정 제거)
   const [shiftTimes, setShiftTimes] = useState(
     shiftConfigs.shiftTimes || {
+      D: { time: '' },
       M: { time: '', nightHours: 0 },
-      D: { time: '', nightHours: 0 },
       E: { time: '', nightHours: 0 },
       N: { time: '', nightHours: 0 }
     }
@@ -30,7 +30,7 @@ export default function AllowanceTab({
   // 3. 통상 시급 상태
   const [hourlyWage, setHourlyWage] = useState(shiftConfigs.hourlyWage || 0);
 
-  // 값 변경 시 상위 상태 업데이트 헬퍼
+  // 값 변경 시 상위 상태 업데이트
   const updateShiftTimes = (code, field, value) => {
     const updated = {
       ...shiftTimes,
@@ -43,7 +43,7 @@ export default function AllowanceTab({
   };
 
   // 4. 근무 횟수 집계
-  const shiftCounts = { D: 0, E: 0, N: 0, M: 0, OFF: 0, 연차: 0 };
+  const shiftCounts = { D: 0, M: 0, E: 0, N: 0, OFF: 0, 연차: 0 };
   Object.entries(myShifts || {}).forEach(([dateKey, code]) => {
     if (dateKey.startsWith(monthPrefix) && code) {
       if (shiftCounts[code] !== undefined) {
@@ -56,8 +56,7 @@ export default function AllowanceTab({
   const totalNightHours =
     shiftCounts.N * (Number(shiftTimes.N?.nightHours) || 0) +
     shiftCounts.E * (Number(shiftTimes.E?.nightHours) || 0) +
-    shiftCounts.M * (Number(shiftTimes.M?.nightHours) || 0) +
-    shiftCounts.D * (Number(shiftTimes.D?.nightHours) || 0);
+    shiftCounts.M * (Number(shiftTimes.M?.nightHours) || 0);
 
   const totalNightPay = Math.round(totalNightHours * Number(hourlyWage || 0) * 0.5);
   const remainingVacation = Number(vacation.total || 0) - Number(vacation.used || 0);
@@ -65,42 +64,50 @@ export default function AllowanceTab({
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
       
-      {/* 1. 상단 근무시간 입력 세션 */}
+      {/* 1. 상단 근무시간 입력 (D -> M -> E -> N 순서, D는 야간인정 없음) */}
       <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-2">
-        {['M', 'D', 'E', 'N'].map((code) => (
-          <div key={code} className="flex items-center gap-2">
-            <span className="font-black text-xs text-indigo-950 w-5 text-center">{code}</span>
-            <input
-              type="text"
-              placeholder="00:00 - 00:00"
-              value={shiftTimes[code]?.time || ''}
-              onChange={(e) => updateShiftTimes(code, 'time', e.target.value)}
-              className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-xs font-bold text-center outline-none focus:border-indigo-400"
-            />
-            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 border border-slate-200/60 rounded-2xl">
-              <span className="text-[10px] font-bold text-slate-400">야간인정:</span>
+        {['D', 'M', 'E', 'N'].map((code) => {
+          const hasNightHours = code !== 'D'; // D근무는 야간인정 필드 제외
+
+          return (
+            <div key={code} className="flex items-center gap-2">
+              <span className="font-black text-xs text-indigo-950 w-5 text-center">{code}</span>
               <input
-                type="number"
-                value={shiftTimes[code]?.nightHours ?? 0}
-                onChange={(e) => updateShiftTimes(code, 'nightHours', Number(e.target.value) || 0)}
-                className="w-7 text-center font-black text-xs bg-transparent outline-none text-indigo-600"
+                type="text"
+                placeholder="00:00 - 00:00"
+                value={shiftTimes[code]?.time || ''}
+                onChange={(e) => updateShiftTimes(code, 'time', e.target.value)}
+                className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200/60 rounded-2xl text-xs font-bold text-center outline-none focus:border-indigo-400"
               />
-              <span className="text-[10px] font-bold text-slate-400">시간</span>
+              {hasNightHours ? (
+                <div className="flex items-center gap-1 bg-slate-50 px-2.5 py-1.5 border border-slate-200/60 rounded-2xl">
+                  <span className="text-[10px] font-bold text-slate-400">야간인정:</span>
+                  <input
+                    type="number"
+                    value={shiftTimes[code]?.nightHours ?? 0}
+                    onChange={(e) => updateShiftTimes(code, 'nightHours', Number(e.target.value) || 0)}
+                    className="w-7 text-center font-black text-xs bg-transparent outline-none text-indigo-600"
+                  />
+                  <span className="text-[10px] font-bold text-slate-400">시간</span>
+                </div>
+              ) : (
+                <div className="w-[110px] hidden sm:block"></div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* 2. 연차(휴가) 현황 세션 */}
+      {/* 2. 연차(휴가) 현황 (인풋 너비 확장으로 숫자 잘림 해결) */}
       <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
         <h3 className="font-black text-sm text-rose-500 flex items-center gap-1.5">
           <span>🌴</span> 연차(휴가) 현황
         </h3>
 
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="p-3 bg-rose-50/50 border border-rose-100 rounded-2xl">
+          <div className="p-3 bg-rose-50/50 border border-rose-100 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-rose-400 block mb-1">총 부여 연차</span>
-            <div className="flex items-center justify-center gap-0.5">
+            <div className="flex items-center justify-center gap-0.5 w-full">
               <input
                 type="number"
                 value={vacation.total}
@@ -109,15 +116,15 @@ export default function AllowanceTab({
                   setVacation(val);
                   if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
                 }}
-                className="w-8 text-center text-lg font-black text-rose-950 bg-transparent outline-none"
+                className="w-12 text-center text-lg font-black text-rose-950 bg-transparent outline-none p-0"
               />
-              <span className="text-xs font-bold text-rose-900">개</span>
+              <span className="text-xs font-bold text-rose-900 shrink-0">개</span>
             </div>
           </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl">
+          <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-slate-400 block mb-1">사용 연차</span>
-            <div className="flex items-center justify-center gap-0.5">
+            <div className="flex items-center justify-center gap-0.5 w-full">
               <input
                 type="number"
                 value={vacation.used}
@@ -126,13 +133,13 @@ export default function AllowanceTab({
                   setVacation(val);
                   if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
                 }}
-                className="w-8 text-center text-lg font-black text-slate-800 bg-transparent outline-none"
+                className="w-12 text-center text-lg font-black text-slate-800 bg-transparent outline-none p-0"
               />
-              <span className="text-xs font-bold text-slate-700">개</span>
+              <span className="text-xs font-bold text-slate-700 shrink-0">개</span>
             </div>
           </div>
 
-          <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl">
+          <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-indigo-400 block mb-1">잔여 연차</span>
             <div className="text-lg font-black text-indigo-950">
               {remainingVacation} <span className="text-xs font-bold">개</span>
@@ -141,7 +148,7 @@ export default function AllowanceTab({
         </div>
       </div>
 
-      {/* 3. 월 야간근로수당 계산기 세션 */}
+      {/* 3. 월 야간근로수당 계산기 */}
       <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
         <h3 className="font-black text-sm text-indigo-900 flex items-center gap-1.5">
           <span>🧮</span> {month}월 야간근로수당 계산기
