@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DollarSign, Settings, Save, Calendar, Clock, Calculator } from 'lucide-react';
 
 export default function AllowanceTab({
@@ -9,16 +9,36 @@ export default function AllowanceTab({
 }) {
   const [activeSubTab, setActiveSubTab] = useState('allowance');
 
-  // 기본 단가 및 근무시간 초기값
+  // 근무별 기본 야간시간 및 단가 설정 (N: 8시간, E: 0.5시간 기본 보장)
   const defaultConfigs = {
-    D: { pay: 0, nightHours: 0, startTime: '07:30', endTime: '15:30' },
-    E: { pay: 10000, nightHours: 0.5, startTime: '14:30', endTime: '22:30' },
-    N: { pay: 60000, nightHours: 8, startTime: '21:30', endTime: '08:00' },
-    M: { pay: 0, nightHours: 0, startTime: '09:00', endTime: '17:00' },
-    hourlyWage: 13000, ...shiftConfigs
+    D: { pay: 0, nightHours: 0 },
+    E: { pay: 10000, nightHours: 0.5 },
+    N: { pay: 60000, nightHours: 8 },
+    M: { pay: 0, nightHours: 0 },
+    hourlyWage: 13000
   };
 
-  const [tempConfigs, setTempConfigs] = useState(defaultConfigs);
+  // 기존 shiftConfigs와 defaultConfigs 병합 (nightHours 유실 방지)
+  const mergedConfigs = {
+    hourlyWage: shiftConfigs?.hourlyWage || defaultConfigs.hourlyWage,
+    D: { ...defaultConfigs.D, ...(shiftConfigs?.D || {}) },
+    E: { ...defaultConfigs.E, ...(shiftConfigs?.E || {}) },
+    N: { ...defaultConfigs.N, ...(shiftConfigs?.N || {}) },
+    M: { ...defaultConfigs.M, ...(shiftConfigs?.M || {}) }
+  };
+
+  const [tempConfigs, setTempConfigs] = useState(mergedConfigs);
+
+  // shiftConfigs가 상위에서 업데이트될 때 상태 동기화
+  useEffect(() => {
+    setTempConfigs({
+      hourlyWage: shiftConfigs?.hourlyWage || defaultConfigs.hourlyWage,
+      D: { ...defaultConfigs.D, ...(shiftConfigs?.D || {}) },
+      E: { ...defaultConfigs.E, ...(shiftConfigs?.E || {}) },
+      N: { ...defaultConfigs.N, ...(shiftConfigs?.N || {}) },
+      M: { ...defaultConfigs.M, ...(shiftConfigs?.M || {}) }
+    });
+  }, [shiftConfigs]);
 
   const [year, month] = selectedDate ? selectedDate.split('-').map(Number) : [2026, 9];
   const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
@@ -28,15 +48,14 @@ export default function AllowanceTab({
   let totalAllowance = 0;
   let totalNightHours = 0;
 
-  const currentConfigs = { ...defaultConfigs, ...shiftConfigs };
-
   Object.entries(myShifts || {}).forEach(([dateKey, code]) => {
     if (dateKey.startsWith(monthPrefix) && code) {
       if (shiftCounts[code] !== undefined) {
         shiftCounts[code] += 1;
       }
-      const pay = currentConfigs[code]?.pay || 0;
-      const nightH = currentConfigs[code]?.nightHours || 0;
+      const pay = mergedConfigs[code]?.pay ?? 0;
+      // N은 8시간, E는 0.5시간 기본값 적용
+      const nightH = mergedConfigs[code]?.nightHours ?? defaultConfigs[code]?.nightHours ?? 0;
 
       totalAllowance += Number(pay);
       totalNightHours += Number(nightH);
@@ -44,7 +63,7 @@ export default function AllowanceTab({
   });
 
   // 법정 야간 가산 수당 (시급 × 50% × 총 야간시간)
-  const hourlyWage = Number(currentConfigs.hourlyWage || 13000);
+  const hourlyWage = Number(mergedConfigs.hourlyWage || 13000);
   const nightExtraPay = Math.round(totalNightHours * hourlyWage * 0.5);
   const grandTotalPay = totalAllowance + nightExtraPay;
 
@@ -60,9 +79,9 @@ export default function AllowanceTab({
     setActiveSubTab('allowance');
   };
 
-  // 야간 가산수당 자동 계산 헬퍼 (시급 * 0.5 * 야간시간)
+  // 야간 가산수당 자동 계산 헬퍼
   const autoCalculateNightPay = (code) => {
-    const nightH = Number(tempConfigs[code]?.nightHours || 0);
+    const nightH = Number(tempConfigs[code]?.nightHours ?? defaultConfigs[code]?.nightHours ?? 0);
     const wage = Number(tempConfigs.hourlyWage || 13000);
     const calculatedPay = Math.round(nightH * wage * 0.5);
 
@@ -86,7 +105,7 @@ export default function AllowanceTab({
         </button>
         <button
           onClick={() => {
-            setTempConfigs({ ...defaultConfigs, ...shiftConfigs });
+            setTempConfigs(mergedConfigs);
             setActiveSubTab('config');
           }}
           className={`flex-1 py-2 rounded-xl transition cursor-pointer ${
@@ -108,19 +127,19 @@ export default function AllowanceTab({
             <div className="text-3xl font-black">
               {formatMoney(grandTotalPay)} <span className="text-base font-bold">원</span>
             </div>
-            <div className="pt-1 text-[11px] opacity-80 space-y-0.5 border-t border-white/20">
+            <div className="pt-2 text-[11px] opacity-90 space-y-1 border-t border-white/20">
               <div className="flex justify-between">
                 <span>• 건당 고정 수당 합계:</span>
-                <span className="font-bold">{formatMoney(totalAllowance)}원</span>
+                <span className="font-black">{formatMoney(totalAllowance)}원</span>
               </div>
               <div className="flex justify-between">
-                <span>• 법정 야간 가산수당 ({totalNightHours}시간):</span>
-                <span className="font-bold">+{formatMoney(nightExtraPay)}원</span>
+                <span>• 법정 야간 가산수당 ({totalNightHours}시간 인정):</span>
+                <span className="font-black">+{formatMoney(nightExtraPay)}원</span>
               </div>
             </div>
           </div>
 
-          {/* 월 근무 집계 (D, E, N, M, OFF) */}
+          {/* 월 근무 집계 */}
           <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs space-y-3">
             <h3 className="text-xs font-black text-slate-800 flex items-center gap-1">
               <Calendar size={14} className="text-indigo-600" /> {month}월 근무 집계
@@ -198,7 +217,7 @@ export default function AllowanceTab({
                       <input
                         type="number"
                         step="0.5"
-                        value={tempConfigs[code]?.nightHours ?? 0}
+                        value={tempConfigs[code]?.nightHours ?? defaultConfigs[code]?.nightHours ?? 0}
                         onChange={(e) =>
                           setTempConfigs({
                             ...tempConfigs,
