@@ -12,7 +12,6 @@ export default function GroupShareTab({
   activeGroupId,
   setActiveGroupId,
   selectedDate,
-  setSelectedDate,
   userName,
   myShifts = {}
 }) {
@@ -22,14 +21,36 @@ export default function GroupShareTab({
 
   const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
 
-  // DB에서 그룹 목록 불러오기
+  // group_shifts 테이블 데이터를 기존 groups 배열 형태(그룹별 멤버 집계)로 재구성
   const fetchGroupsFromDB = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.from('groups').select('*');
+      // DB 테이블명이 group_shifts
+      const { data, error } = await supabase.from('group_shifts').select('*');
       if (error) throw error;
+
       if (data) {
-        setGroups(data);
+        // group_code 기준으로 데이터 묶기
+        const groupMap = {};
+        data.forEach((row) => {
+          const code = row.group_code;
+          if (!groupMap[code]) {
+            groupMap[code] = {
+              id: code,
+              name: row.group_name,
+              code: code,
+              members: []
+            };
+          }
+          groupMap[code].members.push({
+            id: row.id,
+            name: row.user_name,
+            shifts: typeof row.shifts === 'string' ? JSON.parse(row.shifts || '{}') : (row.shifts || {})
+          });
+        });
+
+        const formattedGroups = Object.values(groupMap);
+        setGroups(formattedGroups);
       }
     } catch (err) {
       console.error('Supabase fetch error:', err.message);
@@ -42,35 +63,30 @@ export default function GroupShareTab({
     fetchGroupsFromDB();
   }, []);
 
-  // 1. 새 그룹 생성 (Supabase DB 연결)
+  // 1. 새 그룹 생성
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
       alert('그룹 이름을 입력해 주세요.');
       return;
     }
+
     const randomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newGroup = {
-      id: `group_${Date.now()}`,
-      name: newGroupName.trim(),
-      code: randomCode,
-      members: [
-        {
-          id: `user_${Date.now()}`,
-          name: userName || '홍숙언',
-          shifts: myShifts || {}
-        }
-      ]
+    const newRow = {
+      group_code: randomCode,
+      group_name: newGroupName.trim(),
+      user_name: userName || '홍숙언',
+      shifts: myShifts || {}
     };
 
     try {
       setLoading(true);
-      const { error } = await supabase.from('groups').insert([newGroup]);
+      const { error } = await supabase.from('group_shifts').insert([newRow]);
       if (error) throw error;
 
       await fetchGroupsFromDB();
-      setActiveGroupId(newGroup.id);
+      setActiveGroupId(randomCode);
       setNewGroupName('');
-      alert(`🎉 '${newGroup.name}' 그룹이 생성되었습니다!`);
+      alert(`🎉 '${newRow.group_name}' 그룹이 생성되었습니다! (초대코드: ${randomCode})`);
     } catch (err) {
       alert(`그룹 생성 실패: ${err.message}`);
     } finally {
@@ -78,53 +94,46 @@ export default function GroupShareTab({
     }
   };
 
-  // 2. 코드로 그룹 입장 (Supabase DB 연결)
+  // 2. 코드로 그룹 입장
   const handleJoinGroup = async () => {
     if (!joinCodeInput.trim()) {
-      alert('초대 코드를 입력해 주세요.');
+      alert('6자리 초대 코드를 입력해 주세요.');
       return;
     }
+
     const code = joinCodeInput.trim().toUpperCase();
 
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('groups')
+        .from('group_shifts')
         .select('*')
-        .eq('code', code)
-        .maybeSingle();
+        .eq('group_code', code);
 
-      if (error || !data) {
+      if (error || !data || data.length === 0) {
         alert('해당 초대 코드와 일치하는 그룹이 없습니다.');
         return;
       }
 
-      const existingMembers = data.members || [];
-      const isMember = existingMembers.some((m) => m.name === userName);
+      const groupName = data[0].group_name;
+      const isAlreadyMember = data.some((m) => m.user_name === userName);
 
-      let updatedMembers = existingMembers;
-      if (!isMember) {
-        updatedMembers = [
-          ...existingMembers,
-          {
-            id: `user_${Date.now()}`,
-            name: userName || '최수민',
-            shifts: myShifts || {}
-          }
-        ];
+      if (!isAlreadyMember) {
+        const newRow = {
+          group_code: code,
+          group_name: groupName,
+          user_name: userName || '최수민',
+          shifts: myShifts || {}
+        };
 
-        const { error: updateError } = await supabase
-          .from('groups')
-          .update({ members: updatedMembers })
-          .eq('id', data.id);
-
-        if (updateError) throw updateError;
+        const { error: insertError } = await supabase.from('group_shifts').insert([newRow]);
+        if (insertError) throw insertError;
       }
 
       await fetchGroupsFromDB();
-      setActiveGroupId(data.id);
+      setActiveGroupId(code);
       setJoinCodeInput('');
-      alert(`🎉 '${data.name}' 그룹에 참여했습니다!`);
+      alert(`🎉 '${groupName}' 그룹에 참여했습니다!`);
     } catch (err) {
       alert(`그룹 참여 실패: ${err.message}`);
     } finally {
@@ -138,18 +147,15 @@ export default function GroupShareTab({
     alert(`초대 코드 [ ${code} ] 가 클립보드에 복사되었습니다!`);
   };
 
-  // 4. 그룹 나가기 (Supabase DB 연결)
-  const handleLeaveGroup = async (groupId) => {
+  // 4. 그룹 나가기
+  const handleLeaveGroup = async (groupCode) => {
     if (!window.confirm('정말 이 그룹에서 나가시겠습니까?')) return;
     try {
-      const target = groups.find((g) => g.id === groupId);
-      if (!target) return;
-
-      const updatedMembers = (target.members || []).filter((m) => m.name !== userName);
       const { error } = await supabase
-        .from('groups')
-        .update({ members: updatedMembers })
-        .eq('id', groupId);
+        .from('group_shifts')
+        .delete()
+        .eq('group_code', groupCode)
+        .eq('user_name', userName);
 
       if (error) throw error;
       await fetchGroupsFromDB();
@@ -159,11 +165,15 @@ export default function GroupShareTab({
     }
   };
 
-  // 5. 그룹 삭제 (Supabase DB 연결)
-  const handleDeleteGroup = async (groupId) => {
-    if (!window.confirm('정말 이 그룹을 삭제하시겠습니까?')) return;
+  // 5. 그룹 삭제
+  const handleDeleteGroup = async (groupCode) => {
+    if (!window.confirm('정말 이 그룹 전체를 삭제하시겠습니까?')) return;
     try {
-      const { error } = await supabase.from('groups').delete().eq('id', groupId);
+      const { error } = await supabase
+        .from('group_shifts')
+        .delete()
+        .eq('group_code', groupCode);
+
       if (error) throw error;
       await fetchGroupsFromDB();
       setActiveGroupId(null);
@@ -177,9 +187,7 @@ export default function GroupShareTab({
   const lastDateOfMonth = new Date(year, month, 0).getDate();
   const calendarDays = [];
 
-  for (let i = 0; i < firstDayOfMonth; i++) {
-    calendarDays.push(null);
-  }
+  for (let i = 0; i < firstDayOfMonth; i++) calendarDays.push(null);
   for (let d = 1; d <= lastDateOfMonth; d++) {
     const formattedDay = String(d).padStart(2, '0');
     const formattedMonth = String(month).padStart(2, '0');
@@ -189,7 +197,6 @@ export default function GroupShareTab({
     });
   }
 
-  // 원본 알약 칩 스타일
   const getBadgeStyle = (shift) => {
     switch (shift) {
       case 'D': return { backgroundColor: '#FEF08A', color: '#854D0E' };
@@ -203,12 +210,11 @@ export default function GroupShareTab({
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
       
-      {/* 1. 메인 공유 그룹 목록 / 등록 화면 (이미지 1 UI) */}
+      {/* 1. 메인 공유 그룹 목록 / 등록 화면 */}
       {!currentGroup && (
         <div className="space-y-4">
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
             
-            {/* 타이틀 */}
             <div className="flex justify-between items-center">
               <h2 className="text-base font-black text-indigo-950 flex items-center gap-2">
                 <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
@@ -221,7 +227,6 @@ export default function GroupShareTab({
               </button>
             </div>
 
-            {/* 카드 2개 레이아웃 */}
             <div className="grid grid-cols-2 gap-3">
               {/* 새 그룹 생성 */}
               <div className="p-4 border border-indigo-100 bg-white rounded-3xl space-y-3 flex flex-col justify-between shadow-xs">
@@ -302,11 +307,10 @@ export default function GroupShareTab({
         </div>
       )}
 
-      {/* 2. 그룹 상세 스케줄 비교 화면 (이미지 2 UI) */}
+      {/* 2. 그룹 상세 스케줄 비교 화면 */}
       {currentGroup && (
         <div className="space-y-4">
           
-          {/* 전체 그룹 목록으로 돌아가기 버튼 */}
           <button
             onClick={() => setActiveGroupId(null)}
             className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200/80 rounded-2xl text-xs font-black text-indigo-600 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
@@ -314,7 +318,6 @@ export default function GroupShareTab({
             <ChevronLeft size={16} /> 전체 그룹 목록으로 돌아가기
           </button>
 
-          {/* 그룹 타이틀 & 코드 & 관리 버튼 카드 */}
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
             <div className="flex justify-between items-start">
               <div>
@@ -324,13 +327,13 @@ export default function GroupShareTab({
 
               <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => handleLeaveGroup(currentGroup.id)}
+                  onClick={() => handleLeaveGroup(currentGroup.code)}
                   className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-extrabold border border-slate-200 cursor-pointer"
                 >
                   나가기
                 </button>
                 <button
-                  onClick={() => handleDeleteGroup(currentGroup.id)}
+                  onClick={() => handleDeleteGroup(currentGroup.code)}
                   className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-extrabold border border-rose-200 cursor-pointer"
                 >
                   삭제
@@ -346,7 +349,6 @@ export default function GroupShareTab({
             </button>
           </div>
 
-          {/* 캘린더 메인 카드 */}
           <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-3">
             <div className="flex justify-between items-center px-1">
               <h3 className="font-black text-base text-slate-900">
@@ -357,7 +359,6 @@ export default function GroupShareTab({
               </button>
             </div>
 
-            {/* 요일 헤더 */}
             <div className="grid grid-cols-7 text-center font-bold text-xs border-b border-slate-100 pb-2">
               <span className="text-rose-500">일</span>
               <span className="text-slate-400">월</span>
@@ -368,13 +369,9 @@ export default function GroupShareTab({
               <span className="text-sky-500">토</span>
             </div>
 
-            {/* 그룹 타일 그리드 */}
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((item, idx) => {
-                if (!item) {
-                  return <div key={`empty_${idx}`} className="min-h-[70px]"></div>;
-                }
-
+                if (!item) return <div key={`empty_${idx}`} className="min-h-[70px]"></div>;
                 const isSelected = selectedDayKey === item.dateKey;
 
                 return (
@@ -389,12 +386,11 @@ export default function GroupShareTab({
                   >
                     <span className="text-[11px] font-black text-slate-700 px-1">{item.day}</span>
 
-                    {/* 멤버 알약 근무 칩 */}
                     <div className="space-y-0.5 mt-1">
                       {currentGroup.members?.map((member) => {
                         const shift = member.shifts?.[item.dateKey] || 'OFF';
                         const badgeStyle = getBadgeStyle(shift);
-                        const displayName = member.name.length > 2 ? member.name.substring(0, 2) : member.name;
+                        const displayName = member.name?.length > 2 ? member.name.substring(0, 2) : member.name;
 
                         return (
                           <div
@@ -414,7 +410,6 @@ export default function GroupShareTab({
             </div>
           </div>
 
-          {/* 선택 날짜 멤버별 상세 근무 카드 (이미지 2 하단) */}
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
             <h4 className="font-black text-xs text-slate-800 flex items-center gap-1">
               📌 <span className="text-indigo-600">{selectedDayKey}</span> 선택 일자 상세 근무
@@ -431,10 +426,7 @@ export default function GroupShareTab({
                     className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center"
                   >
                     <span className="font-extrabold text-xs text-slate-800">{member.name} 쌤</span>
-                    <span
-                      style={badgeStyle}
-                      className="px-3 py-1 rounded-xl font-black text-xs"
-                    >
+                    <span style={badgeStyle} className="px-3 py-1 rounded-xl font-black text-xs">
                       {shift}
                     </span>
                   </div>
