@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, LogIn, ChevronLeft, Copy, LogOut, Trash2, RotateCcw } from 'lucide-react';
+import { Users, Plus, LogIn, ChevronLeft, Copy, LogOut, Trash2, RotateCcw, Palette } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function GroupShareTab({
@@ -19,15 +19,27 @@ export default function GroupShareTab({
   const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
   const [loading, setLoading] = useState(false);
 
-  const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
+  // 그룹 테마 색상 팔레트 정의
+  const COLOR_PALETTE = [
+    { id: 'indigo', name: '인디고', bg: '#6366F1', lightBg: '#EEF2FF', border: '#C7D2FE', text: '#4338CA' },
+    { id: 'purple', name: '보라', bg: '#A855F7', lightBg: '#F3E8FF', border: '#E9D5FF', text: '#6B21A8' },
+    { id: 'emerald', name: '에메랄드', bg: '#10B981', lightBg: '#ECFDF5', border: '#A7F3D0', text: '#047857' },
+    { id: 'rose', name: '로즈', bg: '#F43F5E', lightBg: '#FFF1F2', border: '#FECDD3', text: '#BE123C' },
+    { id: 'amber', name: '앰버', bg: '#F59E0B', lightBg: '#FFFBEB', border: '#FDE68A', text: '#B45309' }
+  ];
 
-  // 내가 참여 중인 그룹 목록만 DB에서 조회하는 핵심 함수
+  // 새 그룹 생성 시 기본선택 색상
+  const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]);
+
+  const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
+  const currentTheme = COLOR_PALETTE.find((c) => c.id === currentGroup?.color) || COLOR_PALETTE[0];
+
+  // 내가 참여 중인 그룹 목록 DB 조회
   const fetchMyGroupsFromDB = async () => {
     if (!userName) return;
     try {
       setLoading(true);
 
-      // 1. DB에서 내가(userName) 포함되어 있는 group_code 목록 가져오기
       const { data: myRows, error: myError } = await supabase
         .from('group_shifts')
         .select('group_code')
@@ -40,10 +52,8 @@ export default function GroupShareTab({
         return;
       }
 
-      // 내 그룹 코드 리스트 추출 (중복 제거)
       const myGroupCodes = [...new Set(myRows.map((r) => r.group_code))];
 
-      // 2. 내 그룹 코드들에 속한 모든 멤버 데이터 가져오기
       const { data: groupData, error: groupError } = await supabase
         .from('group_shifts')
         .select('*')
@@ -60,6 +70,7 @@ export default function GroupShareTab({
               id: code,
               name: row.group_name,
               code: code,
+              color: row.color || 'indigo', // DB에 연동되는 색상 컬럼
               members: []
             };
           }
@@ -79,12 +90,11 @@ export default function GroupShareTab({
     }
   };
 
-  // 접속 유저 이름이 확정되거나 변경되면 내가 속한 그룹만 조회
   useEffect(() => {
     fetchMyGroupsFromDB();
   }, [userName]);
 
-  // 1. 새 그룹 생성
+  // 1. 새 그룹 생성 (선택된 색상 포함 저장)
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
       alert('그룹 이름을 입력해 주세요.');
@@ -96,7 +106,8 @@ export default function GroupShareTab({
       group_code: randomCode,
       group_name: newGroupName.trim(),
       user_name: userName || '홍숙언',
-      shifts: myShifts || {}
+      shifts: myShifts || {},
+      color: selectedColor.id
     };
 
     try {
@@ -107,7 +118,7 @@ export default function GroupShareTab({
       await fetchMyGroupsFromDB();
       setActiveGroupId(randomCode);
       setNewGroupName('');
-      alert(`🎉 '${newRow.group_name}' 그룹이 생성되었습니다! (초대코드: ${randomCode})`);
+      alert(`🎉 '${newRow.group_name}' 그룹이 생성되었습니다!`);
     } catch (err) {
       alert(`그룹 생성 실패: ${err.message}`);
     } finally {
@@ -115,7 +126,7 @@ export default function GroupShareTab({
     }
   };
 
-  // 2. 코드로 그룹 입장 (코드를 맞게 넣었을 때만 내 목록에 등록)
+  // 2. 코드로 그룹 입장
   const handleJoinGroup = async () => {
     if (!joinCodeInput.trim()) {
       alert('6자리 초대 코드를 입력해 주세요.');
@@ -137,6 +148,7 @@ export default function GroupShareTab({
       }
 
       const groupName = data[0].group_name;
+      const groupColor = data[0].color || 'indigo';
       const isAlreadyMember = data.some((m) => m.user_name === userName);
 
       if (!isAlreadyMember) {
@@ -144,7 +156,8 @@ export default function GroupShareTab({
           group_code: code,
           group_name: groupName,
           user_name: userName || '최수민',
-          shifts: myShifts || {}
+          shifts: myShifts || {},
+          color: groupColor
         };
 
         const { error: insertError } = await supabase.from('group_shifts').insert([newRow]);
@@ -162,13 +175,31 @@ export default function GroupShareTab({
     }
   };
 
-  // 3. 코드 복사
+  // 3. 기존 그룹 색상 변경
+  const handleChangeGroupColor = async (groupCode, colorId) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('group_shifts')
+        .update({ color: colorId })
+        .eq('group_code', groupCode);
+
+      if (error) throw error;
+      await fetchMyGroupsFromDB();
+    } catch (err) {
+      alert(`색상 변경 실패: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 4. 코드 복사
   const handleCopyCode = (code) => {
     navigator.clipboard.writeText(code);
     alert(`초대 코드 [ ${code} ] 가 클립보드에 복사되었습니다!`);
   };
 
-  // 4. 그룹 나가기 (내 계정 행만 DB에서 삭제)
+  // 5. 그룹 나가기
   const handleLeaveGroup = async (groupCode) => {
     if (!window.confirm('정말 이 그룹에서 나가시겠습니까?')) return;
     try {
@@ -186,7 +217,7 @@ export default function GroupShareTab({
     }
   };
 
-  // 5. 그룹 삭제 (그룹 전체 행 삭제)
+  // 6. 그룹 삭제
   const handleDeleteGroup = async (groupCode) => {
     if (!window.confirm('정말 이 그룹 전체를 삭제하시겠습니까?')) return;
     try {
@@ -203,7 +234,7 @@ export default function GroupShareTab({
     }
   };
 
-  // 달력 날짜 생성
+  // 달력 날짜 계산
   const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
   const lastDateOfMonth = new Date(year, month, 0).getDate();
   const calendarDays = [];
@@ -231,7 +262,7 @@ export default function GroupShareTab({
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
       
-      {/* 1. 메인 공유 그룹 목록 / 등록 화면 */}
+      {/* 1. 공유 그룹 목록 관리 화면 */}
       {!currentGroup && (
         <div className="space-y-4">
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
@@ -248,8 +279,9 @@ export default function GroupShareTab({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              {/* 새 그룹 생성 */}
+            <div className="grid grid-cols-2 gap-3 items-stretch">
+              
+              {/* 새 그룹 생성 (색상 선택 추가) */}
               <div className="p-4 border border-indigo-100 bg-white rounded-3xl space-y-3 flex flex-col justify-between shadow-xs">
                 <div className="space-y-2">
                   <span className="font-extrabold text-xs text-indigo-950 flex items-center gap-1">
@@ -262,13 +294,29 @@ export default function GroupShareTab({
                     onChange={(e) => setNewGroupName(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200/60 rounded-2xl text-xs font-bold outline-none"
                   />
+
+                  {/* 색상 픽커 */}
+                  <div className="flex items-center justify-around pt-1">
+                    {COLOR_PALETTE.map((color) => (
+                      <button
+                        key={color.id}
+                        type="button"
+                        onClick={() => setSelectedColor(color)}
+                        style={{ backgroundColor: color.bg }}
+                        className={`w-5 h-5 rounded-full transition cursor-pointer ${
+                          selectedColor.id === color.id ? 'ring-2 ring-offset-2 ring-slate-800 scale-110' : 'opacity-70 hover:opacity-100'
+                        }`}
+                      />
+                    ))}
+                  </div>
                 </div>
+
                 <button
                   type="button"
                   disabled={loading}
                   onClick={handleCreateGroup}
-                  style={{ backgroundColor: '#6366F1' }}
-                  className="w-full py-2.5 text-white font-black text-xs rounded-2xl hover:bg-indigo-600 transition cursor-pointer shadow-xs"
+                  style={{ backgroundColor: selectedColor.bg }}
+                  className="w-full py-2.5 text-white font-black text-xs rounded-2xl transition cursor-pointer shadow-xs"
                 >
                   {loading ? '처리 중...' : '그룹 만들기'}
                 </button>
@@ -300,22 +348,25 @@ export default function GroupShareTab({
               </div>
             </div>
 
-            {/* 참여 중인 그룹 목록 (내가 참여한 그룹만 표출) */}
+            {/* 참여 중인 그룹 목록 (각 그룹별 지정 색상 반영) */}
             <div className="pt-3 border-t border-slate-100 space-y-2">
               <h3 className="font-black text-xs text-slate-700">참여 중인 그룹 목록</h3>
               {groups && groups.length > 0 ? (
                 <div className="space-y-2">
-                  {groups.map((g) => (
-                    <div
-                      key={g.id}
-                      onClick={() => setActiveGroupId(g.id)}
-                      style={{ backgroundColor: '#6366F1' }}
-                      className="p-3.5 text-white rounded-2xl flex items-center justify-between cursor-pointer shadow-xs transition hover:opacity-95"
-                    >
-                      <span className="font-black text-sm">{g.name} ({g.members?.length || 1}명)</span>
-                      <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">입장하기 &gt;</span>
-                    </div>
-                  ))}
+                  {groups.map((g) => {
+                    const theme = COLOR_PALETTE.find((c) => c.id === g.color) || COLOR_PALETTE[0];
+                    return (
+                      <div
+                        key={g.id}
+                        onClick={() => setActiveGroupId(g.id)}
+                        style={{ backgroundColor: theme.bg }}
+                        className="p-3.5 text-white rounded-2xl flex items-center justify-between cursor-pointer shadow-xs transition hover:opacity-95"
+                      >
+                        <span className="font-black text-sm">{g.name} ({g.members?.length || 1}명)</span>
+                        <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">입장하기 &gt;</span>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="p-4 bg-slate-50 text-center rounded-2xl text-xs font-bold text-slate-400">
@@ -328,21 +379,39 @@ export default function GroupShareTab({
         </div>
       )}
 
-      {/* 2. 그룹 상세 스케줄 비교 화면 */}
+      {/* 2. 그룹 상세 스케줄 비교 화면 (상단 동적 색상 변경 지원) */}
       {currentGroup && (
         <div className="space-y-4">
           
           <button
             onClick={() => setActiveGroupId(null)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200/80 rounded-2xl text-xs font-black text-indigo-600 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+            style={{ color: currentTheme.text }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200/80 rounded-2xl text-xs font-black hover:bg-slate-50 transition shadow-2xs cursor-pointer"
           >
             <ChevronLeft size={16} /> 전체 그룹 목록으로 돌아가기
           </button>
 
+          {/* 그룹 헤더 카드 (색상 테마 실시간 변경 기능) */}
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-xl font-black text-slate-900">{currentGroup.name}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-black text-slate-900">{currentGroup.name}</h2>
+                  {/* 색상 선택 팔레트 바 */}
+                  <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-full border border-slate-100">
+                    {COLOR_PALETTE.map((color) => (
+                      <button
+                        key={color.id}
+                        type="button"
+                        onClick={() => handleChangeGroupColor(currentGroup.code, color.id)}
+                        style={{ backgroundColor: color.bg }}
+                        className={`w-3.5 h-3.5 rounded-full transition cursor-pointer ${
+                          currentTheme.id === color.id ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' : 'opacity-60 hover:opacity-100'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
                 <p className="text-xs font-bold text-slate-400 mt-0.5">초대 코드: {currentGroup.code}</p>
               </div>
 
@@ -364,7 +433,8 @@ export default function GroupShareTab({
 
             <button
               onClick={() => handleCopyCode(currentGroup.code)}
-              className="w-full py-2.5 bg-indigo-50/60 border border-indigo-100 rounded-2xl flex items-center justify-center gap-1.5 text-xs font-extrabold text-indigo-600 cursor-pointer"
+              style={{ backgroundColor: currentTheme.lightBg, borderColor: currentTheme.border, color: currentTheme.text }}
+              className="w-full py-2.5 border rounded-2xl flex items-center justify-center gap-1.5 text-xs font-extrabold cursor-pointer"
             >
               <Copy size={13} /> 코드: {currentGroup.code} 복사하기
             </button>
@@ -399,9 +469,14 @@ export default function GroupShareTab({
                   <div
                     key={item.dateKey}
                     onClick={() => setSelectedDayKey(item.dateKey)}
+                    style={
+                      isSelected
+                        ? { borderColor: currentTheme.bg, backgroundColor: currentTheme.lightBg }
+                        : {}
+                    }
                     className={`min-h-[70px] p-1 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
                       isSelected
-                        ? 'border-indigo-600 ring-2 ring-indigo-200 bg-indigo-50/20'
+                        ? 'ring-2 ring-offset-1'
                         : 'border-slate-100 bg-slate-50/30 hover:bg-slate-50'
                     }`}
                   >
@@ -433,7 +508,7 @@ export default function GroupShareTab({
 
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
             <h4 className="font-black text-xs text-slate-800 flex items-center gap-1">
-              📌 <span className="text-indigo-600">{selectedDayKey}</span> 선택 일자 상세 근무
+              📌 <span style={{ color: currentTheme.text }}>{selectedDayKey}</span> 선택 일자 상세 근무
             </h4>
 
             <div className="grid grid-cols-2 gap-2">
