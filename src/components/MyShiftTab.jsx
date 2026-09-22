@@ -35,7 +35,7 @@ export default function MyShiftTab({
     }
   });
 
-  // 2. 달력 데이터 계산
+  // 2. 달력 일자 계산
   const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1).getDay();
   const lastDateOfMonth = new Date(currentYear, currentMonth, 0).getDate();
   const prevMonthLastDate = new Date(currentYear, currentMonth - 1, 0).getDate();
@@ -67,44 +67,38 @@ export default function MyShiftTab({
     });
   }
 
-  // 3. 참고 이미지 스타일 반영: 근무 코드별 타일 컬러 및 텍스트 설정
-  const getTileStyle = (shift) => {
+  // 3. 네모 라운드 타일 컬러 (마이시프트 톤앤매너)
+  const getTileConfig = (shift) => {
     switch (shift) {
       case 'D':
         return {
-          bg: 'bg-indigo-500/80 text-white',
-          style: { backgroundColor: '#6366F1' },
+          style: { backgroundColor: '#818CF8', color: '#FFFFFF' }, // 인디고 파랑
           label: 'D'
         };
       case 'E':
         return {
-          bg: 'bg-purple-500/80 text-white',
-          style: { backgroundColor: '#A855F7' },
+          style: { backgroundColor: '#C084FC', color: '#FFFFFF' }, // 퍼플 보라
           label: 'E'
         };
       case 'N':
         return {
-          bg: 'bg-emerald-400 text-slate-950 font-black',
-          style: { backgroundColor: '#34D399' },
+          style: { backgroundColor: '#34D399', color: '#064E3B' }, // 에메랄드 민트
           label: 'N'
         };
       case 'M':
         return {
-          bg: 'bg-amber-400 text-slate-950 font-black',
-          style: { backgroundColor: '#FBBF24' },
+          style: { backgroundColor: '#FBBF24', color: '#78350F' }, // 앰버 노랑
           label: 'M'
         };
       case 'OFF':
         return {
-          bg: 'bg-rose-400/90 text-white',
-          style: { backgroundColor: '#FB7185' },
+          style: { backgroundColor: '#FB7185', color: '#FFFFFF' }, // 살구 오프
           isOff: true,
           label: 'OFF'
         };
       case '연차':
         return {
-          bg: 'bg-pink-500 text-white',
-          style: { backgroundColor: '#EC4899' },
+          style: { backgroundColor: '#F472B6', color: '#FFFFFF' }, // 핑크 연차
           label: '연차'
         };
       default:
@@ -113,17 +107,15 @@ export default function MyShiftTab({
   };
 
   return (
-    <div className="space-y-3 font-sans max-w-md mx-auto pb-12 text-slate-100">
-      {/* 메인 캘린더 카드 (세련된 아노다이징 다크 카드) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-2xl space-y-4">
+    <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
+      {/* 메인 캘린더 카드 */}
+      <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-4">
         
-        {/* 헤더 & 월 컨트롤 */}
-        <div className="flex items-center justify-between pt-1 px-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
-              <span>{currentYear}년 {String(currentMonth).padStart(2, '0')}월</span>
-            </h2>
-          </div>
+        {/* 상단 타이틀 & 컨트롤 */}
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-xl font-black text-slate-900 tracking-tight">
+            {currentYear}년 {String(currentMonth).padStart(2, '0')}월
+          </h2>
 
           <div className="flex items-center gap-1">
             <button
@@ -133,67 +125,67 @@ export default function MyShiftTab({
                 const m = String(today.getMonth() + 1).padStart(2, '0');
                 setSelectedDate(`${y}-${m}-01`);
               }}
-              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer border border-slate-700/60"
+              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl transition cursor-pointer"
             >
               오늘
             </button>
             <button
               onClick={handlePrevMonth}
-              className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 transition cursor-pointer"
+              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer"
             >
               <ChevronLeft size={20} />
             </button>
             <button
               onClick={handleNextMonth}
-              className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 transition cursor-pointer"
+              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer"
             >
               <ChevronRight size={20} />
             </button>
           </div>
         </div>
 
-        {/* 상단 미니멀 레전드 바 */}
-        <div className="flex items-center gap-3 px-2 py-1.5 bg-slate-800/60 rounded-2xl border border-slate-800 text-xs font-bold text-slate-300 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        {/* 미니멀 레전드 바 */}
+        <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 rounded-2xl text-xs font-black text-slate-600 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#34D399' }}></span>
             <span>N {shiftCounts.N}</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#818CF8' }}></span>
             <span>D {shiftCounts.D}</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#C084FC' }}></span>
             <span>E {shiftCounts.E}</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-400"></span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#FB7185' }}></span>
             <span>OFF {shiftCounts.OFF}</span>
           </div>
           {shiftCounts.M > 0 && (
-            <div className="flex items-center gap-1 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#FBBF24' }}></span>
               <span>M {shiftCounts.M}</span>
             </div>
           )}
         </div>
 
-        {/* 요일 라벨 */}
-        <div className="grid grid-cols-7 text-center font-black text-xs text-slate-400 pt-1 pb-2 border-b border-slate-800">
-          <span className="text-rose-400">일</span>
+        {/* 요일 헤더 */}
+        <div className="grid grid-cols-7 text-center font-black text-xs text-slate-400 py-1 border-b border-slate-100">
+          <span className="text-rose-500">일</span>
           <span>월</span>
           <span>화</span>
           <span>수</span>
           <span>목</span>
           <span>금</span>
-          <span className="text-sky-400">토</span>
+          <span className="text-sky-500">토</span>
         </div>
 
-        {/* 타일형 캘린더 그리드 */}
-        <div className="grid grid-cols-7 gap-1">
+        {/* 라운드 타일 그리드 */}
+        <div className="grid grid-cols-7 gap-1 pt-1">
           {calendarDays.map((item, index) => {
             const shift = item.dateKey ? myShifts[item.dateKey] : null;
-            const tileConfig = shift ? getTileStyle(shift) : null;
+            const tileConfig = shift ? getTileConfig(shift) : null;
             const isToday =
               item.dateKey ===
               `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
@@ -201,45 +193,42 @@ export default function MyShiftTab({
             return (
               <div
                 key={index}
-                className={`min-h-[72px] rounded-2xl flex flex-col justify-between p-1 relative overflow-hidden transition ${
-                  item.isCurrentMonth ? 'bg-slate-800/40' : 'bg-slate-900/30 opacity-30'
-                } ${isToday ? 'ring-2 ring-indigo-500' : ''}`}
+                className={`min-h-[64px] rounded-2xl flex flex-col justify-between p-1 transition border ${
+                  isToday
+                    ? 'border-indigo-500 bg-indigo-50/20'
+                    : 'border-slate-50 bg-slate-50/30'
+                } ${!item.isCurrentMonth ? 'opacity-25' : ''}`}
               >
-                {/* 상단 날짜 헤더 */}
-                <div className="flex justify-between items-center px-1 pt-0.5">
+                {/* 날짜 숫자 */}
+                <div className="flex justify-between items-center px-1">
                   <span
                     className={`text-[11px] font-black ${
                       index % 7 === 0
-                        ? 'text-rose-400'
+                        ? 'text-rose-500'
                         : index % 7 === 6
-                        ? 'text-sky-400'
-                        : 'text-slate-300'
+                        ? 'text-sky-500'
+                        : 'text-slate-700'
                     }`}
                   >
                     {item.day}
                   </span>
                 </div>
 
-                {/* 중앙 풀타일 근무 블록 */}
-                {shift && tileConfig ? (
+                {/* 네모 라운드 타일 근무 블록 */}
+                {item.isCurrentMonth && shift && tileConfig ? (
                   <div
                     style={tileConfig.style}
-                    className={`w-full h-9 rounded-xl flex items-center justify-center font-black text-sm shadow-xs transition ${
-                      tileConfig.bg
-                    }`}
+                    className="w-full h-8 rounded-xl flex items-center justify-center font-black text-xs shadow-xs transition"
                   >
                     {tileConfig.isOff ? (
-                      <Heart size={16} className="fill-current text-white/90" />
+                      <Heart size={14} className="fill-current text-white/90" />
                     ) : (
                       <span>{tileConfig.label}</span>
                     )}
                   </div>
                 ) : (
-                  <div className="h-9"></div>
+                  <div className="h-8"></div>
                 )}
-
-                {/* 하단 여백 (메모나 디데이용) */}
-                <div className="h-2"></div>
               </div>
             );
           })}
