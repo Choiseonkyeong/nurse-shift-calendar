@@ -21,18 +21,39 @@ export default function GroupShareTab({
 
   const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
 
-  // group_shifts 테이블 데이터를 기존 groups 배열 형태(그룹별 멤버 집계)로 재구성
-  const fetchGroupsFromDB = async () => {
+  // 내가 참여 중인 그룹 목록만 DB에서 조회하는 핵심 함수
+  const fetchMyGroupsFromDB = async () => {
+    if (!userName) return;
     try {
       setLoading(true);
-      // DB 테이블명이 group_shifts
-      const { data, error } = await supabase.from('group_shifts').select('*');
-      if (error) throw error;
 
-      if (data) {
-        // group_code 기준으로 데이터 묶기
+      // 1. DB에서 내가(userName) 포함되어 있는 group_code 목록 가져오기
+      const { data: myRows, error: myError } = await supabase
+        .from('group_shifts')
+        .select('group_code')
+        .eq('user_name', userName);
+
+      if (myError) throw myError;
+
+      if (!myRows || myRows.length === 0) {
+        setGroups([]);
+        return;
+      }
+
+      // 내 그룹 코드 리스트 추출 (중복 제거)
+      const myGroupCodes = [...new Set(myRows.map((r) => r.group_code))];
+
+      // 2. 내 그룹 코드들에 속한 모든 멤버 데이터 가져오기
+      const { data: groupData, error: groupError } = await supabase
+        .from('group_shifts')
+        .select('*')
+        .in('group_code', myGroupCodes);
+
+      if (groupError) throw groupError;
+
+      if (groupData) {
         const groupMap = {};
-        data.forEach((row) => {
+        groupData.forEach((row) => {
           const code = row.group_code;
           if (!groupMap[code]) {
             groupMap[code] = {
@@ -49,8 +70,7 @@ export default function GroupShareTab({
           });
         });
 
-        const formattedGroups = Object.values(groupMap);
-        setGroups(formattedGroups);
+        setGroups(Object.values(groupMap));
       }
     } catch (err) {
       console.error('Supabase fetch error:', err.message);
@@ -59,9 +79,10 @@ export default function GroupShareTab({
     }
   };
 
+  // 접속 유저 이름이 확정되거나 변경되면 내가 속한 그룹만 조회
   useEffect(() => {
-    fetchGroupsFromDB();
-  }, []);
+    fetchMyGroupsFromDB();
+  }, [userName]);
 
   // 1. 새 그룹 생성
   const handleCreateGroup = async () => {
@@ -83,7 +104,7 @@ export default function GroupShareTab({
       const { error } = await supabase.from('group_shifts').insert([newRow]);
       if (error) throw error;
 
-      await fetchGroupsFromDB();
+      await fetchMyGroupsFromDB();
       setActiveGroupId(randomCode);
       setNewGroupName('');
       alert(`🎉 '${newRow.group_name}' 그룹이 생성되었습니다! (초대코드: ${randomCode})`);
@@ -94,7 +115,7 @@ export default function GroupShareTab({
     }
   };
 
-  // 2. 코드로 그룹 입장
+  // 2. 코드로 그룹 입장 (코드를 맞게 넣었을 때만 내 목록에 등록)
   const handleJoinGroup = async () => {
     if (!joinCodeInput.trim()) {
       alert('6자리 초대 코드를 입력해 주세요.');
@@ -130,7 +151,7 @@ export default function GroupShareTab({
         if (insertError) throw insertError;
       }
 
-      await fetchGroupsFromDB();
+      await fetchMyGroupsFromDB();
       setActiveGroupId(code);
       setJoinCodeInput('');
       alert(`🎉 '${groupName}' 그룹에 참여했습니다!`);
@@ -147,7 +168,7 @@ export default function GroupShareTab({
     alert(`초대 코드 [ ${code} ] 가 클립보드에 복사되었습니다!`);
   };
 
-  // 4. 그룹 나가기
+  // 4. 그룹 나가기 (내 계정 행만 DB에서 삭제)
   const handleLeaveGroup = async (groupCode) => {
     if (!window.confirm('정말 이 그룹에서 나가시겠습니까?')) return;
     try {
@@ -158,14 +179,14 @@ export default function GroupShareTab({
         .eq('user_name', userName);
 
       if (error) throw error;
-      await fetchGroupsFromDB();
+      await fetchMyGroupsFromDB();
       setActiveGroupId(null);
     } catch (err) {
       alert(`그룹 나가기 실패: ${err.message}`);
     }
   };
 
-  // 5. 그룹 삭제
+  // 5. 그룹 삭제 (그룹 전체 행 삭제)
   const handleDeleteGroup = async (groupCode) => {
     if (!window.confirm('정말 이 그룹 전체를 삭제하시겠습니까?')) return;
     try {
@@ -175,7 +196,7 @@ export default function GroupShareTab({
         .eq('group_code', groupCode);
 
       if (error) throw error;
-      await fetchGroupsFromDB();
+      await fetchMyGroupsFromDB();
       setActiveGroupId(null);
     } catch (err) {
       alert(`그룹 삭제 실패: ${err.message}`);
@@ -220,10 +241,10 @@ export default function GroupShareTab({
                 <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
               </h2>
               <button
-                onClick={fetchGroupsFromDB}
+                onClick={fetchMyGroupsFromDB}
                 className="text-xs font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-1 cursor-pointer"
               >
-                <RotateCcw size={12} /> 동기화
+                <RotateCcw size={12} /> 새로고침
               </button>
             </div>
 
@@ -279,7 +300,7 @@ export default function GroupShareTab({
               </div>
             </div>
 
-            {/* 참여 중인 그룹 목록 */}
+            {/* 참여 중인 그룹 목록 (내가 참여한 그룹만 표출) */}
             <div className="pt-3 border-t border-slate-100 space-y-2">
               <h3 className="font-black text-xs text-slate-700">참여 중인 그룹 목록</h3>
               {groups && groups.length > 0 ? (
@@ -354,7 +375,7 @@ export default function GroupShareTab({
               <h3 className="font-black text-base text-slate-900">
                 {year}년 {month}월 그룹 근무표
               </h3>
-              <button onClick={fetchGroupsFromDB} className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer">
+              <button onClick={fetchMyGroupsFromDB} className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer">
                 <RotateCcw size={12} /> 동기화
               </button>
             </div>
