@@ -5,9 +5,10 @@ import { unregisterDevice } from '../lib/pushNotifications';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
-import RosterReview from './RosterReview';
 import { toCsv, toIcs } from '../lib/exportData';
 import { shareFile } from '../lib/shareCalendar';
+
+const ROSTER_NAME_KEY = 'roster_name'; // 근무표 속 내 이름 (앱 이름과 다를 때 기억)
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
 const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
@@ -20,20 +21,50 @@ export default function ImportTab({
   userName,
   setUserName,
   dayNotes = {},
-  setDayNotes
+  setDayNotes,
+  onImported
 }) {
   const shiftTypes = useShiftTypes();
   const [ocrProgress, setOcrProgress] = useState(null); // { p, msg }
-  const [ocrResult, setOcrResult] = useState(null);
   const [icsPreview, setIcsPreview] = useState(null); // { shifts, notes, eventCount, fileName }
   const [icsOverwrite, setIcsOverwrite] = useState(true);
   const [icsWithNotes, setIcsWithNotes] = useState(true);
   const [statusMessage, setStatusMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showNameModal, setShowNameModal] = useState(false);
-  const [parsedDataByName, setParsedDataByName] = useState({});
-  const [extractedNames, setExtractedNames] = useState([]);
-  const [detectedYearMonth, setDetectedYearMonth] = useState('2026-09');
+  // 인식 결과(사진/엑셀): 본인 이름을 자동으로 못 찾았을 때만 이름 선택 창 표시
+  // { source: '사진' | '엑셀', yearMonth: 'YYYY-MM', byName: { 이름: { shifts, uncertain } } }
+  const [pendingImport, setPendingImport] = useState(null);
+
+  /** 근무표에 바로 등록 → 내 근무 달력으로 이동 (App 이 되돌리기 배너 표시) */
+  const registerImport = (imp, name) => {
+    const data = imp.byName[name];
+    if (!data) return;
+    try {
+      localStorage.setItem(ROSTER_NAME_KEY, name);
+    } catch (e) {
+      /* 저장 실패는 무시 */
+    }
+    setPendingImport(null);
+    onImported?.({ name, source: imp.source, yearMonth: imp.yearMonth, shifts: data.shifts, uncertain: data.uncertain });
+  };
+
+  /** 본인 이름 자동 선택: 앱 이름 → 지난번 선택한 이름 → 한 명뿐이면 그 사람 */
+  const autoRegister = (imp) => {
+    const names = Object.keys(imp.byName);
+    let saved = '';
+    try {
+      saved = localStorage.getItem(ROSTER_NAME_KEY) || '';
+    } catch (e) {
+      /* 무시 */
+    }
+    const pick =
+      names.find((n) => n === userName) ||
+      names.find((n) => n === saved) ||
+      names.find((n) => userName && (n.includes(userName) || userName.includes(n))) ||
+      (names.length === 1 ? names[0] : '');
+    if (pick) registerImport(imp, pick);
+    else setPendingImport(imp);
+  };
 
   // 1. 엑셀 파서 (7명 전원 정밀 추출 및 줄바꿈/특수문자 정제)
   const handleExcelUpload = async (e) => {
@@ -89,7 +120,6 @@ export default function ImportTab({
           }
 
           const targetYM = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`;
-          setDetectedYearMonth(targetYM);
 
           const prevDateObj = new Date(parsedYear, parsedMonth - 2, 1);
           const prevYear = prevDateObj.getFullYear();
@@ -206,10 +236,12 @@ export default function ImportTab({
             return;
           }
 
-          setParsedDataByName(nameMap);
-          setExtractedNames(foundNames);
-          setShowNameModal(true);
-          setStatusMessage(`✅ [${parsedYear}년 ${parsedMonth}월] 총 ${foundNames.length}명의 근무자 추출 완료!`);
+          setStatusMessage('');
+          autoRegister({
+            source: '엑셀',
+            yearMonth: targetYM,
+            byName: Object.fromEntries(foundNames.map((n) => [n, { shifts: nameMap[n], uncertain: [] }]))
+          });
 
         } catch (err) {
           console.error(err);
@@ -246,7 +278,19 @@ export default function ImportTab({
       if (result.error) {
         setStatusMessage(`❌ ${result.error}`);
       } else {
-        setOcrResult(result);
+        // 인식 결과 → 이름별 { 근무, 확인 필요 날짜(신뢰도 낮음·못 읽음) }
+        const byName = {};
+        result.names.forEach((n) => {
+          const cells = result.people[n] || {};
+          byName[n] = {
+            shifts: Object.fromEntries(Object.entries(cells).map(([k, v]) => [k, v.code])),
+            uncertain: [
+              ...Object.entries(cells).filter(([, v]) => v.confidence < 60).map(([k]) => k),
+              ...(result.unread?.[n] || [])
+            ]
+          };
+        });
+        autoRegister({ source: '사진', yearMonth: `${result.year}-${String(result.month).padStart(2, '0')}`, byName });
       }
     } catch (err) {
       console.error(err);
@@ -255,14 +299,6 @@ export default function ImportTab({
       setOcrProgress(null);
       setIsProcessing(false);
     }
-  };
-
-  const handleApplyOcr = ({ name, shifts, yearMonth }) => {
-    setMyShifts?.((prev) => ({ ...(prev || {}), ...shifts }));
-    if (name && setUserName && !userName) setUserName(name);
-    setSelectedDate?.(`${yearMonth}-01`);
-    setOcrResult(null);
-    setStatusMessage(`🎉 [${name}] ${yearMonth.replace('-', '년 ')}월 근무 ${Object.keys(shifts).length}일을 저장했습니다.`);
   };
 
   // 3. 휴대폰 캘린더(.ics) 가져오기
@@ -328,29 +364,6 @@ export default function ImportTab({
     } catch (err) {
       setStatusMessage(`❌ 내보내기 실패: ${err.message}`);
     }
-  };
-
-  // 본인 이름 선택 시 저장 및 자동 달력 연/월 이동
-  const handleSelectName = (selectedName) => {
-    const targetShifts = parsedDataByName[selectedName] || {};
-
-    if (setMyShifts && Object.keys(targetShifts).length > 0) {
-      setMyShifts((prev) => ({
-        ...(prev || {}),
-        ...targetShifts
-      }));
-    }
-
-    if (setUserName) {
-      setUserName(selectedName);
-    }
-
-    if (setSelectedDate && detectedYearMonth) {
-      setSelectedDate(`${detectedYearMonth}-01`);
-    }
-
-    setShowNameModal(false);
-    setStatusMessage(`🎉 [${selectedName}] 님의 근무표가 내 달력(${detectedYearMonth})에 완벽히 저장되었습니다!`);
   };
 
   return (
@@ -503,9 +516,6 @@ export default function ImportTab({
         </div>
       </div>
 
-      {ocrResult && (
-        <RosterReview result={ocrResult} defaultName={userName} onApply={handleApplyOcr} onClose={() => setOcrResult(null)} />
-      )}
 
       {icsPreview && createPortal(
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
@@ -548,23 +558,23 @@ export default function ImportTab({
       )}
 
       {/* 추출된 전체 근무자 목록 선택 모달 */}
-      {showNameModal && createPortal(
+      {pendingImport && createPortal(
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
             <div className="flex justify-between items-center border-b pb-2 border-slate-100">
               <h3 className="font-extrabold text-sm text-slate-900">본인 이름 선택</h3>
-              <button onClick={() => setShowNameModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <button onClick={() => setPendingImport(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
                 <X size={16} />
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              분석된 근무자 목록입니다. 본인 이름을 선택하시면 근무표가 달력에 즉시 저장됩니다.
+              {pendingImport.source} 근무표에서 {Object.keys(pendingImport.byName).length}명을 찾았어요. 본인 이름을 누르면 바로 내 근무표에 등록돼요.
             </p>
             <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-              {extractedNames.map((name) => (
+              {Object.keys(pendingImport.byName).map((name) => (
                 <button
                   key={name}
-                  onClick={() => handleSelectName(name)}
+                  onClick={() => registerImport(pendingImport, name)}
                   className="py-2.5 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 font-extrabold text-xs rounded-2xl transition cursor-pointer"
                 >
                   {name}

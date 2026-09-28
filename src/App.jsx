@@ -341,6 +341,22 @@ export default function App() {
     setCustomShiftTypes((prev) => (prev || []).filter((t) => t.code !== code));
   };
 
+  // 사진/엑셀 가져오기 → 내 근무표에 바로 등록하고 달력으로 이동 (되돌리기 가능)
+  const [importBanner, setImportBanner] = useState(null);
+  const handleImported = ({ name, source, yearMonth, shifts, uncertain = [] }) => {
+    const current = myShiftsRef.current || {};
+    const previous = Object.fromEntries(Object.keys(shifts).map((k) => [k, current[k] || null]));
+    setMyShifts((prev) => ({ ...(prev || {}), ...shifts }));
+    setSelectedDate(`${yearMonth}-01`);
+    setActiveTab('myShift');
+    setImportBanner({ name, source, yearMonth, count: Object.keys(shifts).length, uncertain, previous, keys: Object.keys(shifts) });
+  };
+  const handleUndoImport = () => {
+    if (!importBanner) return;
+    setMyShifts((prev) => applyChanges(prev || {}, importBanner.previous));
+    setImportBanner(null);
+  };
+
   const handleSaveName = () => {
     if (tempUserName.trim()) {
       setUserName(tempUserName.trim().slice(0, 30));
@@ -458,6 +474,9 @@ export default function App() {
               dayNotes={dayNotes || {}}
               setDayNotes={setDayNotes}
               onDeleteShiftType={handleDeleteShiftType}
+              importBanner={importBanner}
+              onUndoImport={handleUndoImport}
+              onCloseImportBanner={() => setImportBanner(null)}
             />
           )}
 
@@ -502,6 +521,7 @@ export default function App() {
               setUserName={setUserName}
               dayNotes={dayNotes || {}}
               setDayNotes={setDayNotes}
+              onImported={handleImported}
             />
           )}
           </Suspense>
