@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
+import PatternFill from './PatternFill';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { isNativePush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 
@@ -31,6 +32,7 @@ export default function MyShiftTab({
   const [quickCode, setQuickCode] = useState(null);
   const quickMode = quickCode !== null;
   const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
+  const [isPatternOpen, setIsPatternOpen] = useState(false);
 
   // 알림 권한 요청 및 타이머 등록
   const requestNotificationPermission = async () => {
@@ -256,7 +258,7 @@ export default function MyShiftTab({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-400 min-w-0 truncate">
-              {quickMode ? (quickCode === '' ? '지울 날짜 터치' : `터치 → ${quickCode}`) : '근무 입력'}
+              {quickMode ? (quickCode === '' ? '지울 날짜 터치' : `터치 → ${quickCode}`) : ''}
             </span>
             <div className="flex items-center gap-1.5 shrink-0">
             <button
@@ -264,7 +266,14 @@ export default function MyShiftTab({
               onClick={() => setIsTypeManagerOpen(true)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-2xl text-xs font-black border bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap"
             >
-              <Palette size={13} /> 근무 종류
+              <Palette size={13} /> 종류
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsPatternOpen(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-2xl text-xs font-black border bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap"
+            >
+              <Repeat size={13} /> 패턴
             </button>
             <button
               type="button"
@@ -405,6 +414,18 @@ export default function MyShiftTab({
           onSave={onSaveShiftType}
           onDelete={onDeleteShiftType}
           isCodeInUse={(code) => Object.values(myShifts || {}).includes(code)}
+        />
+      )}
+
+      {isPatternOpen && (
+        <PatternFill
+          startDate={selectedDate}
+          myShifts={myShifts || {}}
+          onClose={() => setIsPatternOpen(false)}
+          onApply={(filled) => {
+            setMyShifts((prev) => ({ ...(prev || {}), ...filled }));
+            setIsPatternOpen(false);
+          }}
         />
       )}
 
