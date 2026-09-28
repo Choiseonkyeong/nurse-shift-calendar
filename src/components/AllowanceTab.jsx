@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useShiftTypes, findShiftType } from '../lib/shiftTypes';
 
 export default function AllowanceTab({
   myShifts = {},
@@ -9,6 +10,9 @@ export default function AllowanceTab({
 }) {
   // 보안 모드: 시급·수당 금액 가리기
   const blurCls = privacyBlur ? 'blur-[5px] select-none' : '';
+  const shiftTypes = useShiftTypes();
+  const workTypes = shiftTypes.filter((t) => t.kind === 'work');
+  const leaveTypes = shiftTypes.filter((t) => t.kind === 'leave');
   const [year, month] = selectedDate ? selectedDate.split('-').map(Number) : [2026, 9];
 
   // 1. 커스텀 정산 시작일 설정 (기본값: 26일)
@@ -96,7 +100,7 @@ export default function AllowanceTab({
   };
 
   // 5. 계산된 정산 범위 내 근무 횟수 정밀 집계
-  const shiftCounts = { D: 0, M: 0, E: 0, N: 0, OFF: 0, 연차: 0 };
+  const shiftCounts = Object.fromEntries(shiftTypes.map((t) => [t.code, 0]));
 
   Object.entries(myShifts || {}).forEach(([dateKey, code]) => {
     if (dateKey >= startDateStr && dateKey <= endDateStr && code) {
@@ -107,16 +111,20 @@ export default function AllowanceTab({
   });
 
   // 야간 가산수당 계산
-  const totalNightHours =
-    shiftCounts.N * (Number(shiftTimes.N?.nightHours) || 0) +
-    shiftCounts.E * (Number(shiftTimes.E?.nightHours) || 0) +
-    shiftCounts.M * (Number(shiftTimes.M?.nightHours) || 0);
+  const nightHoursOf = (code) => Number(shiftTimes[code]?.nightHours) || 0;
+  const totalNightHours = workTypes.reduce((sum, t) => sum + (shiftCounts[t.code] || 0) * nightHoursOf(t.code), 0);
 
   const totalNightPay = Math.round(totalNightHours * Number(hourlyWage || 0) * 0.5);
   // 연차 사용: 달력에 기록한 올해 연차를 자동 집계 + 앱 사용 전 이미 쓴 연차(수동 입력)
-  const calendarLeaveDays = Object.entries(myShifts || {}).filter(
-    ([dateKey, code]) => code === '연차' && dateKey.startsWith(`${year}-`)
-  ).length;
+  // 휴가 종류별 차감 일수 적용 (연차 1, 반차 0.5, 병가 0 ...)
+  const leaveUsage = Object.fromEntries(leaveTypes.map((t) => [t.code, 0]));
+  Object.entries(myShifts || {}).forEach(([dateKey, code]) => {
+    if (dateKey.startsWith(`${year}-`) && leaveUsage[code] !== undefined) leaveUsage[code] += 1;
+  });
+  const calendarLeaveDays = leaveTypes.reduce(
+    (sum, t) => sum + leaveUsage[t.code] * (t.leaveDays ?? 1),
+    0
+  );
   const priorUsed = Number(vacation.used || 0);
   const totalUsed = calendarLeaveDays + priorUsed;
   const remainingVacation = Number(vacation.total || 0) - totalUsed;
@@ -127,16 +135,16 @@ export default function AllowanceTab({
       {/* 1. 상단 근무시간 입력 세션 */}
       <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-2">
         <div className="flex items-center gap-2 px-1 text-[10px] font-bold text-slate-400">
-          <span className="w-5" />
+          <span className="w-8" />
           <span className="flex-1 text-center">근무 시간</span>
           <span className="w-12 text-center">야간(h)</span>
         </div>
-        {['D', 'M', 'E', 'N'].map((code) => {
-          const hasNightHours = code !== 'D';
+        {workTypes.map(({ code }) => {
+          const hasNightHours = true;
 
           return (
             <div key={code} className="flex items-center gap-2">
-              <span className="font-black text-xs text-indigo-950 w-5 text-center">{code}</span>
+              <span className="font-black text-xs text-indigo-950 w-8 text-center truncate">{code}</span>
               <div className="flex-1 min-w-0 flex items-center gap-1 bg-slate-50 border border-slate-200/60 rounded-2xl px-2 py-1">
                 <input
                   type="time"
@@ -212,6 +220,20 @@ export default function AllowanceTab({
           </div>
         </div>
 
+        {/* 휴가 종류별 올해 사용 내역 */}
+        <div className="flex flex-wrap gap-1.5">
+          {leaveTypes.map((t) => (
+            <span
+              key={t.code}
+              style={{ backgroundColor: t.bg, color: t.fg }}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-black ${leaveUsage[t.code] ? '' : 'opacity-40'}`}
+            >
+              {t.code} {leaveUsage[t.code]}회
+              {(t.leaveDays ?? 1) !== 1 && ` · ${leaveUsage[t.code] * (t.leaveDays ?? 1)}일`}
+            </span>
+          ))}
+        </div>
+
         <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-2xl border border-slate-100">
           <span className="text-[11px] font-bold text-slate-500">앱 사용 전 올해 이미 쓴 연차</span>
           <div className="flex items-center gap-1">
@@ -264,28 +286,15 @@ export default function AllowanceTab({
 
         {/* 수당 산출 내역 */}
         <div className="p-4 bg-indigo-50/30 rounded-3xl border border-indigo-100 space-y-3 text-xs">
-          <div className="flex justify-between items-center font-bold text-slate-600">
-            <span>Night(N) 근무:</span>
-            <span className="font-black text-indigo-950 text-sm">
-              {shiftCounts.N} 회 ({shiftCounts.N * (Number(shiftTimes.N?.nightHours) || 0)}시간)
-            </span>
-          </div>
-
-          <div className="flex justify-between items-center font-bold text-slate-600">
-            <span>Evening(E) 근무:</span>
-            <span className="font-black text-indigo-950 text-sm">
-              {shiftCounts.E} 회 ({shiftCounts.E * (Number(shiftTimes.E?.nightHours) || 0)}시간)
-            </span>
-          </div>
-
-          {shiftCounts.M > 0 && (
-            <div className="flex justify-between items-center font-bold text-slate-600">
-              <span>Mid(M) 근무:</span>
+          {/* 야간 인정 시간이 있는 근무만 표시 (기본 E/N + 사용자 정의 근무) */}
+          {workTypes.filter((t) => nightHoursOf(t.code) > 0 || t.code === 'N' || t.code === 'E').map((t) => (
+            <div key={t.code} className="flex justify-between items-center font-bold text-slate-600">
+              <span>{t.label} 근무:</span>
               <span className="font-black text-indigo-950 text-sm">
-                {shiftCounts.M} 회 ({shiftCounts.M * (Number(shiftTimes.M?.nightHours) || 0)}시간)
+                {shiftCounts[t.code] || 0} 회 ({(shiftCounts[t.code] || 0) * nightHoursOf(t.code)}시간)
               </span>
             </div>
-          )}
+          ))}
 
           <div className="pt-2 border-t border-indigo-100/60 flex justify-between items-center">
             <span className="font-extrabold text-slate-700">통상 시급 (원):</span>

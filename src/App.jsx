@@ -5,7 +5,7 @@ import AllowanceTab from './components/AllowanceTab';
 import GroupShareTab from './components/GroupShareTab';
 import ImportTab from './components/ImportTab';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
-import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts } from './lib/shiftApi';
+import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType } from './lib/shiftApi';
 import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 
@@ -78,7 +78,15 @@ export default function App() {
       return [];
     }
   });
-  const shiftTypes = useMemo(() => mergeShiftTypes(customShiftTypes), [customShiftTypes]);
+  const shiftTypes = useMemo(() => {
+    // 근무 시간이 비어 있으면 수당 탭의 시간 설정으로 채움 (기존 사용자 설정 유지)
+    const times = shiftConfigs?.shiftTimes || {};
+    return mergeShiftTypes(customShiftTypes).map((t) => {
+      if (t.kind !== 'work' || (t.start && t.end)) return t;
+      const [start = '', end = ''] = String(times[t.code]?.time || '').split('-').map((x) => x.trim());
+      return { ...t, start, end };
+    });
+  }, [customShiftTypes, shiftConfigs?.shiftTimes]);
 
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [newGroupName, setNewGroupName] = useState('');
@@ -147,6 +155,10 @@ export default function App() {
         syncedShiftsRef.current = merged;
         setProfile(me);
         setMyShifts(merged);
+
+        // 서버에 저장된 내 근무 종류(이름·색상·시간) 반영
+        const serverTypes = await fetchMyShiftTypes().catch(() => null);
+        if (!cancelled && serverTypes?.length) setCustomShiftTypes(serverTypes);
       } catch (err) {
         console.error('서버 동기화 실패 (오프라인 모드로 동작):', err.message);
       }
@@ -179,6 +191,26 @@ export default function App() {
       .then(() => setProfile((p) => ({ ...p, display_name: userName })))
       .catch((err) => console.error('이름 저장 실패:', err.message));
   }, [userName, profile]);
+
+  // 근무 종류 저장: 로컬 즉시 반영 → 근무 시간은 알림/수당 설정에도 반영 → 서버 저장
+  const handleSaveShiftType = async (type) => {
+    if (profile) await upsertShiftType(type);
+    setCustomShiftTypes((prev) => [...(prev || []).filter((t) => t.code !== type.code), type]);
+    if (type.kind === 'work' && type.start && type.end) {
+      setShiftConfigs((prev) => ({
+        ...prev,
+        shiftTimes: {
+          ...(prev?.shiftTimes || {}),
+          [type.code]: { ...(prev?.shiftTimes?.[type.code] || {}), time: `${type.start} - ${type.end}` }
+        }
+      }));
+    }
+  };
+
+  const handleDeleteShiftType = async (code) => {
+    if (profile) await deleteShiftType(code);
+    setCustomShiftTypes((prev) => (prev || []).filter((t) => t.code !== code));
+  };
 
   const handleSaveName = () => {
     if (tempUserName.trim()) {
@@ -264,6 +296,8 @@ export default function App() {
               profile={profile}
               alarmSettings={alarmSettings}
               setAlarmSettings={setAlarmSettings}
+              onSaveShiftType={handleSaveShiftType}
+              onDeleteShiftType={handleDeleteShiftType}
             />
           )}
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
+import ShiftTypeManager from './ShiftTypeManager';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { isNativePush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 
@@ -13,7 +14,9 @@ export default function MyShiftTab({
   userName = '최수민',
   profile,
   alarmSettings,
-  setAlarmSettings
+  setAlarmSettings,
+  onSaveShiftType,
+  onDeleteShiftType
 }) {
   const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
   
@@ -27,6 +30,7 @@ export default function MyShiftTab({
   // 빠른 입력: null = 꺼짐, '' = 지우기, 그 외 = 선택한 근무 코드
   const [quickCode, setQuickCode] = useState(null);
   const quickMode = quickCode !== null;
+  const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
 
   // 알림 권한 요청 및 타이머 등록
   const requestNotificationPermission = async () => {
@@ -117,7 +121,7 @@ export default function MyShiftTab({
     [0, 1].forEach((offset) => {
       const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
       const code = myShifts[toDateKey(day)];
-      if (!code || code === 'OFF' || code === '연차') return;
+      if (!code || shiftTypes.find((t) => t.code === code)?.kind !== 'work') return;
 
       const startTimeStr = shiftTimes[code]?.time?.split('-')[0]?.trim();
       const match = /^(\d{1,2}):(\d{2})$/.exec(startTimeStr || '');
@@ -137,7 +141,7 @@ export default function MyShiftTab({
     });
 
     return () => timers.forEach(clearTimeout);
-  }, [alarmSettings?.enabled, alarmSettings?.minutesBefore, myShifts, shiftConfigs.shiftTimes, userName, dayTick]);
+  }, [alarmSettings?.enabled, alarmSettings?.minutesBefore, myShifts, shiftConfigs.shiftTimes, shiftTypes, userName, dayTick]);
 
   // 이전/다음 달 이동
   const goMonth = (delta) => setSelectedDate(addMonthsKey(selectedDate, delta));
@@ -251,21 +255,28 @@ export default function MyShiftTab({
         {/* 빠른 입력: 근무를 고르고 날짜를 연속으로 터치 */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-400">
-              {quickMode
-                ? quickCode === '' ? '지울 날짜를 터치하세요' : `터치하는 날짜에 ${quickCode} 입력`
-                : '날짜를 눌러 근무를 입력하세요'}
+            <span className="text-[11px] font-bold text-slate-400 min-w-0 truncate">
+              {quickMode ? (quickCode === '' ? '지울 날짜 터치' : `터치 → ${quickCode}`) : '근무 입력'}
             </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsTypeManagerOpen(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-2xl text-xs font-black border bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap"
+            >
+              <Palette size={13} /> 근무 종류
+            </button>
             <button
               type="button"
               onClick={() => setQuickCode(quickMode ? null : (shiftTypes[0]?.code || ''))}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-2xl text-xs font-black border transition cursor-pointer ${
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-2xl text-xs font-black border transition cursor-pointer whitespace-nowrap ${
                 quickMode ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
               }`}
             >
               <Zap size={13} className={quickMode ? 'fill-white' : ''} />
-              {quickMode ? '빠른 입력 끝내기' : '빠른 입력'}
+              {quickMode ? '입력 끝' : '빠른 입력'}
             </button>
+            </div>
           </div>
 
           {quickMode && (
@@ -386,6 +397,15 @@ export default function MyShiftTab({
             </button>
           </div>
         </div>
+      )}
+
+      {isTypeManagerOpen && (
+        <ShiftTypeManager
+          onClose={() => setIsTypeManagerOpen(false)}
+          onSave={onSaveShiftType}
+          onDelete={onDeleteShiftType}
+          isCodeInUse={(code) => Object.values(myShifts || {}).includes(code)}
+        />
       )}
 
       {/* 4. 알람 시간 설정 모달 */}

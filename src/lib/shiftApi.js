@@ -92,3 +92,40 @@ export async function fetchGroupSchedule(groupId, from, to) {
   });
   return { shifts, styles };
 }
+
+// ---------------- 근무 종류 (사용자 정의) ----------------
+
+const toClientType = (r) => ({
+  code: r.code,
+  label: r.label,
+  kind: r.kind,
+  bg: r.bg_color,
+  fg: r.text_color,
+  start: r.start_time ? r.start_time.slice(0, 5) : '',
+  end: r.end_time ? r.end_time.slice(0, 5) : '',
+  nightHours: Number(r.night_hours) || 0,
+  ...(r.kind === 'leave' ? { leaveDays: r.leave_days == null ? 1 : Number(r.leave_days) } : {})
+});
+
+/** 내 근무 종류 목록 (프리셋 또는 내 설정) */
+export async function fetchMyShiftTypes() {
+  return (unwrap(await supabase.rpc('get_my_shift_types')) || []).map(toClientType);
+}
+
+export async function upsertShiftType(t) {
+  unwrap(await supabase.rpc('upsert_my_shift_type', {
+    p_code: t.code,
+    p_label: t.label,
+    p_kind: t.kind,
+    p_bg: t.bg,
+    p_fg: t.fg,
+    p_start: t.start || null,
+    p_end: t.end || null,
+    p_night_hours: Number(t.nightHours) || 0,
+    p_leave_days: t.kind === 'leave' ? (t.leaveDays ?? 1) : null
+  }));
+}
+
+export async function deleteShiftType(code) {
+  unwrap(await supabase.rpc('delete_my_shift_type', { p_code: code }));
+}
