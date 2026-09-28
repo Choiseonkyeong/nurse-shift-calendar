@@ -1,14 +1,35 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw } from 'lucide-react';
+import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw, Pencil, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
 import AllowanceTab from './components/AllowanceTab';
 import GroupShareTab from './components/GroupShareTab';
 import ImportTab from './components/ImportTab';
+import NameSetup from './components/NameSetup';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType, fetchMyNotes, saveNoteChanges } from './lib/shiftApi';
 import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 import { syncWidget } from './lib/widgetSync';
+
+const SYNCED_SHIFTS_KEY = 'synced_shift_data';
+const SYNCED_NOTES_KEY = 'synced_day_notes';
+const readJson = (key) => {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : null;
+  } catch (e) {
+    return null;
+  }
+};
+/** { 날짜: 값|null } 변경분 적용 (null/빈값 = 삭제) */
+const applyChanges = (base = {}, changes = {}) => {
+  const next = { ...(base || {}) };
+  Object.entries(changes).forEach(([k, v]) => {
+    if (v) next[k] = v;
+    else delete next[k];
+  });
+  return next;
+};
 
 export default function App() {
   const today = getTodayDateObj();
@@ -19,7 +40,10 @@ export default function App() {
 
   // 기존 사용자 여부 (레거시 group_shifts 데이터 연결 판단용) — 저장 effect 실행 전에 판정
   const [hadStoredName] = useState(() => localStorage.getItem('shift_user_name') !== null);
-  const [userName, setUserName] = useState(() => localStorage.getItem('shift_user_name') || '최수민');
+  // 첫 실행이면 빈 이름 → 이름 입력 화면 표시 후 서버 연결
+  const [userName, setUserName] = useState(() => localStorage.getItem('shift_user_name') || '');
+  // 서버 동기화 상태: connecting | saved | saving | offline
+  const [syncStatus, setSyncStatus] = useState('connecting');
   const [profile, setProfile] = useState(null);
   const syncedShiftsRef = useRef(null); // 서버에 반영된 마지막 근무 스냅샷 (null = 아직 동기화 전)
   const [isEditingName, setIsEditingName] = useState(false);
@@ -61,6 +85,7 @@ export default function App() {
     }
   });
   const syncedNotesRef = useRef(null);
+  const [syncRetry, setSyncRetry] = useState(0);
 
   const [groups, setGroups] = useState(() => {
     try {
@@ -117,7 +142,7 @@ export default function App() {
   }, [groups]);
 
   useEffect(() => {
-    localStorage.setItem('shift_user_name', userName);
+    if (userName) localStorage.setItem('shift_user_name', userName);
   }, [userName]);
 
   useEffect(() => {
@@ -156,62 +181,121 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [profile?.id, shiftConfigs?.shiftTimes]);
 
-  // 서버 부트스트랩: 익명 세션 → 프로필 → 서버/로컬 근무 병합 (로컬 우선) 후 차이분 업로드
+  // ---------------- 서버 동기화 ----------------
+  // 마지막으로 서버와 일치했던 스냅샷을 기기에 저장해 두고, 그 이후 "이 기기에서 바뀐 것"만 서버에 반영한다.
+  // (예전처럼 기기 값 전체가 이기면 다른 기기에서 바꾼 근무나 오프라인에서 지운 근무가 되살아남)
+  const myShiftsRef = useRef(myShifts);
+  myShiftsRef.current = myShifts;
+  const dayNotesRef = useRef(dayNotes);
+  dayNotesRef.current = dayNotes;
+  const bootstrappedRef = useRef(false);
+  const pullingRef = useRef(false);
+
+  const markSyncedShifts = (snapshot) => {
+    syncedShiftsRef.current = snapshot;
+    localStorage.setItem(SYNCED_SHIFTS_KEY, JSON.stringify(snapshot));
+  };
+  const markSyncedNotes = (snapshot) => {
+    syncedNotesRef.current = snapshot;
+    localStorage.setItem(SYNCED_NOTES_KEY, JSON.stringify(snapshot));
+  };
+
+  /** 서버 값 + 이 기기에서 바뀐 값 병합 → 서버 저장 → 화면 반영 */
+  const pullAndMerge = async (me) => {
+    if (pullingRef.current) return;
+    pullingRef.current = true;
+    try {
+      const remote = await fetchMyShifts();
+      const local = myShiftsRef.current || {};
+      const base = syncedShiftsRef.current || readJson(SYNCED_SHIFTS_KEY);
+      // base 가 없으면 이전 버전 사용자 → 기기 값 전체를 변경분으로 취급 (기존 동작 유지)
+      const localChanges = base ? diffShifts(base, local) : Object.fromEntries(Object.entries(local).filter(([, v]) => v));
+      const merged = applyChanges(remote, localChanges);
+      const result = await saveShiftChanges(diffShifts(remote, merged));
+      if (result?.skipped?.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', result.skipped);
+      markSyncedShifts(merged);
+      // 조회하는 동안 사용자가 바꾼 값은 유지 (다음 저장 때 반영)
+      setMyShifts((cur) => applyChanges(merged, diffShifts(local, cur || {})));
+
+      try {
+        const remoteNotes = await fetchMyNotes();
+        const localNotes = dayNotesRef.current || {};
+        const baseNotes = syncedNotesRef.current || readJson(SYNCED_NOTES_KEY);
+        const noteChanges = baseNotes
+          ? diffShifts(baseNotes, localNotes)
+          : Object.fromEntries(Object.entries(localNotes).filter(([, v]) => v));
+        const mergedNotes = applyChanges(remoteNotes, noteChanges);
+        const upload = diffShifts(remoteNotes, mergedNotes);
+        if (Object.keys(upload).length) await saveNoteChanges(me.id, upload);
+        markSyncedNotes(mergedNotes);
+        setDayNotes((cur) => applyChanges(mergedNotes, diffShifts(localNotes, cur || {})));
+      } catch (err) {
+        console.error('메모 동기화 실패 (기기에만 저장):', err.message);
+      }
+      setSyncStatus('saved');
+    } finally {
+      pullingRef.current = false;
+    }
+  };
+
+  // 서버 부트스트랩: 이름이 정해지면 익명 세션 → 프로필 → 병합
   useEffect(() => {
-    let cancelled = false;
+    if (!userName || bootstrappedRef.current) return;
+    bootstrappedRef.current = true;
     (async () => {
       try {
         await ensureSession();
         const me = await ensureProfile(userName, hadStoredName);
-        const remote = await fetchMyShifts();
-        if (cancelled) return;
-
-        const local = Object.fromEntries(Object.entries(myShifts || {}).filter(([, v]) => v));
-        const merged = { ...remote, ...local };
-        const result = await saveShiftChanges(diffShifts(remote, merged));
-        if (result?.skipped?.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', result.skipped);
-
-        if (cancelled) return;
-        syncedShiftsRef.current = merged;
+        await pullAndMerge(me);
         setProfile(me);
-        setMyShifts(merged);
 
         // 서버에 저장된 내 근무 종류(이름·색상·시간) 반영
         const serverTypes = await fetchMyShiftTypes().catch(() => null);
-        if (!cancelled && serverTypes?.length) setCustomShiftTypes(serverTypes);
-
-        // 메모: 서버 + 로컬 병합 (로컬 우선) 후 차이분 업로드 (실패해도 근무 동기화는 유지)
-        try {
-          const remoteNotes = await fetchMyNotes();
-          if (cancelled) return;
-          const localNotes = Object.fromEntries(Object.entries(dayNotes || {}).filter(([, v]) => v));
-          const mergedNotes = { ...remoteNotes, ...localNotes };
-          const noteChanges = diffShifts(remoteNotes, mergedNotes);
-          if (Object.keys(noteChanges).length) await saveNoteChanges(me.id, noteChanges);
-          syncedNotesRef.current = mergedNotes;
-          setDayNotes(mergedNotes);
-        } catch (err) {
-          console.error('메모 동기화 실패 (기기에만 저장):', err.message);
-        }
+        if (serverTypes?.length) setCustomShiftTypes(serverTypes);
       } catch (err) {
+        bootstrappedRef.current = false; // 다시 연결되면 재시도
+        setSyncStatus('offline');
         console.error('서버 동기화 실패 (오프라인 모드로 동작):', err.message);
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
+  }, [userName, syncRetry]);
+
+  // 앱으로 돌아오거나(다른 기기 변경 반영) 네트워크가 다시 연결되면 재동기화
+  useEffect(() => {
+    let last = Date.now();
+    const resync = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!profile) {
+        setSyncRetry((n) => n + 1);
+        return;
+      }
+      if (Date.now() - last < 30000) return;
+      last = Date.now();
+      pullAndMerge(profile).catch(() => setSyncStatus('offline'));
+    };
+    document.addEventListener('visibilitychange', resync);
+    window.addEventListener('online', resync);
+    return () => {
+      document.removeEventListener('visibilitychange', resync);
+      window.removeEventListener('online', resync);
+    };
+  }, [profile]);
 
   // 근무 변경 → 서버 반영 (디바운스)
   useEffect(() => {
     if (!profile || !syncedShiftsRef.current) return;
     const changes = diffShifts(syncedShiftsRef.current, myShifts || {});
     if (Object.keys(changes).length === 0) return;
+    setSyncStatus('saving');
 
     const snapshot = { ...(myShifts || {}) };
     const timer = setTimeout(async () => {
       try {
         await saveShiftChanges(changes);
-        syncedShiftsRef.current = snapshot;
+        markSyncedShifts(applyChanges(syncedShiftsRef.current, changes));
+        setSyncStatus('saved');
       } catch (err) {
+        setSyncStatus('offline');
         console.error('근무 저장 실패:', err.message);
       }
     }, 600);
@@ -223,12 +307,14 @@ export default function App() {
     if (!profile || !syncedNotesRef.current) return;
     const changes = diffShifts(syncedNotesRef.current, dayNotes || {});
     if (Object.keys(changes).length === 0) return;
-    const snapshot = { ...(dayNotes || {}) };
+    setSyncStatus('saving');
     const timer = setTimeout(async () => {
       try {
         await saveNoteChanges(profile.id, changes);
-        syncedNotesRef.current = snapshot;
+        markSyncedNotes(applyChanges(syncedNotesRef.current, changes));
+        setSyncStatus('saved');
       } catch (err) {
+        setSyncStatus('offline');
         console.error('메모 저장 실패:', err.message);
       }
     }, 800);
@@ -265,7 +351,7 @@ export default function App() {
 
   const handleSaveName = () => {
     if (tempUserName.trim()) {
-      setUserName(tempUserName.trim());
+      setUserName(tempUserName.trim().slice(0, 30));
       setIsEditingName(false);
     }
   };
@@ -278,6 +364,7 @@ export default function App() {
 
   return (
     <ShiftTypesContext.Provider value={shiftTypes}>
+    {!userName && <NameSetup onSubmit={(name) => { setUserName(name); setTempUserName(name); }} />}
     <div className="min-h-screen bg-slate-100 flex justify-center items-start sm:py-6 font-sans">
       <div className="w-full max-w-md bg-white h-[100dvh] sm:h-[min(840px,calc(100dvh-3rem))] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
         
@@ -286,11 +373,11 @@ export default function App() {
           className="bg-white px-5 py-4 border-b border-slate-100 flex justify-between items-center z-10 shrink-0"
           style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-sm shadow-2xs">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 shrink-0 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-sm shadow-2xs">
               {userName.substring(0, 1)}
             </div>
-            <div>
+            <div className="min-w-0">
               {isEditingName ? (
                 <div className="flex items-center gap-1">
                   <input
@@ -303,25 +390,34 @@ export default function App() {
                   <button onClick={handleSaveName} className="text-[10px] bg-indigo-600 text-white px-2 py-1 rounded font-bold cursor-pointer">저장</button>
                 </div>
               ) : (
-                <div className="flex items-center gap-1 cursor-pointer" onClick={() => setIsEditingName(true)}>
-                  <h1 className="font-black text-base text-slate-900 leading-tight">{userName} 님의 근무표</h1>
-                </div>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 cursor-pointer group max-w-full"
+                  onClick={() => {
+                    setTempUserName(userName);
+                    setIsEditingName(true);
+                  }}
+                  aria-label="이름 수정"
+                >
+                  <h1 className="font-black text-base text-slate-900 leading-tight truncate">{userName} 님의 근무표</h1>
+                  <Pencil size={12} className="shrink-0 text-slate-300 group-hover:text-indigo-500" />
+                </button>
               )}
-              <p className="text-[11px] font-bold text-slate-400">스마트 일정 & 수당 관리자</p>
+              <SyncBadge status={syncStatus} />
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0 ml-2">
             <button
               onClick={handleGoToday}
-              className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-2xl text-xs font-black hover:bg-amber-100 transition cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1.5 whitespace-nowrap bg-amber-50 text-amber-600 border border-amber-200 rounded-2xl text-xs font-black hover:bg-amber-100 transition cursor-pointer"
             >
               <RotateCcw size={13} />
               <span>오늘</span>
             </button>
             <button 
               onClick={() => setPrivacyBlur(!privacyBlur)}
-              className={`text-xs px-3 py-1.5 rounded-2xl font-black flex items-center gap-1 border transition cursor-pointer ${
+              className={`text-xs px-2.5 py-1.5 whitespace-nowrap rounded-2xl font-black flex items-center gap-1 border transition cursor-pointer ${
                 privacyBlur ? 'bg-amber-400 text-slate-900 border-amber-300' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
               }`}
             >
@@ -460,5 +556,21 @@ export default function App() {
       </div>
     </div>
     </ShiftTypesContext.Provider>
+  );
+}
+
+/** 헤더 아래 서버 저장 상태 */
+function SyncBadge({ status }) {
+  const map = {
+    connecting: { icon: <Loader2 size={11} className="animate-spin" />, text: '서버 연결 중', cls: 'text-slate-400' },
+    saving: { icon: <Loader2 size={11} className="animate-spin" />, text: '저장 중', cls: 'text-slate-400' },
+    saved: { icon: <Cloud size={11} />, text: '서버에 저장됨', cls: 'text-emerald-500' },
+    offline: { icon: <CloudOff size={11} />, text: '오프라인 · 기기 저장', cls: 'text-amber-500' }
+  };
+  const { icon, text, cls } = map[status] || map.connecting;
+  return (
+    <p className={`text-[11px] font-bold flex items-center gap-1 whitespace-nowrap ${cls}`}>
+      {icon} {text}
+    </p>
   );
 }
