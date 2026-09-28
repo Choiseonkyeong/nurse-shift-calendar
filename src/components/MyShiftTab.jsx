@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { addMonthsKey } from '../utils/dateUtils';
 import { isNativePush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 
 export default function MyShiftTab({
@@ -128,6 +129,9 @@ export default function MyShiftTab({
     }
   };
 
+  // 이전/다음 달 이동
+  const goMonth = (delta) => setSelectedDate(addMonthsKey(selectedDate, delta));
+
   // 날짜 클릭 시 수정 모달 오픈
   const handleDayClick = (dateKey) => {
     setSelectedDate(dateKey);
@@ -183,8 +187,24 @@ export default function MyShiftTab({
       {/* 1. 월간 요약 카드 & 알림 버튼 */}
       <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-black text-slate-900">{year}년 {month}월</h2>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="이전 달"
+              onClick={() => goMonth(-1)}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <h2 className="text-lg font-black text-slate-900 min-w-[7rem] text-center">{year}년 {month}월</h2>
+            <button
+              type="button"
+              aria-label="다음 달"
+              onClick={() => goMonth(1)}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            >
+              <ChevronRight size={18} />
+            </button>
           </div>
 
           {/* 알람 설정 버튼 */}
