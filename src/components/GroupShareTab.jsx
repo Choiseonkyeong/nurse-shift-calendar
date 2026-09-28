@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Copy, LogOut, Trash2, RotateCcw, Palette } from 'lucide-react';
 import { addMonthsKey } from '../utils/dateUtils';
+import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
+import { dayNumberClass, getHoliday } from '../utils/holidays';
+import GroupBoard from './GroupBoard';
 import {
   fetchMyGroups,
   createGroup,
@@ -23,8 +26,11 @@ export default function GroupShareTab({
   selectedDate,
   setSelectedDate,
   profile,
-  myShifts = {}
+  myShifts = {},
+  privacyBlur = false
 }) {
+  // 보안 모드: 화면 공유/캡처 시 동료 이름 가리기
+  const blurCls = privacyBlur ? 'blur-[3px] select-none' : '';
   const [selectedDayKey, setSelectedDayKey] = useState(selectedDate || '2026-09-07');
   const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
   const [loading, setLoading] = useState(false);
@@ -46,7 +52,8 @@ export default function GroupShareTab({
   };
 
   // 현재 그룹의 해당 월 근무표 { [profileId]: { 'YYYY-MM-DD': code } }
-  const [groupSchedule, setGroupSchedule] = useState({});
+  const [groupSchedule, setGroupSchedule] = useState({ shifts: {}, styles: {} });
+  const shiftTypes = useShiftTypes();
 
   const withLoading = async (fn, failLabel) => {
     try {
@@ -86,13 +93,19 @@ export default function GroupShareTab({
   }, [profile?.id]);
 
   useEffect(() => {
-    setGroupSchedule({});
+    setGroupSchedule({ shifts: {}, styles: {} });
     fetchScheduleFromDB();
   }, [profile?.id, currentGroup?.id, year, month]);
 
   // 본인 근무는 로컬 최신값, 동료 근무는 서버 조회값
   const getMemberShifts = (member) =>
-    member.id === profile?.id ? myShifts : groupSchedule[member.id] || {};
+    member.id === profile?.id ? myShifts : groupSchedule.shifts[member.id] || {};
+
+  // 동료가 직접 만든 근무 코드는 서버에 저장된 그 사람의 색상 사용
+  const getMemberBadgeStyle = (member, code) => {
+    const own = member.id !== profile?.id && groupSchedule.styles[member.id]?.[code];
+    return own ? { backgroundColor: own.bg, color: own.fg } : badgeStyle(shiftTypes, code);
+  };
 
   const ensureOnline = () => {
     if (profile) return true;
@@ -187,16 +200,6 @@ export default function GroupShareTab({
       dateKey: `${year}-${formattedMonth}-${formattedDay}`
     });
   }
-
-  const getBadgeStyle = (shift) => {
-    switch (shift) {
-      case 'D': return { backgroundColor: '#FEF08A', color: '#854D0E' };
-      case 'E': return { backgroundColor: '#FFEDD5', color: '#9A3412' };
-      case 'N': return { backgroundColor: '#E0F2FE', color: '#0369A1' };
-      case 'M': return { backgroundColor: '#F3E8FF', color: '#6B21A8' };
-      default: return { backgroundColor: '#F1F5F9', color: '#475569' };
-    }
-  };
 
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
@@ -446,21 +449,27 @@ export default function GroupShareTab({
                         : 'border-slate-100 bg-slate-50/30 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="text-[11px] font-black text-slate-700 px-1">{item.day}</span>
+                    <span
+                      title={getHoliday(item.dateKey) || undefined}
+                      className={`text-[11px] font-black px-1 ${dayNumberClass(item.dateKey)}`}
+                    >
+                      {item.day}
+                    </span>
 
                     <div className="space-y-0.5 mt-1">
                       {currentGroup.members?.map((member) => {
-                        const shift = getMemberShifts(member)[item.dateKey] || 'OFF';
-                        const badgeStyle = getBadgeStyle(shift);
+                        const shift = getMemberShifts(member)[item.dateKey] || '';
+                        if (!shift) return null; // 미입력 날짜는 표시하지 않음 (OFF 와 구분)
+                        const memberStyle = getMemberBadgeStyle(member, shift);
                         const displayName = member.name?.length > 2 ? member.name.substring(0, 2) : member.name;
 
                         return (
                           <div
                             key={member.id}
-                            style={badgeStyle}
+                            style={memberStyle}
                             className="flex justify-between items-center px-1.5 py-0.5 rounded-lg text-[9px] font-black"
                           >
-                            <span className="truncate">{displayName}</span>
+                            <span className={`truncate ${blurCls}`}>{displayName}</span>
                             <span className="ml-0.5 font-bold">{shift}</span>
                           </div>
                         );
@@ -479,23 +488,25 @@ export default function GroupShareTab({
 
             <div className="grid grid-cols-2 gap-2">
               {currentGroup.members?.map((member) => {
-                const shift = getMemberShifts(member)[selectedDayKey] || 'OFF';
-                const badgeStyle = getBadgeStyle(shift);
+                const shift = getMemberShifts(member)[selectedDayKey] || '';
+                const memberStyle = shift ? getMemberBadgeStyle(member, shift) : { backgroundColor: '#F8FAFC', color: '#CBD5E1' };
 
                 return (
                   <div
                     key={member.id}
                     className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center"
                   >
-                    <span className="font-extrabold text-xs text-slate-800">{member.name} 쌤</span>
-                    <span style={badgeStyle} className="px-3 py-1 rounded-xl font-black text-xs">
-                      {shift}
+                    <span className={`font-extrabold text-xs text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
+                    <span style={memberStyle} className="px-3 py-1 rounded-xl font-black text-xs">
+                      {shift || '미입력'}
                     </span>
                   </div>
                 );
               })}
             </div>
           </div>
+
+          <GroupBoard group={currentGroup} profile={profile} themeColor={currentThemeBg} privacyBlur={privacyBlur} />
 
         </div>
       )}

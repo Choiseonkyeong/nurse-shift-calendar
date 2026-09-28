@@ -77,16 +77,93 @@ export async function deleteGroup(groupId) {
   if (!rows || rows.length === 0) throw new Error('그룹을 만든 사람만 삭제할 수 있습니다.');
 }
 
-/** 그룹 근무표 → { [profileId]: { 'YYYY-MM-DD': 'D' } } */
+/** 그룹 근무표 → { shifts: { [profileId]: { 'YYYY-MM-DD': 'D' } }, styles: { [profileId]: { D: { bg, fg } } } } */
 export async function fetchGroupSchedule(groupId, from, to) {
   const rows = unwrap(await supabase.rpc('get_group_schedule', {
     p_group_id: groupId,
     p_from: from,
     p_to: to
   })) || [];
-  const byMember = {};
+  const shifts = {};
+  const styles = {};
   rows.forEach((r) => {
-    (byMember[r.profile_id] ||= {})[r.work_date] = r.code;
+    (shifts[r.profile_id] ||= {})[r.work_date] = r.code;
+    (styles[r.profile_id] ||= {})[r.code] = { bg: r.bg_color, fg: r.text_color };
   });
-  return byMember;
+  return { shifts, styles };
+}
+
+// ---------------- 근무 종류 (사용자 정의) ----------------
+
+const toClientType = (r) => ({
+  code: r.code,
+  label: r.label,
+  kind: r.kind,
+  bg: r.bg_color,
+  fg: r.text_color,
+  start: r.start_time ? r.start_time.slice(0, 5) : '',
+  end: r.end_time ? r.end_time.slice(0, 5) : '',
+  nightHours: Number(r.night_hours) || 0,
+  ...(r.kind === 'leave' ? { leaveDays: r.leave_days == null ? 1 : Number(r.leave_days) } : {})
+});
+
+/** 내 근무 종류 목록 (프리셋 또는 내 설정) */
+export async function fetchMyShiftTypes() {
+  return (unwrap(await supabase.rpc('get_my_shift_types')) || []).map(toClientType);
+}
+
+export async function upsertShiftType(t) {
+  unwrap(await supabase.rpc('upsert_my_shift_type', {
+    p_code: t.code,
+    p_label: t.label,
+    p_kind: t.kind,
+    p_bg: t.bg,
+    p_fg: t.fg,
+    p_start: t.start || null,
+    p_end: t.end || null,
+    p_night_hours: Number(t.nightHours) || 0,
+    p_leave_days: t.kind === 'leave' ? (t.leaveDays ?? 1) : null
+  }));
+}
+
+export async function deleteShiftType(code) {
+  unwrap(await supabase.rpc('delete_my_shift_type', { p_code: code }));
+}
+
+// ---------------- 날짜별 메모 (본인 전용) ----------------
+
+/** { 'YYYY-MM-DD': '메모' } */
+export async function fetchMyNotes() {
+  const rows = unwrap(await supabase.from('day_notes').select('note_date, body')) || [];
+  return Object.fromEntries(rows.map((r) => [r.note_date, r.body]));
+}
+
+/** changes: { 'YYYY-MM-DD': '메모' | null(삭제) } */
+export async function saveNoteChanges(profileId, changes) {
+  const upserts = Object.entries(changes)
+    .filter(([, body]) => body)
+    .map(([note_date, body]) => ({ profile_id: profileId, note_date, body: body.slice(0, 500) }));
+  const deletes = Object.entries(changes).filter(([, body]) => !body).map(([d]) => d);
+  if (upserts.length) unwrap(await supabase.from('day_notes').upsert(upserts));
+  if (deletes.length) unwrap(await supabase.from('day_notes').delete().eq('profile_id', profileId).in('note_date', deletes));
+}
+
+// ---------------- 그룹 게시판 ----------------
+
+/** 최신 글 50개 [{ id, author_id, body, created_at }] */
+export async function fetchGroupPosts(groupId) {
+  return unwrap(await supabase
+    .from('group_posts')
+    .select('id, author_id, body, created_at')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+    .limit(50)) || [];
+}
+
+export async function createGroupPost(groupId, authorId, body) {
+  unwrap(await supabase.from('group_posts').insert({ group_id: groupId, author_id: authorId, body: body.trim() }));
+}
+
+export async function deleteGroupPost(postId) {
+  unwrap(await supabase.from('group_posts').delete().eq('id', postId));
 }
