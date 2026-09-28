@@ -5,10 +5,7 @@ import AllowanceTab from './components/AllowanceTab';
 import GroupShareTab from './components/GroupShareTab';
 import ImportTab from './components/ImportTab';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
-import AuthScreen from './components/AuthScreen';
-import { supabase } from './supabaseClient';
-import { ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts } from './lib/shiftApi';
-import { isSocialUser, getOAuthDisplayName, handleWebCallback, listenNativeCallback } from './lib/auth';
+import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts } from './lib/shiftApi';
 import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
 
 export default function App() {
@@ -20,12 +17,8 @@ export default function App() {
 
   // 기존 사용자 여부 (레거시 group_shifts 데이터 연결 판단용) — 저장 effect 실행 전에 판정
   const [hadStoredName] = useState(() => localStorage.getItem('shift_user_name') !== null);
-  const [userName, setUserName] = useState(() => localStorage.getItem('shift_user_name') || '');
+  const [userName, setUserName] = useState(() => localStorage.getItem('shift_user_name') || '최수민');
   const [profile, setProfile] = useState(null);
-  // 인증 단계: checking(세션 확인) → needLogin(로그인 화면) | ready(로그인 완료) | offline(오프라인 사용)
-  const [authPhase, setAuthPhase] = useState('checking');
-  const [authUser, setAuthUser] = useState(null);
-  const [authError, setAuthError] = useState('');
   const syncedShiftsRef = useRef(null); // 서버에 반영된 마지막 근무 스냅샷 (null = 아직 동기화 전)
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempUserName, setTempUserName] = useState(userName);
@@ -94,7 +87,7 @@ export default function App() {
   }, [groups]);
 
   useEffect(() => {
-    if (userName) localStorage.setItem('shift_user_name', userName);
+    localStorage.setItem('shift_user_name', userName);
   }, [userName]);
 
   useEffect(() => {
@@ -120,51 +113,13 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [profile?.id, shiftConfigs?.shiftTimes]);
 
-  // 인증 상태 추적: 소셜 로그인 사용자만 앱 진입 (익명 세션은 로그인 화면에서 소셜 계정 연결)
+  // 서버 부트스트랩: 익명 세션 → 프로필 → 서버/로컬 근무 병합 (로컬 우선) 후 차이분 업로드
   useEffect(() => {
-    let mounted = true;
-    handleWebCallback().then((msg) => msg && setAuthError(msg)).catch(() => {});
-    const stopNative = listenNativeCallback((msg) => setAuthError(msg));
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      if (isSocialUser(session?.user)) {
-        setAuthUser(session.user);
-        setAuthPhase('ready');
-      } else {
-        setAuthPhase('needLogin');
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (isSocialUser(session?.user)) {
-        setAuthUser((prev) => (prev?.id === session.user.id ? prev : session.user));
-        setAuthPhase('ready');
-        setAuthError('');
-      } else if (event === 'SIGNED_OUT') {
-        setAuthUser(null);
-        setProfile(null);
-        setAuthPhase('needLogin');
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-      stopNative();
-    };
-  }, []);
-
-  // 서버 부트스트랩: 로그인 사용자 → 프로필(최초 로그인 시 자동 회원가입) → 서버/로컬 근무 병합 (로컬 우선) 후 차이분 업로드
-  useEffect(() => {
-    if (!authUser) return;
     let cancelled = false;
     (async () => {
       try {
-        const oauthName = getOAuthDisplayName(authUser);
-        const displayName = (hadStoredName && userName) || oauthName || userName || '사용자';
-        if (!userName || !hadStoredName) setUserName(displayName);
-        const me = await ensureProfile(displayName, hadStoredName);
+        await ensureSession();
+        const me = await ensureProfile(userName, hadStoredName);
         const remote = await fetchMyShifts();
         if (cancelled) return;
 
@@ -182,7 +137,7 @@ export default function App() {
       }
     })();
     return () => { cancelled = true; };
-  }, [authUser?.id]);
+  }, []);
 
   // 근무 변경 → 서버 반영 (디바운스)
   useEffect(() => {
@@ -226,17 +181,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center items-start sm:py-6 font-sans">
       <div className="w-full max-w-md bg-white h-[100dvh] sm:h-[min(840px,calc(100dvh-3rem))] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
-        {authPhase === 'checking' && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
-          </div>
-        )}
-
-        {authPhase === 'needLogin' && (
-          <AuthScreen errorMessage={authError} onContinueOffline={() => setAuthPhase('offline')} />
-        )}
-
-        {(authPhase === 'ready' || authPhase === 'offline') && (<>
+        
         {/* 1. 상단 프로필 헤더 */}
         <div
           className="bg-white px-5 py-4 border-b border-slate-100 flex justify-between items-center z-10 shrink-0"
@@ -244,7 +189,7 @@ export default function App() {
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-sm shadow-2xs">
-              {(userName || '사용자').substring(0, 1)}
+              {userName.substring(0, 1)}
             </div>
             <div>
               {isEditingName ? (
@@ -259,8 +204,8 @@ export default function App() {
                   <button onClick={handleSaveName} className="text-[10px] bg-indigo-600 text-white px-2 py-1 rounded font-bold cursor-pointer">저장</button>
                 </div>
               ) : (
-                <div className="flex items-center gap-1 cursor-pointer" onClick={() => { setTempUserName(userName); setIsEditingName(true); }}>
-                  <h1 className="font-black text-base text-slate-900 leading-tight">{userName || '사용자'} 님의 근무표</h1>
+                <div className="flex items-center gap-1 cursor-pointer" onClick={() => setIsEditingName(true)}>
+                  <h1 className="font-black text-base text-slate-900 leading-tight">{userName} 님의 근무표</h1>
                 </div>
               )}
               <p className="text-[11px] font-bold text-slate-400">스마트 일정 & 수당 관리자</p>
@@ -406,7 +351,6 @@ export default function App() {
           </button>
         </div>
 
-        </>)}
       </div>
     </div>
   );

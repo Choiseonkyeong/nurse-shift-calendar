@@ -22,14 +22,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- 소셜 로그인 콜백 딥링크: com.nurseshift.app://auth-callback -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="com.nurseshift.app" android:host="auth-callback" />
-            </intent-filter>
-
         </activity>
 
         <!-- FCM: 채널 미지정 알림의 기본 채널 (앱에서 shift-reminders 채널 생성) -->

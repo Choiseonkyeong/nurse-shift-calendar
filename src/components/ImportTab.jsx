@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2 } from 'lucide-react';
 import { unregisterDevice } from '../lib/pushNotifications';
-import { signOut } from '../lib/auth';
 
 export default function ImportTab({
   selectedDate,
@@ -448,7 +447,6 @@ export default function ImportTab({
             onClick={async () => {
               if (window.confirm('저장된 근무표 및 그룹 데이터를 모두 초기화하시겠습니까?')) {
                 await unregisterDevice(); // 초기화 후 이전 계정 알림이 오지 않도록 토큰 해제
-                await signOut();
                 localStorage.clear();
                 window.location.reload();
               }
