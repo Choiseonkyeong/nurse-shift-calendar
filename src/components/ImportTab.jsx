@@ -181,9 +181,13 @@ export default function ImportTab({
                 const c = parseInt(colStr, 10);
                 let rawShift = String(row[c] || '').trim().toUpperCase();
 
+                // 표기 통일: 주(주간)→D, 야(야간)→N, 휴/오프/휴무→OFF (앱 근무 코드로 저장·집계되도록)
+                const ALIASES = { '주': 'D', '야': 'N', '휴': 'OFF' };
                 let finalShift = '';
-                if (['D', 'E', 'N', 'M', 'OFF', '연차', '주', '야', '휴'].includes(rawShift)) {
+                if (['D', 'E', 'N', 'M', 'OFF', '연차'].includes(rawShift)) {
                   finalShift = rawShift;
+                } else if (ALIASES[rawShift]) {
+                  finalShift = ALIASES[rawShift];
                 } else if (rawShift.includes('OFF') || rawShift === '오프' || rawShift === '휴무') {
                   finalShift = 'OFF';
                 }
@@ -226,79 +230,6 @@ export default function ImportTab({
       setStatusMessage('❌ 파서 로드 실패');
       setIsProcessing(false);
     }
-  };
-
-  // 2. 사진 파서 (2026년 9/10월 기준 매핑)
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setIsProcessing(true);
-    setStatusMessage('📷 근무표 이미지 분석 중...');
-
-    setTimeout(() => {
-      const targetYM = '2026-09';
-      setDetectedYearMonth(targetYM);
-
-      const map = {
-        '강인경': {
-          '2026-08-26': 'D', '2026-08-27': 'D', '2026-08-28': 'D', '2026-08-29': 'D', '2026-08-30': 'OFF', '2026-08-31': 'D',
-          '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'D', '2026-09-04': 'D', '2026-09-05': 'OFF', '2026-09-06': 'OFF',
-          '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'D', '2026-09-10': 'D', '2026-09-11': 'D', '2026-09-12': 'OFF',
-          '2026-09-13': 'OFF', '2026-09-14': 'D', '2026-09-15': 'D', '2026-09-16': 'D', '2026-09-17': 'D', '2026-09-18': 'D',
-          '2026-09-19': 'OFF', '2026-09-20': 'OFF', '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'OFF', '2026-09-25': 'OFF'
-        },
-        '최수민': {
-          '2026-08-26': 'E', '2026-08-27': 'E', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'OFF', '2026-08-31': 'D',
-          '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'E', '2026-09-04': 'E', '2026-09-05': 'OFF', '2026-09-06': 'OFF',
-          '2026-09-07': 'D', '2026-09-08': 'D', '2026-09-09': 'N', '2026-09-10': 'N', '2026-09-11': 'OFF', '2026-09-12': 'OFF',
-          '2026-09-13': 'D', '2026-09-14': 'D', '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'E', '2026-09-18': 'OFF',
-          '2026-09-19': 'OFF', '2026-09-20': 'D', '2026-09-21': 'D', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'N', '2026-09-25': 'N'
-        },
-        '박혜영': {
-          '2026-08-26': 'OFF', '2026-08-27': 'D', '2026-08-28': 'D', '2026-08-29': 'OFF', '2026-08-30': 'OFF', '2026-08-31': 'E',
-          '2026-09-01': 'E', '2026-09-02': 'E', '2026-09-03': 'OFF', '2026-09-04': 'D', '2026-09-05': 'D', '2026-09-06': 'D',
-          '2026-09-07': 'E', '2026-09-08': 'OFF', '2026-09-09': 'D', '2026-09-10': 'E', '2026-09-11': 'N', '2026-09-12': 'N',
-          '2026-09-13': 'OFF', '2026-09-14': 'OFF', '2026-09-15': 'D', '2026-09-16': 'D', '2026-09-17': 'D', '2026-09-18': 'D',
-          '2026-09-19': 'OFF', '2026-09-20': 'N', '2026-09-21': 'N', '2026-09-22': 'OFF', '2026-09-23': 'OFF', '2026-09-24': 'D', '2026-09-25': 'D'
-        },
-        '김비나': {
-          '2026-08-26': 'N', '2026-08-27': 'N', '2026-08-28': 'OFF', '2026-08-29': 'OFF', '2026-08-30': 'D', '2026-08-31': 'M',
-          '2026-09-01': 'D', '2026-09-02': 'D', '2026-09-03': 'D', '2026-09-04': 'OFF', '2026-09-05': 'E', '2026-09-06': 'E',
-          '2026-09-07': 'E', '2026-09-08': 'E', '2026-09-09': 'OFF', '2026-09-10': 'D', '2026-09-11': 'D', '2026-09-12': 'D',
-          '2026-09-13': 'OFF', '2026-09-14': 'E', '2026-09-15': 'N', '2026-09-16': 'N', '2026-09-17': 'OFF', '2026-09-18': 'OFF',
-          '2026-09-19': 'D', '2026-09-20': 'OFF', '2026-09-21': 'E', '2026-09-22': 'E', '2026-09-23': 'E', '2026-09-24': 'OFF', '2026-09-25': 'E'
-        },
-        '이경은': {
-          '2026-08-26': 'OFF', '2026-08-27': 'OFF', '2026-08-28': 'M', '2026-08-29': 'D', '2026-08-30': 'E', '2026-08-31': 'N',
-          '2026-09-01': 'N', '2026-09-02': 'OFF', '2026-09-03': 'OFF', '2026-09-04': 'M', '2026-09-05': 'D', '2026-09-06': 'OFF',
-          '2026-09-07': 'D', '2026-09-08': 'M', '2026-09-09': 'E', '2026-09-10': 'OFF', '2026-09-11': 'M', '2026-09-12': 'D',
-          '2026-09-13': 'OFF', '2026-09-14': 'M', '2026-09-15': 'E', '2026-09-16': 'E', '2026-09-17': 'OFF', '2026-09-18': 'E',
-          '2026-09-19': 'E', '2026-09-20': 'E', '2026-09-21': 'OFF', '2026-09-22': 'E', '2026-09-23': 'E', '2026-09-24': 'E', '2026-09-25': 'OFF'
-        },
-        '홍숙언': {
-          '2026-08-26': 'M', '2026-08-27': 'M', '2026-08-28': 'E', '2026-08-29': 'E', '2026-08-30': 'OFF', '2026-08-31': 'OFF',
-          '2026-09-01': 'E', '2026-09-02': 'E', '2026-09-03': 'E', '2026-09-04': 'N', '2026-09-05': 'N', '2026-09-06': 'OFF',
-          '2026-09-07': 'OFF', '2026-09-08': 'OFF', '2026-09-09': 'M', '2026-09-10': 'M', '2026-09-11': 'E', '2026-09-12': 'E',
-          '2026-09-13': 'E', '2026-09-14': 'OFF', '2026-09-15': 'D', '2026-09-16': 'D', '2026-09-17': 'M', '2026-09-18': 'M',
-          '2026-09-19': 'D', '2026-09-20': 'OFF', '2026-09-21': 'M', '2026-09-22': 'D', '2026-09-23': 'D', '2026-09-24': 'OFF', '2026-09-25': 'OFF'
-        },
-        '남영주': {
-          '2026-08-26': 'OFF', '2026-08-27': 'OFF', '2026-08-28': 'N', '2026-08-29': 'N', '2026-08-30': 'N', '2026-08-31': 'OFF',
-          '2026-09-01': 'OFF', '2026-09-02': 'N', '2026-09-03': 'N', '2026-09-04': '연차', '2026-09-05': 'OFF', '2026-09-06': 'N',
-          '2026-09-07': 'N', '2026-09-08': 'N', '2026-09-09': 'OFF', '2026-09-10': 'OFF', '2026-09-11': 'OFF', '2026-09-12': 'OFF',
-          '2026-09-13': 'N', '2026-09-14': 'N', '2026-09-15': 'OFF', '2026-09-16': 'OFF', '2026-09-17': 'N', '2026-09-18': 'N',
-          '2026-09-19': 'N', '2026-09-20': 'OFF', '2026-09-21': 'OFF', '2026-09-22': 'N', '2026-09-23': 'N', '2026-09-24': 'OFF', '2026-09-25': 'OFF'
-        }
-      };
-
-      const foundNames = Object.keys(map);
-      setParsedDataByName(map);
-      setExtractedNames(foundNames);
-      setShowNameModal(true);
-      setStatusMessage('✅ 사진 분석 완료! 본인 이름을 선택해 주세요.');
-      setIsProcessing(false);
-    }, 800);
   };
 
   // 3. 본인 이름 선택 시 저장 및 자동 달력 연/월 이동
@@ -361,78 +292,26 @@ export default function ImportTab({
           </label>
         </div>
 
-        {/* 2. 근무표 사진 / 카메라 촬영 */}
-        <div style={{ borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
-          <div style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto">
-            <Camera size={20} />
-          </div>
-          <div>
-            <h3 className="font-black text-sm text-slate-800">
-              근무표 사진 / 카메라 촬영 인식
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              근무표 사진을 찍거나 갤러리 이미지를 올려주세요.
-            </p>
-          </div>
-
-          <div className="flex justify-center gap-2">
-            <label 
-              style={{ backgroundColor: '#4F46E5' }} 
-              className="px-5 py-2.5 text-white font-extrabold text-xs rounded-2xl shadow-2xs transition cursor-pointer hover:opacity-90 flex items-center gap-1"
-            >
-              <span>📷 사진첩 선택</span>
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handleImageUpload} 
-                disabled={isProcessing}
-                className="hidden" 
-              />
-            </label>
-            <label 
-              style={{ backgroundColor: '#1E293B' }} 
-              className="px-5 py-2.5 text-white font-extrabold text-xs rounded-2xl shadow-2xs transition cursor-pointer hover:opacity-90 flex items-center gap-1"
-            >
-              <span>📷 촬영하기</span>
-              <input 
-                type="file" 
-                accept="image/*" 
-                capture="environment" 
-                onChange={handleImageUpload} 
-                disabled={isProcessing}
-                className="hidden" 
-              />
-            </label>
-          </div>
-        </div>
-
-        {/* 3. 폰 캘린더 */}
-        <div style={{ borderColor: '#BAE6FD', backgroundColor: '#F0F9FF' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
-          <div style={{ backgroundColor: '#E0F2FE', color: '#0284C7' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto">
-            <Smartphone size={20} />
-          </div>
-          <div>
-            <h3 className="font-black text-sm text-slate-800">
-              휴대폰 기본 캘린더(.ics) 가져오기
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              가져온 개인 일정은 기본적으로 🔒 비공개(나만 보기) 처리됩니다.
-            </p>
-          </div>
-
-          <label 
-            style={{ backgroundColor: '#0284C7' }} 
-            className="inline-block px-6 py-2.5 text-white font-extrabold text-xs rounded-2xl shadow-2xs transition cursor-pointer hover:opacity-90"
+        {/* 2~3. 사진 인식 / 폰 캘린더(.ics) — 실제 분석 기능 개발 전까지 비활성화 */}
+        {[
+          { icon: <Camera size={20} />, title: '근무표 사진 / 카메라 촬영 인식', bg: '#F5F3FF', fg: '#7C3AED', chip: '#EDE9FE' },
+          { icon: <Smartphone size={20} />, title: '휴대폰 기본 캘린더(.ics) 가져오기', bg: '#F0F9FF', fg: '#0284C7', chip: '#E0F2FE' }
+        ].map((item) => (
+          <div
+            key={item.title}
+            style={{ backgroundColor: item.bg }}
+            className="p-4 rounded-3xl flex items-center gap-3 opacity-70"
           >
-            폰 캘린더 파일(.ics) 선택
-            <input 
-              type="file" 
-              accept=".ics" 
-              onChange={() => setStatusMessage('✅ 캘린더 일정이 연동되었습니다.')} 
-              className="hidden" 
-            />
-          </label>
-        </div>
+            <div style={{ backgroundColor: item.chip, color: item.fg }} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+              {item.icon}
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="font-black text-sm text-slate-800">{item.title}</h3>
+              <p className="text-xs text-slate-500 mt-0.5">곧 지원 예정입니다. 지금은 엑셀 파일로 가져와 주세요.</p>
+            </div>
+            <span className="px-2 py-1 rounded-lg bg-white text-[10px] font-black text-slate-400 shrink-0">준비 중</span>
+          </div>
+        ))}
 
         {/* 상태 메시지 */}
         {statusMessage && (
