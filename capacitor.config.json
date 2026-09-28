@@ -1,0 +1,11 @@
+{
+  "appId": "com.nurseshift.app",
+  "appName": "NurseShift",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "never"
+  }
+}
