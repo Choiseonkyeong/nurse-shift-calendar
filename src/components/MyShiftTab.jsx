@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from './Modal';
 import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
 import { getHoliday, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
-import { isNativePush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
+import { isNativePush, usesServerPush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 import { shareMonthImage } from '../lib/shareCalendar';
 
 export default function MyShiftTab({
@@ -87,11 +87,15 @@ export default function MyShiftTab({
       if (turningOn) {
         const granted = await enablePushReminders({ minutesBefore, shiftTimes: shiftConfigs.shiftTimes });
         if (!granted) {
-          alert('알림 권한이 거부되었습니다. 휴대폰 설정 > 앱 > 알림에서 허용해 주세요.');
+          alert(
+            isNativePush()
+              ? '알림 권한이 거부되었습니다. 휴대폰 설정 > 앱 > 알림에서 허용해 주세요.'
+              : '알림 권한이 거부되었습니다. 브라우저 주소창의 자물쇠 아이콘 > 알림에서 허용해 주세요.'
+          );
           return;
         }
         setAlarmSettings({ enabled: true, minutesBefore });
-        alert(`🔔 근무 시작 ${formatLead(minutesBefore)} 전 알림이 설정되었습니다.\n앱을 종료해도 알림이 도착합니다.`);
+        alert(`🔔 근무 시작 ${formatLead(minutesBefore)} 전 알림이 설정되었습니다.\n${isNativePush() ? '앱을 종료해도' : '브라우저를 닫아도'} 알림이 도착합니다.`);
       } else {
         await disablePushReminders({ minutesBefore });
         setAlarmSettings({ ...alarmSettings, enabled: false });
@@ -106,7 +110,7 @@ export default function MyShiftTab({
 
   // 알림 설정 토글/변경
   const handleToggleAlarm = async (minutes) => {
-    if (isNativePush()) return handleToggleNativeAlarm(minutes);
+    if (usesServerPush()) return handleToggleNativeAlarm(minutes);
 
     if (!alarmSettings.enabled || minutes !== undefined) {
       const granted = await requestNotificationPermission();
@@ -133,7 +137,7 @@ export default function MyShiftTab({
   }, [dayTick]);
 
   useEffect(() => {
-    if (isNativePush() || !alarmSettings?.enabled) return;
+    if (usesServerPush() || !alarmSettings?.enabled) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
     const shiftTimes = shiftConfigs.shiftTimes || {};
@@ -448,8 +452,8 @@ export default function MyShiftTab({
       </div>
 
       {/* 3. 근무 직접 수정 모달 (팝업) */}
-      {isEditModalOpen && createPortal(
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
+      {isEditModalOpen && (
+        <Modal onClose={() => setIsEditModalOpen(false)} label="근무 직접 수정">
           <div className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
@@ -502,8 +506,7 @@ export default function MyShiftTab({
               />
             </label>
           </div>
-        </div>,
-        document.body
+        </Modal>
       )}
 
       {/* 선택한 날짜 메모 */}
@@ -548,8 +551,8 @@ export default function MyShiftTab({
       )}
 
       {/* 4. 알람 시간 설정 모달 */}
-      {isAlarmModalOpen && createPortal(
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
+      {isAlarmModalOpen && (
+        <Modal onClose={() => setIsAlarmModalOpen(false)} label="근무 시작 알림 설정">
           <div className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
@@ -585,6 +588,12 @@ export default function MyShiftTab({
               ))}
             </div>
 
+            {!usesServerPush() && (
+              <p className="text-[11px] font-bold text-slate-500 bg-slate-50 rounded-2xl p-3">
+                웹에서는 이 화면이 열려 있을 때만 알림이 와요. 앱을 설치하면 앱을 꺼 둬도 알림을 받을 수 있어요.
+              </p>
+            )}
+
             {alarmSettings.enabled && (
               <button
                 onClick={() => handleToggleAlarm()}
@@ -594,8 +603,7 @@ export default function MyShiftTab({
               </button>
             )}
           </div>
-        </div>,
-        document.body
+        </Modal>
       )}
 
     </div>

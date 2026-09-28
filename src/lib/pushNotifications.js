@@ -10,6 +10,39 @@ const CHANNEL_ID = 'shift-reminders';
 
 export const isNativePush = () => Capacitor.isNativePlatform();
 
+// 웹 푸시(브라우저를 닫아도 알림): Vercel 환경 변수에 Firebase 웹 설정이 있을 때만 사용
+//   VITE_FIREBASE_WEB_CONFIG = Firebase 콘솔 > 프로젝트 설정 > 웹 앱의 firebaseConfig (JSON)
+//   VITE_FIREBASE_VAPID_KEY  = 클라우드 메시징 > 웹 푸시 인증서의 키 쌍
+// (둘 다 공개 값. 없으면 웹은 '화면이 열려 있을 때만' 알림)
+const WEB_CONFIG = (() => {
+  try {
+    return JSON.parse(import.meta.env.VITE_FIREBASE_WEB_CONFIG || 'null');
+  } catch (e) {
+    return null;
+  }
+})();
+const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
+
+export const isWebPushAvailable = () =>
+  !isNativePush() &&
+  Boolean(WEB_CONFIG?.projectId && VAPID_KEY) &&
+  typeof window !== 'undefined' &&
+  'serviceWorker' in navigator &&
+  'PushManager' in window &&
+  'Notification' in window;
+
+/** 서버가 보내는 알림(앱: FCM, 웹: 웹 푸시)을 쓰는지 */
+export const usesServerPush = () => isNativePush() || isWebPushAvailable();
+
+/** 웹: Firebase 초기화 + 알림용 서비스 워커 등록 */
+async function prepareWebPush() {
+  const { initializeApp, getApps } = await import('firebase/app');
+  if (!getApps().length) initializeApp(WEB_CONFIG);
+  const registration = await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
+  return registration;
+}
+
 const unwrap = ({ data, error }) => {
   if (error) throw error;
   return data;
@@ -41,7 +74,9 @@ let listenerAdded = false;
 
 /** 권한 요청 → 채널 생성 → FCM 토큰 발급/등록. 성공 시 true */
 export async function registerDevice({ prompt = true } = {}) {
-  if (!isNativePush()) return false;
+  if (!usesServerPush()) return false;
+  // 웹은 Firebase 앱을 먼저 초기화해야 메시징 플러그인을 쓸 수 있음
+  const webRegistration = isNativePush() ? null : await prepareWebPush();
 
   let { receive } = await FirebaseMessaging.checkPermissions();
   if (receive !== 'granted' && prompt) {
@@ -60,7 +95,7 @@ export async function registerDevice({ prompt = true } = {}) {
     });
   }
 
-  if (!listenerAdded) {
+  if (!listenerAdded && isNativePush()) {
     listenerAdded = true;
     // 토큰 갱신(재설치/만료) 시 서버에 재등록
     await FirebaseMessaging.addListener('tokenReceived', ({ token }) => {
@@ -68,7 +103,9 @@ export async function registerDevice({ prompt = true } = {}) {
     });
   }
 
-  const { token } = await FirebaseMessaging.getToken();
+  const { token } = await FirebaseMessaging.getToken(
+    webRegistration ? { vapidKey: VAPID_KEY, serviceWorkerRegistration: webRegistration } : undefined
+  );
   await registerToken(token);
   return true;
 }
@@ -99,7 +136,7 @@ export async function disablePushReminders({ minutesBefore }) {
 /** 로그아웃/초기화 전: 이 기기 토큰을 서버에서 제거 (실패해도 진행) */
 export async function unregisterDevice() {
   const token = localStorage.getItem(TOKEN_KEY);
-  if (!isNativePush() || !token) return;
+  if (!usesServerPush() || !token) return;
   try {
     const supabase = await getSupabase();
     unwrap(await supabase.rpc('unregister_device_token', { p_token: token }));

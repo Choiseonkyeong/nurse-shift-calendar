@@ -12,14 +12,15 @@ import { authRedirectType, getAccountInfo } from './lib/account';
 import { getThemePref, setThemePref } from './lib/theme';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType, fetchMyNotes, saveNoteChanges } from './lib/shiftApi';
-import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
+import { usesServerPush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 import { syncWidget } from './lib/widgetSync';
 import { applyChanges, mergeWithRemote } from './lib/syncMerge';
+import { queueTypeOp, flushTypeQueue, applyTypeQueue } from './lib/typeSync';
+import { SETTINGS_TS_KEY, decideSettingsSync, fetchMySettings, saveMySettings } from './lib/settingsSync';
 
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
 const LEGACY_DEFAULT_NAME = '최수민';
-const UPLOAD_TYPES_KEY = 'upload_local_types'; // 백업 복원 후 근무 종류 업로드 필요 (lib/backup.js 가 설정)
 const NAME_CONFIRMED_KEY = 'name_confirmed';
 const SYNCED_NOTES_KEY = 'synced_day_notes';
 const readJson = (key) => {
@@ -180,17 +181,67 @@ export default function App() {
     syncWidget(myShifts || {}, shiftTypes);
   }, [myShifts, shiftTypes]);
 
+  // ---------------- 설정 동기화 (시급·연차·수당 기준·근무 시간·알림) ----------------
+  const [settingsVersion, setSettingsVersion] = useState(0);
+  const settingsReadyRef = useRef(false); // 서버와 첫 비교가 끝나기 전에는 올리지 않음
+  const applyingServerSettingsRef = useRef(false); // 서버 값 반영 중에는 다시 올리지 않음
+  const settingsPayload = () => ({ shift_configs: shiftConfigsRef.current || {}, shift_alarm_settings: alarmSettingsRef.current });
+
+  const syncSettings = async () => {
+    const server = await fetchMySettings().catch(() => null);
+    if (!server) return; // 서버에 설정 저장 기능이 아직 없음(마이그레이션 전) → 기기에만 저장
+    const localTs = localStorage.getItem(SETTINGS_TS_KEY);
+    const action = decideSettingsSync(localTs, server);
+    if (action === 'pull') {
+      const { shift_configs: configs, shift_alarm_settings: alarm } = server.settings || {};
+      // 실제로 값을 바꿀 때만 "서버에서 온 변경" 표시 (안 그러면 다음 기기 변경이 저장되지 않음)
+      if (configs || alarm) applyingServerSettingsRef.current = true;
+      if (configs) setShiftConfigs(configs);
+      if (alarm) setAlarmSettings(alarm);
+      if (configs) setSettingsVersion((v) => v + 1); // 수당 탭 입력칸을 서버 값으로 다시 그림
+      localStorage.setItem(SETTINGS_TS_KEY, server.updated_at);
+    } else if (action === 'push') {
+      const ts = localTs || new Date().toISOString();
+      localStorage.setItem(SETTINGS_TS_KEY, ts);
+      await saveMySettings(settingsPayload(), ts).catch(() => {});
+    }
+    settingsReadyRef.current = true;
+  };
+  const syncSettingsRef = useRef(syncSettings);
+  syncSettingsRef.current = syncSettings;
+  const shiftConfigsRef = useRef(shiftConfigs);
+  shiftConfigsRef.current = shiftConfigs;
+  const alarmSettingsRef = useRef(alarmSettings);
+  alarmSettingsRef.current = alarmSettings;
+
+  // 이 기기에서 설정을 바꾸면 변경 시각 기록 후 서버에 저장 (디바운스)
+  useEffect(() => {
+    if (!profile || !settingsReadyRef.current) return;
+    if (applyingServerSettingsRef.current) {
+      applyingServerSettingsRef.current = false;
+      return;
+    }
+    const ts = new Date().toISOString();
+    localStorage.setItem(SETTINGS_TS_KEY, ts);
+    const timer = setTimeout(() => {
+      saveMySettings({ shift_configs: shiftConfigs || {}, shift_alarm_settings: alarmSettings }, ts).catch((err) =>
+        console.error('설정 저장 실패 (다음 연결 때 다시 저장):', err.message)
+      );
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [shiftConfigs, alarmSettings, profile]);
+
   // 앱 실행 시 FCM 토큰 재등록 (토큰 갱신/재설치 대비, 권한 팝업 없이)
   useEffect(() => {
-    if (!profile || !isNativePush() || !alarmSettings.enabled) return;
+    if (!profile || !usesServerPush() || !alarmSettings.enabled) return;
     registerDevice({ prompt: false }).catch((err) => console.error('푸시 기기 등록 실패:', err.message));
-    // 프로필이 연결될 때 1회만 (알림 설정 변경은 알림 설정 화면에서 처리)
+    // 프로필 연결 시 + 다른 기기 설정으로 알림이 켜졌을 때 (권한이 이미 있으면 조용히 등록)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id]);
+  }, [profile?.id, alarmSettings.enabled]);
 
   // 알림 켜진 상태에서 근무 시간/시간대 변경 → 서버 알림 설정 동기화 (디바운스)
   useEffect(() => {
-    if (!profile || !isNativePush() || !alarmSettings.enabled) return;
+    if (!profile || !usesServerPush() || !alarmSettings.enabled) return;
     const timer = setTimeout(() => {
       saveReminderSettings({
         enabled: true,
@@ -227,6 +278,8 @@ export default function App() {
     if (pullingRef.current) return;
     pullingRef.current = true;
     try {
+      // 오프라인에서 바꾼 근무 종류를 먼저 보냄 (그 코드의 근무가 서버에 저장되도록)
+      await flushTypeQueue({ upsert: upsertShiftType, remove: deleteShiftType });
       const remote = await fetchMyShifts();
       const local = myShiftsRef.current || {};
       // 기준 스냅샷이 없으면 이전 버전 사용자 → 기기 값 전체 우선 (기존 동작 유지)
@@ -271,18 +324,16 @@ export default function App() {
       try {
         await ensureSession();
         const me = await ensureProfile(userName, hadStoredName);
-        // 백업 복원 직후: 기기의 근무 종류를 먼저 서버에 올려야 그 코드의 근무가 저장됨
-        if (localStorage.getItem(UPLOAD_TYPES_KEY)) {
-          for (const t of customShiftTypesRef.current || []) await upsertShiftType(t).catch(() => {});
-          localStorage.removeItem(UPLOAD_TYPES_KEY);
-        }
         await pullAndMergeRef.current(me);
         setProfile(me);
         getAccountInfo().then((a) => setAccountStatus(a.status)).catch(() => {});
 
         // 서버에 저장된 내 근무 종류(이름·색상·시간) 반영
+        // (아직 못 보낸 기기 변경은 서버 목록 위에 유지)
         const serverTypes = await fetchMyShiftTypes().catch(() => null);
-        if (serverTypes?.length) setCustomShiftTypes(serverTypes);
+        if (serverTypes?.length) setCustomShiftTypes(applyTypeQueue(serverTypes));
+
+        await syncSettingsRef.current();
       } catch (err) {
         bootstrappedRef.current = false; // 다시 연결되면 재시도
         setSyncStatus('offline');
@@ -359,9 +410,24 @@ export default function App() {
       .catch((err) => console.error('이름 저장 실패:', err.message));
   }, [userName, profile]);
 
+  // 근무 종류 서버 반영: 오프라인·네트워크 오류면 기기에 쌓아 두고 다음 연결 때 전송(typeSync),
+  // 서버가 거부한 경우(형식 오류 등)는 오류를 그대로 알려 줌
+  const saveTypeToServer = async (op, send) => {
+    if (!profile) {
+      queueTypeOp(op);
+      return;
+    }
+    try {
+      await send();
+    } catch (err) {
+      if (!navigator.onLine || /fetch|network|load failed/i.test(err?.message || '')) queueTypeOp(op);
+      else throw err;
+    }
+  };
+
   // 근무 종류 저장: 로컬 즉시 반영 → 근무 시간은 알림/수당 설정에도 반영 → 서버 저장
   const handleSaveShiftType = async (type) => {
-    if (profile) await upsertShiftType(type);
+    await saveTypeToServer({ type: 'upsert', value: type }, () => upsertShiftType(type));
     setCustomShiftTypes((prev) => [...(prev || []).filter((t) => t.code !== type.code), type]);
     if (type.kind === 'work' && type.start && type.end) {
       setShiftConfigs((prev) => ({
@@ -375,7 +441,7 @@ export default function App() {
   };
 
   const handleDeleteShiftType = async (code) => {
-    if (profile) await deleteShiftType(code);
+    await saveTypeToServer({ type: 'remove', code }, () => deleteShiftType(code));
     setCustomShiftTypes((prev) => (prev || []).filter((t) => t.code !== code));
   };
 
@@ -565,6 +631,7 @@ export default function App() {
 
           {activeTab === 'allowance' && (
             <AllowanceTab
+              key={settingsVersion}
               myShifts={myShifts || {}}
               shiftConfigs={shiftConfigs}
               setShiftConfigs={setShiftConfigs}

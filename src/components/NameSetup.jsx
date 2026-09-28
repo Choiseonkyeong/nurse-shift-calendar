@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from './Modal';
 import { CalendarHeart } from 'lucide-react';
 
 /** 첫 실행: 이름 입력 (그룹 멤버에게 보이는 이름) */
@@ -12,8 +12,8 @@ export default function NameSetup({ onSubmit, onLogin, initialName = '', confirm
     if (trimmed) onSubmit(trimmed.slice(0, 30));
   };
 
-  return createPortal(
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-5 z-[110]">
+  return (
+    <Modal label="이름 입력" zIndex={110}>
       <form onSubmit={submit} className="bg-white w-full max-w-xs rounded-3xl p-6 space-y-4 shadow-xl text-center">
         <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
           <CalendarHeart size={24} />
@@ -47,7 +47,6 @@ export default function NameSetup({ onSubmit, onLogin, initialName = '', confirm
           </button>
         )}
       </form>
-    </div>,
-    document.body
+    </Modal>
   );
 }

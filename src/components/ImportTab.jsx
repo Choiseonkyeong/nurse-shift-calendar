@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from './Modal';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive } from 'lucide-react';
 import { unregisterDevice } from '../lib/pushNotifications';
 import { useShiftTypes } from '../lib/shiftTypes';
@@ -600,8 +600,8 @@ export default function ImportTab({
       </div>
 
 
-      {icsPreview && createPortal(
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
+      {icsPreview && (
+        <Modal onClose={() => setIcsPreview(null)} label="캘린더 가져오기">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-3 shadow-xl border border-slate-100">
             <div className="flex justify-between items-center">
               <h3 className="font-extrabold text-sm text-slate-900">캘린더 가져오기</h3>
@@ -636,13 +636,12 @@ export default function ImportTab({
               가져오기
             </button>
           </div>
-        </div>,
-        document.body
+        </Modal>
       )}
 
       {/* 추출된 전체 근무자 목록 선택 모달 */}
-      {pendingImport && createPortal(
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
+      {pendingImport && (
+        <Modal onClose={() => setPendingImport(null)} label="본인 이름 선택">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
             <div className="flex justify-between items-center border-b pb-2 border-slate-100">
               <h3 className="font-extrabold text-sm text-slate-900">본인 이름 선택</h3>
@@ -665,8 +664,7 @@ export default function ImportTab({
               ))}
             </div>
           </div>
-        </div>,
-        document.body
+        </Modal>
       )}
     </div>
   );
