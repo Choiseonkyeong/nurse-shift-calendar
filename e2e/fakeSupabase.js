@@ -22,6 +22,8 @@ export function createFakeState(overrides = {}) {
     groups: [], // { id, code, name, color, members: [profileId] }
     posts: [], // { id, group_id, author_id, body, created_at }
     swaps: [], // shift_swaps rows
+    types: {}, // profileId → { code: 종류(서버 행 형식) }
+    settings: {}, // profileId → { settings, updated_at }
     confirmEmail: true, // true: 이메일 인증 필요(링크 클릭 전 new_email 대기)
     offline: false,
     seq: 1,
@@ -185,7 +187,33 @@ export async function installFakeSupabase(context, state) {
           return json({ upserted: 0, deleted: 0, skipped: [] });
         }
         case 'get_my_shift_types':
-          return json([]);
+          return json(Object.values(state.types[myProfile.id] || {}));
+        case 'upsert_my_shift_type': {
+          (state.types[myProfile.id] ||= {})[body.p_code] = {
+            code: body.p_code,
+            label: body.p_label,
+            kind: body.p_kind,
+            bg_color: body.p_bg,
+            text_color: body.p_fg,
+            start_time: body.p_start ? `${body.p_start}:00` : null,
+            end_time: body.p_end ? `${body.p_end}:00` : null,
+            night_hours: body.p_night_hours,
+            leave_days: body.p_leave_days
+          };
+          return json(null);
+        }
+        case 'delete_my_shift_type':
+          delete state.types[myProfile.id]?.[body.p_code];
+          return json(null);
+        case 'get_my_settings':
+          return json(state.settings[myProfile.id] || { settings: {}, updated_at: null });
+        case 'set_my_settings': {
+          const cur = state.settings[myProfile.id];
+          if (!cur?.updated_at || Date.parse(cur.updated_at) <= Date.parse(body.p_updated_at)) {
+            state.settings[myProfile.id] = { settings: body.p_settings, updated_at: body.p_updated_at };
+          }
+          return json(state.settings[myProfile.id]);
+        }
         case 'get_my_groups':
           return json(
             state.groups

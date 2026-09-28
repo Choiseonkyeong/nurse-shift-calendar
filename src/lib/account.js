@@ -20,6 +20,8 @@ export const ACCOUNT_DATA_KEYS = [
   'group_last_seen',
   'roster_name',
   'name_confirmed',
+  'pending_type_ops', // 이전 계정의 근무 종류 변경 대기열
+  'settings_updated_at', // 로그인한 계정의 서버 설정이 이기도록
   PASSWORD_SET_KEY
 ];
 

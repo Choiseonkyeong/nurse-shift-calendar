@@ -77,3 +77,17 @@ describe('위젯 데이터', () => {
     expect(data.days['2026-09-28']).toMatchObject({ code: 'D', time: '07:00-15:00', bg: '#FEF08A' });
   });
 });
+
+import { decideSettingsSync } from '../src/lib/settingsSync';
+
+describe('설정 동기화 방향', () => {
+  it.each([
+    [null, { updated_at: null }, 'push'], // 서버에 아직 없음 → 기기 값 올림
+    [null, { updated_at: '2026-09-28T10:00:00Z' }, 'pull'], // 새 폰 → 서버 값
+    ['2026-09-28T09:00:00Z', { updated_at: '2026-09-28T10:00:00Z' }, 'pull'], // 다른 기기가 더 최근
+    ['2026-09-28T11:00:00Z', { updated_at: '2026-09-28T10:00:00Z' }, 'push'], // 이 기기가 더 최근
+    ['2026-09-28T10:00:00Z', { updated_at: '2026-09-28T10:00:00+00:00' }, 'none']
+  ])('기기 %s / 서버 %j → %s', (local, server, expected) => {
+    expect(decideSettingsSync(local, server)).toBe(expected);
+  });
+});

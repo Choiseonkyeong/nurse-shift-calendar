@@ -43,7 +43,7 @@ describe('전체 백업/복원', () => {
     expect(JSON.parse(dst.getItem('shift_configs'))).toEqual({ hourlyWage: 12000 });
     expect(dst.getItem('synced_shift_data')).toBeNull();
     expect(dst.getItem('synced_day_notes')).toBeNull();
-    expect(dst.getItem('upload_local_types')).toBe('1');
+    expect(JSON.parse(dst.getItem('pending_type_ops')).upsert['교']).toMatchObject({ label: '교육' });
   });
 
   it('잘못된 파일 거부', () => {

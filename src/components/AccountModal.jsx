@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from './Modal';
 import { X, ShieldCheck, Mail, KeyRound, LogIn, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import {
   getAccountInfo,
@@ -107,8 +107,8 @@ export default function AccountModal({ online, userName, initialMode = 'link', o
 
   const status = info?.status;
 
-  return createPortal(
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
+  return (
+    <Modal onClose={onClose} label="계정">
       <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100 max-h-[90dvh] overflow-y-auto">
         <div className="flex justify-between items-center">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
@@ -258,7 +258,6 @@ export default function AccountModal({ online, userName, initialMode = 'link', o
           </p>
         )}
       </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }

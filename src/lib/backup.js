@@ -1,4 +1,6 @@
 // src/lib/backup.js
+import { queueTypeOp } from './typeSync';
+
 // 전체 백업/복원 파일(.json): 근무·메모·근무 종류·수당/연차 설정·알림 설정·이름
 // (서버에 없는 설정까지 포함 → 폰을 바꿀 때 그대로 옮길 수 있음)
 
@@ -65,6 +67,8 @@ export function restoreBackup(data, storage = localStorage) {
   storage.removeItem('synced_shift_data');
   storage.removeItem('synced_day_notes');
   storage.setItem('name_confirmed', '1');
-  // 백업의 근무 종류를 다음 서버 연결 때 먼저 올리도록 표시 (App 부트스트랩이 처리)
-  if (Array.isArray(data.custom_shift_types) && data.custom_shift_types.length) storage.setItem('upload_local_types', '1');
+  // 백업의 근무 종류를 다음 서버 연결 때 먼저 올리도록 전송 대기열에 넣음 (lib/typeSync)
+  (Array.isArray(data.custom_shift_types) ? data.custom_shift_types : []).forEach((t) => {
+    if (t?.code) queueTypeOp({ type: 'upsert', value: t }, storage);
+  });
 }

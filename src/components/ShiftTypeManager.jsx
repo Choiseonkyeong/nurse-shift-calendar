@@ -1,5 +1,5 @@
-import { createPortal } from 'react-dom';
 import React, { useState } from 'react';
+import Modal from './Modal';
 import { X, Plus, ChevronLeft, Trash2, Check } from 'lucide-react';
 import { useShiftTypes, DEFAULT_CODES } from '../lib/shiftTypes';
 
@@ -73,8 +73,8 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, isCodeInUs
   };
 
   // 하단 탭바보다 위에 뜨도록 body 에 렌더링
-  return createPortal(
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
+  return (
+    <Modal onClose={onClose} label="근무 종류 관리">
       <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100 max-h-[85dvh] overflow-y-auto">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <div className="flex items-center gap-1.5">
@@ -245,7 +245,6 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, isCodeInUs
           </div>
         )}
       </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }
