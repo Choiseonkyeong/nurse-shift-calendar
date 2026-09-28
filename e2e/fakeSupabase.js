@@ -275,6 +275,22 @@ export async function installFakeSupabase(context, state) {
           s.decided_at = new Date().toISOString();
           return json(s);
         }
+        case 'delete_my_account': {
+          if (myProfile) {
+            const pid = myProfile.id;
+            delete state.profiles[pid];
+            delete state.shifts[pid];
+            delete state.notes[pid];
+            delete state.types[pid];
+            delete state.settings[pid];
+            state.posts = state.posts.filter((p) => p.author_id !== pid);
+            state.swaps = state.swaps.filter((x) => x.requester_id !== pid && x.target_id !== pid);
+            state.groups.forEach((g) => (g.members = g.members.filter((m) => m !== pid)));
+            state.groups = state.groups.filter((g) => g.members.length);
+          }
+          delete state.users[userId];
+          return json(null);
+        }
         default:
           return json(null);
       }

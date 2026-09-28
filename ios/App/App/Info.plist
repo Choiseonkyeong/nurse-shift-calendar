@@ -4,6 +4,14 @@
 <dict>
   <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>근무표를 사진으로 찍어 내 근무표에 등록하기 위해 카메라를 사용합니다. 사진은 기기 안에서만 처리됩니다.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>앨범에 있는 근무표 사진을 불러와 내 근무표에 등록하기 위해 사진에 접근합니다.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>이번 달 근무표 이미지를 사진 앱에 저장하기 위해 사용합니다.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>

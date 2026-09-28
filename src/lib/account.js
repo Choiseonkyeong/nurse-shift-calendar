@@ -121,3 +121,20 @@ export function authRedirectType() {
   if (params.get('error_description')) return 'error';
   return params.get('type') || 'signup';
 }
+
+/**
+ * 계정 삭제: 서버의 계정과 모든 데이터(근무·메모·설정·그룹 멤버십·게시글·교환 요청·알림 토큰) 삭제 후
+ * 이 기기 데이터도 전부 지움. 호출 후 새로고침 필요
+ */
+export async function deleteMyAccount() {
+  const supabase = await getSupabase();
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) {
+    if (/delete_my_account|function .* does not exist|PGRST202/i.test(`${error.message} ${error.code}`)) {
+      throw new Error('서버 업데이트(계정 삭제 SQL) 후 사용할 수 있어요. 관리자에게 문의해 주세요.');
+    }
+    throw error;
+  }
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+  localStorage.clear();
+}

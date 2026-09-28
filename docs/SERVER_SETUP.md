@@ -3,7 +3,7 @@
 앱 코드는 모두 배포되어 있고, 아래는 **Supabase 대시보드에서 한 번만** 하면 되는 작업입니다.
 위에서부터 순서대로 하면 됩니다. (이미 한 항목은 건너뛰기)
 
-## 1. SQL 2개 실행 (필수, 2분)
+## 1. SQL 3개 실행 (필수, 3분)
 
 SQL Editor → New query → 아래 파일을 **하나씩 전체** 붙여넣고 Run
 
@@ -11,8 +11,9 @@ SQL Editor → New query → 아래 파일을 **하나씩 전체** 붙여넣고 
 |---|---|---|
 | `supabase/migrations/20260928000800_shift_swaps.sql` | 그룹 근무 교환 요청 | `select count(*) from shift_swaps;` |
 | `supabase/migrations/20260928000900_profile_settings.sql` | 시급·연차·알림 설정을 서버에 저장 (새 폰 로그인 시 복원) | `select get_my_settings();` → `null` |
+| `supabase/migrations/20260928001000_delete_account.sql` | 앱 안에서 계정 삭제 (스토어 필수) | `select proname from pg_proc where proname = 'delete_my_account';` → 1행 |
 
-실행 전에도 앱은 정상 동작합니다. (교환 버튼이 안 보이고, 설정은 기기에만 저장될 뿐)
+실행 전에도 앱은 정상 동작합니다. (교환 버튼이 안 보이고, 설정은 기기에만 저장되고, 계정 삭제는 "서버 업데이트 후 사용" 안내가 뜰 뿐)
 
 ## 2. 이메일 계정 연결 (필수, 3분)
 
@@ -46,3 +47,11 @@ SQL Editor → New query → 아래 파일을 **하나씩 전체** 붙여넣고 
 
 [`docs/PUSH_SETUP.md`](./PUSH_SETUP.md) 참고
 (Firebase 서비스 계정 키, GitHub Secrets 3개, Deploy Supabase Functions 실행, `pg_cron`/`pg_net` + vault + `000300` 마이그레이션, `google-services.json`)
+
+## 5. 스토어 등록 전 확인 (플레이스토어·앱스토어)
+
+1. **개인정보처리방침**: `public/privacy.html` 의 `[운영자 이름 · 문의 이메일을 입력하세요]` 부분을 실제 값으로 바꾼 뒤 배포
+   - 스토어에 입력할 주소: `https://(Vercel 운영 주소)/privacy.html`
+2. **계정 삭제 안내**(구글 플레이 "데이터 보안" 양식): 앱 안 경로 = 프로필 → 계정 → 계정 삭제, 웹 주소 = Vercel 운영 주소 (같은 경로)
+3. **데이터 보안/개인정보 라벨**: 개인정보처리방침 1번 표 그대로 (광고·추적 없음, 사진은 기기 안에서만 처리)
+4. iOS 카메라·사진 권한 문구는 앱에 포함되어 있음 (`ios/App/App/Info.plist`)

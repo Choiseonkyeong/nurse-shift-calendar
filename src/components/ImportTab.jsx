@@ -596,6 +596,14 @@ export default function ImportTab({
             <Trash2 size={14} />
             <span>전체 초기화 (복구 불가)</span>
           </button>
+          <a
+            href="/privacy.html"
+            target="_blank"
+            rel="noopener"
+            className="block mt-2 text-[11px] font-bold text-slate-400 underline"
+          >
+            개인정보처리방침
+          </a>
         </div>
       </div>
 
