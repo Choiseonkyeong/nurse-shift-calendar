@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, LogIn, ChevronLeft, Copy, LogOut, Trash2, RotateCcw, Palette } from 'lucide-react';
+import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Copy, LogOut, Trash2, RotateCcw, Palette } from 'lucide-react';
+import { addMonthsKey } from '../utils/dateUtils';
 import {
   fetchMyGroups,
   createGroup,
@@ -20,6 +21,7 @@ export default function GroupShareTab({
   activeGroupId,
   setActiveGroupId,
   selectedDate,
+  setSelectedDate,
   profile,
   myShifts = {}
 }) {
@@ -35,6 +37,13 @@ export default function GroupShareTab({
 
   const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
   const currentThemeBg = currentGroup?.color || '#6366F1';
+
+  // 이전/다음 달 이동 (앱 전체 선택 날짜와 공유)
+  const goMonth = (delta) => {
+    const next = addMonthsKey(selectedDate, delta);
+    setSelectedDate(next);
+    setSelectedDayKey(next);
+  };
 
   // 현재 그룹의 해당 월 근무표 { [profileId]: { 'YYYY-MM-DD': code } }
   const [groupSchedule, setGroupSchedule] = useState({});
@@ -381,9 +390,27 @@ export default function GroupShareTab({
 
           <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-3">
             <div className="flex justify-between items-center px-1">
-              <h3 className="font-black text-base text-slate-900">
-                {year}년 {month}월 그룹 근무표
-              </h3>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="이전 달"
+                  onClick={() => goMonth(-1)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <h3 className="font-black text-base text-slate-900 text-center">
+                  {year}년 {month}월 그룹 근무표
+                </h3>
+                <button
+                  type="button"
+                  aria-label="다음 달"
+                  onClick={() => goMonth(1)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
               <button onClick={refreshAll} className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer">
                 <RotateCcw size={12} /> 동기화
               </button>

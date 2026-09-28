@@ -77,3 +77,12 @@ export function cleanDisplayName(name) {
 export function isSamePerson(nameA, nameB) {
   return cleanDisplayName(nameA) === cleanDisplayName(nameB) && cleanDisplayName(nameA) !== '';
 }
+
+/** 'YYYY-MM-DD' 기준 delta 개월 이동한 달의 1일 키 (예: ('2026-01-15', -1) → '2025-12-01') */
+export function addMonthsKey(dateKey, delta) {
+  const { year, month } = splitDateKey(dateKey);
+  const total = year * 12 + (month - 1) + delta;
+  const y = Math.floor(total / 12);
+  const m = (total % 12) + 1;
+  return `${y}-${String(m).padStart(2, '0')}-01`;
+}
