@@ -180,7 +180,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center items-start sm:py-6 font-sans">
-      <div className="w-full max-w-md bg-white h-[100dvh] sm:h-[840px] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
+      <div className="w-full max-w-md bg-white h-[100dvh] sm:h-[min(840px,calc(100dvh-3rem))] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
         
         {/* 1. 상단 프로필 헤더 */}
         <div
