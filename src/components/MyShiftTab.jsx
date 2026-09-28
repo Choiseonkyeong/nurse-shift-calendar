@@ -222,11 +222,16 @@ export default function MyShiftTab({
         </div>
 
         {/* 근무 요약 칩 */}
+        {/* 달력 근무 칩과 동일한 색상 사용, 0건은 흐리게 */}
         <div className="grid grid-cols-6 gap-1.5 pt-1 text-center">
           {Object.entries(shiftCounts).map(([code, count]) => (
-            <div key={code} className="p-2 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col items-center">
-              <span className="text-[10px] font-bold text-slate-400 block">{code}</span>
-              <span className="text-sm font-black text-slate-800">{count}</span>
+            <div
+              key={code}
+              style={getBadgeStyle(code)}
+              className={`py-2 rounded-2xl flex flex-col items-center gap-0.5 transition ${count === 0 ? 'opacity-40' : ''}`}
+            >
+              <span className="text-[11px] font-black leading-none">{code}</span>
+              <span className="text-base font-black leading-tight">{count}</span>
             </div>
           ))}
         </div>
@@ -274,7 +279,7 @@ export default function MyShiftTab({
                     {shift}
                   </div>
                 ) : (
-                  <div className="text-[10px] text-slate-300 font-bold text-center pb-1">+ 수정</div>
+                  <div className="text-[10px] text-slate-300 font-bold text-center pb-1 whitespace-nowrap">+ 수정</div>
                 )}
               </div>
             );
