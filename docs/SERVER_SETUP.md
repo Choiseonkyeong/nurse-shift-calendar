@@ -30,6 +30,11 @@ SQL Editor → New query → 아래 파일을 **하나씩 전체** 붙여넣고 
 
 확인: 앱 → 왼쪽 위 프로필 동그라미(노란 점) → 이메일 입력 → 인증 메일 수신 → 링크 클릭 → 앱에서 [인증 확인] → 비밀번호 설정.
 
+## 2-1. 카카오 / Google 로그인 (선택, 20분)
+
+[`docs/AUTH_SETUP.md`](./AUTH_SETUP.md) 참고. 설정 전에는 버튼이 숨겨져 있어 앱 사용에 문제없습니다.
+(카카오 Developers·Google Cloud 에서 키 발급 → Supabase Providers 에 입력 → *Allow manual linking* ON → Redirect URLs 에 `com.nurseshift.app://auth-callback` 추가)
+
 ## 3. 웹에서도 창을 닫았을 때 알림 받기 (선택)
 
 앱(APK·iOS)은 4번 푸시 설정만 하면 되고, **웹 버전**도 브라우저를 닫은 상태에서 알림을 받으려면:

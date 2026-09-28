@@ -25,6 +25,9 @@ export function createFakeState(overrides = {}) {
     types: {}, // profileId → { code: 종류(서버 행 형식) }
     settings: {}, // profileId → { settings, updated_at }
     confirmEmail: true, // true: 이메일 인증 필요(링크 클릭 전 new_email 대기)
+    providers: {}, // Supabase 에서 켠 소셜 로그인 (예: { kakao: true })
+    oauthAccount: { sub: 'social-1', name: '카카오간호' }, // 브라우저에 로그인된 소셜 계정 (제공자 화면 대신)
+    identities: {}, // 'kakao:social-1' → userId
     offline: false,
     seq: 1,
     ...overrides
@@ -52,8 +55,8 @@ const publicUser = (u) => ({
   is_anonymous: Boolean(u.is_anonymous),
   email_confirmed_at: u.email ? '2026-01-01T00:00:00Z' : null,
   app_metadata: {},
-  user_metadata: {},
-  identities: []
+  user_metadata: u.meta || {},
+  identities: (u.identities || []).map((provider) => ({ provider, identity_id: `${provider}-${u.id}` }))
 });
 
 const profileOf = (state, userId) => Object.values(state.profiles).find((p) => p.auth_user_id === userId);
@@ -62,6 +65,17 @@ const profileOf = (state, userId) => Object.values(state.profiles).find((p) => p
 export function seedAccount(state, { email, password, name, shifts = {} }) {
   const user = { id: newId(state, 'user'), email, password, is_anonymous: false };
   state.users[user.id] = user;
+  const profile = { id: newId(state, 'profile'), auth_user_id: user.id, display_name: name };
+  state.profiles[profile.id] = profile;
+  state.shifts[profile.id] = { ...shifts };
+  return { user, profile };
+}
+
+/** 테스트에서 직접 쓰는 헬퍼: 소셜 계정이 연결된 계정(+프로필) 만들기 */
+export function seedSocialAccount(state, { provider, sub, name, shifts = {} }) {
+  const user = { id: newId(state, 'user'), is_anonymous: false, identities: [provider], meta: { full_name: name } };
+  state.users[user.id] = user;
+  state.identities[`${provider}:${sub}`] = user.id;
   const profile = { id: newId(state, 'profile'), auth_user_id: user.id, display_name: name };
   state.profiles[profile.id] = profile;
   state.shifts[profile.id] = { ...shifts };
@@ -120,6 +134,43 @@ export async function installFakeSupabase(context, state) {
     if (path.startsWith('/auth/v1/')) {
       const userId = userIdFrom(req.headers()['authorization'] || '');
       const me = state.users[userId];
+      if (path.endsWith('/settings')) return json({ external: { email: true, ...state.providers } });
+      if (path.endsWith('/user/identities/authorize')) {
+        const next = new URL(`${url.origin}/auth/v1/authorize`);
+        next.searchParams.set('provider', url.searchParams.get('provider'));
+        next.searchParams.set('redirect_to', url.searchParams.get('redirect_to'));
+        next.searchParams.set('link_user', userId);
+        return json({ url: next.toString() });
+      }
+      if (path.endsWith('/authorize')) {
+        // 제공자 로그인 화면을 건너뛰고 바로 앱으로 되돌려 보냄 (토큰은 주소 # 뒤)
+        const provider = url.searchParams.get('provider');
+        const back = url.searchParams.get('redirect_to');
+        const linkUser = url.searchParams.get('link_user');
+        const key = `${provider}:${state.oauthAccount.sub}`;
+        const redirect = (hash) => route.fulfill({ status: 302, headers: { location: `${back}#${hash}` }, body: '' });
+        let user;
+        if (linkUser) {
+          if (state.identities[key] && state.identities[key] !== linkUser) {
+            return redirect('error=server_error&error_code=identity_already_exists&error_description=Identity+is+already+linked+to+another+user');
+          }
+          user = state.users[linkUser];
+          user.is_anonymous = false;
+        } else {
+          user = state.users[state.identities[key]];
+          if (!user) {
+            user = { id: newId(state, 'user'), is_anonymous: false };
+            state.users[user.id] = user;
+          }
+        }
+        state.identities[key] = user.id;
+        user.identities = [...new Set([...(user.identities || []), provider])];
+        user.meta = { full_name: state.oauthAccount.name };
+        const ses = sessionFor(state, user);
+        return redirect(
+          `access_token=${ses.access_token}&expires_in=3600&expires_at=${ses.expires_at}&refresh_token=${ses.refresh_token}&token_type=bearer&provider_token=x`
+        );
+      }
       if (path.endsWith('/signup')) {
         const user = { id: newId(state, 'user'), is_anonymous: true };
         state.users[user.id] = user;

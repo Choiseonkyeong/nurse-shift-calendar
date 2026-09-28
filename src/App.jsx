@@ -9,6 +9,7 @@ import NameSetup from './components/NameSetup';
 import AccountModal from './components/AccountModal';
 import AuthLanding from './components/AuthLanding';
 import { authRedirectType, getAccountInfo } from './lib/account';
+import { consumeOAuthNotice } from './lib/socialAuth';
 import { getThemePref, setThemePref } from './lib/theme';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType, fetchMyNotes, saveNoteChanges } from './lib/shiftApi';
@@ -138,7 +139,12 @@ export default function App() {
   // 인증 메일 링크로 열린 웹 페이지 (이메일 인증 완료 / 비밀번호 재설정)
   const [authLanding, setAuthLanding] = useState(() => authRedirectType());
   // 계정 창: 'link' | 'login' | null, 계정 상태: anonymous | pending | needs_password | linked
-  const [accountModal, setAccountModal] = useState(null);
+  // 카카오·구글 로그인에서 돌아온 결과 안내 (한 번만). 로그인 성공은 화면 전환으로 충분해서 창을 띄우지 않음
+  const [oauthNotice, setOauthNotice] = useState(() => {
+    const n = consumeOAuthNotice();
+    return n && !n.silent ? n : null;
+  });
+  const [accountModal, setAccountModal] = useState(() => (oauthNotice ? (userName ? 'link' : 'login') : null));
   const [accountStatus, setAccountStatus] = useState(null);
   // 화면 테마: system → dark → light 순으로 전환
   const [themePref, setThemePrefState] = useState(getThemePref);
@@ -499,7 +505,11 @@ export default function App() {
         online={Boolean(profile)}
         userName={userName}
         initialMode={accountModal}
-        onClose={() => setAccountModal(null)}
+        initialMessage={oauthNotice}
+        onClose={() => {
+          setAccountModal(null);
+          setOauthNotice(null);
+        }}
         onStatusChange={setAccountStatus}
       />
     )}
