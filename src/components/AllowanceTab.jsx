@@ -4,8 +4,11 @@ export default function AllowanceTab({
   myShifts = {},
   selectedDate,
   shiftConfigs = {},
-  setShiftConfigs
+  setShiftConfigs,
+  privacyBlur = false
 }) {
+  // 보안 모드: 시급·수당 금액 가리기
+  const blurCls = privacyBlur ? 'blur-[5px] select-none' : '';
   const [year, month] = selectedDate ? selectedDate.split('-').map(Number) : [2026, 9];
 
   // 1. 커스텀 정산 시작일 설정 (기본값: 26일)
@@ -255,13 +258,13 @@ export default function AllowanceTab({
                 setHourlyWage(val);
                 if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, hourlyWage: val, startDay });
               }}
-              className="w-28 py-1.5 px-3 bg-white border border-slate-200 rounded-xl font-black text-right text-slate-900 outline-none focus:border-indigo-500"
+              className={`w-28 py-1.5 px-3 bg-white border border-slate-200 rounded-xl font-black text-right text-slate-900 outline-none focus:border-indigo-500 ${blurCls}`}
             />
           </div>
 
           <div className="pt-3 border-t border-indigo-100/80 flex justify-between items-center">
             <span className="font-black text-slate-900 text-sm">{month}월 총 야간수당:</span>
-            <span className="text-2xl font-black text-indigo-600">
+            <span className={`text-2xl font-black text-indigo-600 ${blurCls}`}>
               {totalNightPay.toLocaleString()} <span className="text-base">원</span>
             </span>
           </div>

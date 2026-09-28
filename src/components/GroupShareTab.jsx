@@ -23,8 +23,11 @@ export default function GroupShareTab({
   selectedDate,
   setSelectedDate,
   profile,
-  myShifts = {}
+  myShifts = {},
+  privacyBlur = false
 }) {
+  // 보안 모드: 화면 공유/캡처 시 동료 이름 가리기
+  const blurCls = privacyBlur ? 'blur-[3px] select-none' : '';
   const [selectedDayKey, setSelectedDayKey] = useState(selectedDate || '2026-09-07');
   const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
   const [loading, setLoading] = useState(false);
@@ -460,7 +463,7 @@ export default function GroupShareTab({
                             style={badgeStyle}
                             className="flex justify-between items-center px-1.5 py-0.5 rounded-lg text-[9px] font-black"
                           >
-                            <span className="truncate">{displayName}</span>
+                            <span className={`truncate ${blurCls}`}>{displayName}</span>
                             <span className="ml-0.5 font-bold">{shift}</span>
                           </div>
                         );
@@ -487,7 +490,7 @@ export default function GroupShareTab({
                     key={member.id}
                     className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center"
                   >
-                    <span className="font-extrabold text-xs text-slate-800">{member.name} 쌤</span>
+                    <span className={`font-extrabold text-xs text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
                     <span style={badgeStyle} className="px-3 py-1 rounded-xl font-black text-xs">
                       {shift}
                     </span>

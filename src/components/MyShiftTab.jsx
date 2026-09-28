@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
-import { addMonthsKey } from '../utils/dateUtils';
+import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { isNativePush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 
 export default function MyShiftTab({
@@ -81,8 +81,7 @@ export default function MyShiftTab({
       if (!granted) return;
 
       const newSettings = { enabled: true, minutesBefore: minutes || alarmSettings.minutesBefore };
-      setAlarmSettings(newSettings);
-      scheduleShiftNotifications(newSettings.minutesBefore);
+      setAlarmSettings(newSettings); // 실제 예약은 아래 useEffect 가 담당
       alert(`🔔 근무 시작 ${newSettings.minutesBefore >= 60 ? `${newSettings.minutesBefore / 60}시간` : `${newSettings.minutesBefore}분`} 전 알림이 설정되었습니다.`);
     } else {
       setAlarmSettings({ ...alarmSettings, enabled: false });
@@ -91,43 +90,48 @@ export default function MyShiftTab({
     setIsAlarmModalOpen(false);
   };
 
-  // 근무 시작 알림 예약 로직
-  const scheduleShiftNotifications = (minutesBefore) => {
+  // 웹 근무 시작 알림 예약: 오늘·내일(로컬 날짜 기준) 근무를 브라우저가 열려 있는 동안 예약
+  // 자정마다 다시 예약해 장시간 열어 둬도 다음 날 알림이 이어지도록 함 (앱은 서버 푸시 사용)
+  const [dayTick, setDayTick] = useState(0);
+  useEffect(() => {
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+    const timer = setTimeout(() => setDayTick((t) => t + 1), nextMidnight - now);
+    return () => clearTimeout(timer);
+  }, [dayTick]);
+
+  useEffect(() => {
+    if (isNativePush() || !alarmSettings?.enabled) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-    // 오늘 및 내일 근무 체크 후 알림 예약
-    const todayStr = new Date().toISOString().split('T')[0];
-    const todaysShift = myShifts[todayStr];
+    const shiftTimes = shiftConfigs.shiftTimes || {};
+    const timers = [];
+    const now = new Date();
 
-    if (todaysShift && todaysShift !== 'OFF' && todaysShift !== '연차') {
-      const shiftTimes = shiftConfigs.shiftTimes || {
-        D: { time: '07:30 - 15:30' },
-        E: { time: '14:30 - 22:30' },
-        N: { time: '21:30 - 08:00' },
-        M: { time: '09:00 - 17:00' }
-      };
+    [0, 1].forEach((offset) => {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+      const code = myShifts[toDateKey(day)];
+      if (!code || code === 'OFF' || code === '연차') return;
 
-      const startTimeStr = shiftTimes[todaysShift]?.time?.split('-')[0]?.trim();
-      if (startTimeStr) {
-        const [hours, mins] = startTimeStr.split(':').map(Number);
-        const shiftDate = new Date();
-        shiftDate.setHours(hours, mins, 0, 0);
+      const startTimeStr = shiftTimes[code]?.time?.split('-')[0]?.trim();
+      const match = /^(\d{1,2}):(\d{2})$/.exec(startTimeStr || '');
+      if (!match) return;
 
-        const alarmTime = new Date(shiftDate.getTime() - minutesBefore * 60 * 1000);
-        const now = new Date();
+      const start = new Date(day);
+      start.setHours(Number(match[1]), Number(match[2]), 0, 0);
+      const delay = start.getTime() - alarmSettings.minutesBefore * 60 * 1000 - now.getTime();
+      if (delay <= 0) return;
 
-        const timeToAlarm = alarmTime.getTime() - now.getTime();
-        if (timeToAlarm > 0) {
-          setTimeout(() => {
-            new Notification(`⏰ [근무 알림] ${userName} 님!`, {
-              body: `잠시 후 (${startTimeStr}) ${todaysShift} 근무가 시작됩니다. 준비해 주세요!`,
-              icon: '/favicon.ico'
-            });
-          }, timeToAlarm);
-        }
-      }
-    }
-  };
+      timers.push(setTimeout(() => {
+        new Notification(`⏰ [근무 알림] ${userName} 님!`, {
+          body: `잠시 후 (${startTimeStr}) ${code} 근무가 시작됩니다. 준비해 주세요!`,
+          icon: '/favicon.ico'
+        });
+      }, delay));
+    });
+
+    return () => timers.forEach(clearTimeout);
+  }, [alarmSettings?.enabled, alarmSettings?.minutesBefore, myShifts, shiftConfigs.shiftTimes, userName, dayTick]);
 
   // 이전/다음 달 이동
   const goMonth = (delta) => setSelectedDate(addMonthsKey(selectedDate, delta));
