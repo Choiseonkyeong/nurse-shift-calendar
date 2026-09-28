@@ -26,22 +26,21 @@ pg_cron(5분) → Edge Function send-shift-reminders → FCM → Android / iOS(A
    - Firebase → 프로젝트 설정 → **서비스 계정** → *새 비공개 키 생성* → JSON 다운로드
    - ⚠️ 이 파일은 비밀값입니다. 저장소에 커밋하지 마세요.
 
-## 2. Supabase Edge Function
+## 2. 발송 함수 배포 (GitHub Actions 자동, CLI 설치 불필요)
 
-[Supabase CLI](https://supabase.com/docs/guides/cli) 로그인 후 저장소 루트에서:
+1. **CRON_SECRET 만들기**: 아무 긴 랜덤 문자열 (예: 비밀번호 생성기로 40자 이상). 3단계에서 한 번 더 씁니다.
+2. **Supabase 액세스 토큰**: supabase.com → 오른쪽 위 프로필 → **Account preferences → Access Tokens → Generate new token**
+3. GitHub 저장소 → **Settings → Secrets and variables → Actions → New repository secret** 으로 3개 등록
 
-```bash
-supabase link --project-ref ianilyiumkvkowcnuawt
+   | 이름 | 값 |
+   |---|---|
+   | `SUPABASE_ACCESS_TOKEN` | 2번 토큰 |
+   | `FIREBASE_SERVICE_ACCOUNT` | 1단계 5번 서비스 계정 JSON 파일 내용 **전체** |
+   | `CRON_SECRET` | 1번 랜덤 문자열 |
 
-# 임의의 긴 랜덤 문자열 (cron → 함수 호출 인증용)
-CRON_SECRET=$(openssl rand -hex 32)
-echo "$CRON_SECRET"   # 3단계에서 한 번 더 사용
-
-supabase secrets set CRON_SECRET="$CRON_SECRET" \
-  FIREBASE_SERVICE_ACCOUNT="$(cat ~/Downloads/<서비스계정파일>.json)"
-
-supabase functions deploy send-shift-reminders --no-verify-jwt
-```
+4. GitHub → **Actions → Deploy Supabase Functions → Run workflow** (master 선택) 실행
+   → 초록색 체크가 뜨면 함수 배포 + 시크릿 등록 완료
+   (이후 `supabase/functions/` 가 바뀌어 master 에 머지되면 자동 재배포)
 
 ## 3. 스케줄러 (DB)
 
@@ -49,7 +48,7 @@ supabase functions deploy send-shift-reminders --no-verify-jwt
 2. SQL Editor 에서 (값 교체 후) 실행:
    ```sql
    select vault.create_secret('https://ianilyiumkvkowcnuawt.supabase.co', 'project_url');
-   select vault.create_secret('<2단계의 CRON_SECRET 값>', 'shift_reminder_cron_secret');
+   select vault.create_secret('<2단계 1번 CRON_SECRET 값>', 'shift_reminder_cron_secret');
    ```
 3. `supabase/migrations/20260928000300_schedule_shift_reminders.sql` 전체를 SQL Editor 에서 실행
 

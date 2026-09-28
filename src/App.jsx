@@ -432,7 +432,7 @@ export default function App() {
             className="flex flex-col items-center justify-center py-1.5 px-4 transition-all cursor-pointer"
           >
             <Users size={18} className={activeTab === 'groupShare' ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className="text-[11px] font-black mt-0.5">동료 비교</span>
+            <span className="text-[11px] font-black mt-0.5">그룹</span>
           </button>
 
           <button
