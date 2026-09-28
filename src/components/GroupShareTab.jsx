@@ -3,6 +3,7 @@ import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Copy, LogOut, Trash2, Ro
 import { addMonthsKey } from '../utils/dateUtils';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import { dayNumberClass, getHoliday } from '../utils/holidays';
+import GroupBoard from './GroupBoard';
 import {
   fetchMyGroups,
   createGroup,
@@ -457,7 +458,8 @@ export default function GroupShareTab({
 
                     <div className="space-y-0.5 mt-1">
                       {currentGroup.members?.map((member) => {
-                        const shift = getMemberShifts(member)[item.dateKey] || 'OFF';
+                        const shift = getMemberShifts(member)[item.dateKey] || '';
+                        if (!shift) return null; // 미입력 날짜는 표시하지 않음 (OFF 와 구분)
                         const memberStyle = getMemberBadgeStyle(member, shift);
                         const displayName = member.name?.length > 2 ? member.name.substring(0, 2) : member.name;
 
@@ -486,8 +488,8 @@ export default function GroupShareTab({
 
             <div className="grid grid-cols-2 gap-2">
               {currentGroup.members?.map((member) => {
-                const shift = getMemberShifts(member)[selectedDayKey] || 'OFF';
-                const memberStyle = getMemberBadgeStyle(member, shift);
+                const shift = getMemberShifts(member)[selectedDayKey] || '';
+                const memberStyle = shift ? getMemberBadgeStyle(member, shift) : { backgroundColor: '#F8FAFC', color: '#CBD5E1' };
 
                 return (
                   <div
@@ -496,13 +498,15 @@ export default function GroupShareTab({
                   >
                     <span className={`font-extrabold text-xs text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
                     <span style={memberStyle} className="px-3 py-1 rounded-xl font-black text-xs">
-                      {shift}
+                      {shift || '미입력'}
                     </span>
                   </div>
                 );
               })}
             </div>
           </div>
+
+          <GroupBoard group={currentGroup} profile={profile} themeColor={currentThemeBg} privacyBlur={privacyBlur} />
 
         </div>
       )}

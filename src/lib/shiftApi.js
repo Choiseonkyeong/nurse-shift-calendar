@@ -147,3 +147,23 @@ export async function saveNoteChanges(profileId, changes) {
   if (upserts.length) unwrap(await supabase.from('day_notes').upsert(upserts));
   if (deletes.length) unwrap(await supabase.from('day_notes').delete().eq('profile_id', profileId).in('note_date', deletes));
 }
+
+// ---------------- 그룹 게시판 ----------------
+
+/** 최신 글 50개 [{ id, author_id, body, created_at }] */
+export async function fetchGroupPosts(groupId) {
+  return unwrap(await supabase
+    .from('group_posts')
+    .select('id, author_id, body, created_at')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+    .limit(50)) || [];
+}
+
+export async function createGroupPost(groupId, authorId, body) {
+  unwrap(await supabase.from('group_posts').insert({ group_id: groupId, author_id: authorId, body: body.trim() }));
+}
+
+export async function deleteGroupPost(postId) {
+  unwrap(await supabase.from('group_posts').delete().eq('id', postId));
+}

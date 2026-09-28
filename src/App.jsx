@@ -174,15 +174,19 @@ export default function App() {
         const serverTypes = await fetchMyShiftTypes().catch(() => null);
         if (!cancelled && serverTypes?.length) setCustomShiftTypes(serverTypes);
 
-        // 메모: 서버 + 로컬 병합 (로컬 우선) 후 차이분 업로드
-        const remoteNotes = await fetchMyNotes();
-        if (cancelled) return;
-        const localNotes = Object.fromEntries(Object.entries(dayNotes || {}).filter(([, v]) => v));
-        const mergedNotes = { ...remoteNotes, ...localNotes };
-        const noteChanges = diffShifts(remoteNotes, mergedNotes);
-        if (Object.keys(noteChanges).length) await saveNoteChanges(me.id, noteChanges);
-        syncedNotesRef.current = mergedNotes;
-        setDayNotes(mergedNotes);
+        // 메모: 서버 + 로컬 병합 (로컬 우선) 후 차이분 업로드 (실패해도 근무 동기화는 유지)
+        try {
+          const remoteNotes = await fetchMyNotes();
+          if (cancelled) return;
+          const localNotes = Object.fromEntries(Object.entries(dayNotes || {}).filter(([, v]) => v));
+          const mergedNotes = { ...remoteNotes, ...localNotes };
+          const noteChanges = diffShifts(remoteNotes, mergedNotes);
+          if (Object.keys(noteChanges).length) await saveNoteChanges(me.id, noteChanges);
+          syncedNotesRef.current = mergedNotes;
+          setDayNotes(mergedNotes);
+        } catch (err) {
+          console.error('메모 동기화 실패 (기기에만 저장):', err.message);
+        }
       } catch (err) {
         console.error('서버 동기화 실패 (오프라인 모드로 동작):', err.message);
       }
