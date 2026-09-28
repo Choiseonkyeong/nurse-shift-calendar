@@ -3,6 +3,7 @@ import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
+import { getHoliday, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { isNativePush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 
@@ -358,9 +359,12 @@ export default function MyShiftTab({
                 }`}
               >
                 <div className="flex items-start justify-between">
-                  <span className="text-[11px] font-black text-slate-700 px-0.5">{item.day}</span>
+                  <span className={`text-[11px] font-black px-0.5 ${dayNumberClass(item.dateKey)}`}>{item.day}</span>
                   {dayNotes[item.dateKey] && <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400" title="메모 있음" />}
                 </div>
+                {getHoliday(item.dateKey) && (
+                  <span className="text-[8px] font-bold text-rose-400 leading-none truncate px-0.5">{getHoliday(item.dateKey)}</span>
+                )}
 
                 {shift ? (
                   <div
@@ -445,7 +449,10 @@ export default function MyShiftTab({
         >
           <StickyNote size={15} className="text-amber-500 mt-0.5 shrink-0" />
           <div className="min-w-0">
-            <p className="text-[11px] font-black text-slate-400">{selectedDate} 메모</p>
+            <p className="text-[11px] font-black text-slate-400">
+              {selectedDate} 메모
+              {getHoliday(selectedDate) && <span className="ml-1.5 text-rose-400">· {getHoliday(selectedDate)}</span>}
+            </p>
             <p className={`text-xs font-bold whitespace-pre-wrap break-words ${dayNotes[selectedDate] ? 'text-slate-700' : 'text-slate-300'}`}>
               {dayNotes[selectedDate] || '메모가 없습니다. 눌러서 추가하세요.'}
             </p>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Copy, LogOut, Trash2, RotateCcw, Palette } from 'lucide-react';
 import { addMonthsKey } from '../utils/dateUtils';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
+import { dayNumberClass, getHoliday } from '../utils/holidays';
 import {
   fetchMyGroups,
   createGroup,
@@ -447,7 +448,12 @@ export default function GroupShareTab({
                         : 'border-slate-100 bg-slate-50/30 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="text-[11px] font-black text-slate-700 px-1">{item.day}</span>
+                    <span
+                      title={getHoliday(item.dateKey) || undefined}
+                      className={`text-[11px] font-black px-1 ${dayNumberClass(item.dateKey)}`}
+                    >
+                      {item.day}
+                    </span>
 
                     <div className="space-y-0.5 mt-1">
                       {currentGroup.members?.map((member) => {
