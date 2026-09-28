@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
 import AllowanceTab from './components/AllowanceTab';
 import GroupShareTab from './components/GroupShareTab';
 import ImportTab from './components/ImportTab';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
+import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts } from './lib/shiftApi';
 
 export default function App() {
   const today = getTodayDateObj();
@@ -13,7 +14,11 @@ export default function App() {
   const [selectedDate, _setSelectedDate] = useState(today.dateStr);
   const setSelectedDate = (raw) => _setSelectedDate(toDateKey(raw));
 
+  // 기존 사용자 여부 (레거시 group_shifts 데이터 연결 판단용) — 저장 effect 실행 전에 판정
+  const [hadStoredName] = useState(() => localStorage.getItem('shift_user_name') !== null);
   const [userName, setUserName] = useState(() => localStorage.getItem('shift_user_name') || '최수민');
+  const [profile, setProfile] = useState(null);
+  const syncedShiftsRef = useRef(null); // 서버에 반영된 마지막 근무 스냅샷 (null = 아직 동기화 전)
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempUserName, setTempUserName] = useState(userName);
 
@@ -73,6 +78,58 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('shift_user_name', userName);
   }, [userName]);
+
+  // 서버 부트스트랩: 익명 세션 → 프로필 → 서버/로컬 근무 병합 (로컬 우선) 후 차이분 업로드
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await ensureSession();
+        const me = await ensureProfile(userName, hadStoredName);
+        const remote = await fetchMyShifts();
+        if (cancelled) return;
+
+        const local = Object.fromEntries(Object.entries(myShifts || {}).filter(([, v]) => v));
+        const merged = { ...remote, ...local };
+        const result = await saveShiftChanges(diffShifts(remote, merged));
+        if (result?.skipped?.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', result.skipped);
+
+        if (cancelled) return;
+        syncedShiftsRef.current = merged;
+        setProfile(me);
+        setMyShifts(merged);
+      } catch (err) {
+        console.error('서버 동기화 실패 (오프라인 모드로 동작):', err.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 근무 변경 → 서버 반영 (디바운스)
+  useEffect(() => {
+    if (!profile || !syncedShiftsRef.current) return;
+    const changes = diffShifts(syncedShiftsRef.current, myShifts || {});
+    if (Object.keys(changes).length === 0) return;
+
+    const snapshot = { ...(myShifts || {}) };
+    const timer = setTimeout(async () => {
+      try {
+        await saveShiftChanges(changes);
+        syncedShiftsRef.current = snapshot;
+      } catch (err) {
+        console.error('근무 저장 실패:', err.message);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [myShifts, profile]);
+
+  // 이름 변경 → 프로필 반영
+  useEffect(() => {
+    if (!profile || profile.display_name === userName) return;
+    updateDisplayName(profile.id, userName)
+      .then(() => setProfile((p) => ({ ...p, display_name: userName })))
+      .catch((err) => console.error('이름 저장 실패:', err.message));
+  }, [userName, profile]);
 
   const handleSaveName = () => {
     if (tempUserName.trim()) {
@@ -175,6 +232,7 @@ export default function App() {
               setSelectedDate={setSelectedDate}
               shiftConfigs={shiftConfigs}
               userName={userName}
+              profile={profile}
               myShifts={myShifts || {}}
               privacyBlur={privacyBlur}
             />

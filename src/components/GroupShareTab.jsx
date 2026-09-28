@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, LogIn, ChevronLeft, Copy, LogOut, Trash2, RotateCcw, Palette } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import {
+  fetchMyGroups,
+  createGroup,
+  joinGroup,
+  updateGroupColor,
+  leaveGroup,
+  deleteGroup,
+  fetchGroupSchedule
+} from '../lib/shiftApi';
 
 export default function GroupShareTab({
   newGroupName,
@@ -12,7 +20,7 @@ export default function GroupShareTab({
   activeGroupId,
   setActiveGroupId,
   selectedDate,
-  userName,
+  profile,
   myShifts = {}
 }) {
   const [selectedDayKey, setSelectedDayKey] = useState(selectedDate || '2026-09-07');
@@ -28,65 +36,60 @@ export default function GroupShareTab({
   const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
   const currentThemeBg = currentGroup?.color || '#6366F1';
 
-  // 내가 참여 중인 그룹 목록 DB 조회
-  const fetchMyGroupsFromDB = async () => {
-    if (!userName) return;
+  // 현재 그룹의 해당 월 근무표 { [profileId]: { 'YYYY-MM-DD': code } }
+  const [groupSchedule, setGroupSchedule] = useState({});
+
+  const withLoading = async (fn, failLabel) => {
     try {
       setLoading(true);
-
-      const { data: myRows, error: myError } = await supabase
-        .from('group_shifts')
-        .select('group_code')
-        .eq('user_name', userName);
-
-      if (myError) throw myError;
-
-      if (!myRows || myRows.length === 0) {
-        setGroups([]);
-        return;
-      }
-
-      const myGroupCodes = [...new Set(myRows.map((r) => r.group_code))];
-
-      const { data: groupData, error: groupError } = await supabase
-        .from('group_shifts')
-        .select('*')
-        .in('group_code', myGroupCodes);
-
-      if (groupError) throw groupError;
-
-      if (groupData) {
-        const groupMap = {};
-        groupData.forEach((row) => {
-          const code = row.group_code;
-          if (!groupMap[code]) {
-            groupMap[code] = {
-              id: code,
-              name: row.group_name,
-              code: code,
-              color: row.color || '#6366F1', // 자유 HEX 코드 연동
-              members: []
-            };
-          }
-          groupMap[code].members.push({
-            id: row.id,
-            name: row.user_name,
-            shifts: typeof row.shifts === 'string' ? JSON.parse(row.shifts || '{}') : (row.shifts || {})
-          });
-        });
-
-        setGroups(Object.values(groupMap));
-      }
+      return await fn();
     } catch (err) {
-      console.error('Supabase fetch error:', err.message);
+      console.error(err);
+      if (failLabel) alert(`${failLabel}: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  // 내가 참여 중인 그룹 목록 + 멤버 조회
+  const fetchMyGroupsFromDB = () =>
+    withLoading(async () => {
+      if (!profile) return;
+      setGroups(await fetchMyGroups());
+    });
+
+  // 현재 그룹의 선택 월 근무표 조회
+  const fetchScheduleFromDB = () =>
+    withLoading(async () => {
+      if (!profile || !currentGroup) return;
+      const mm = String(month).padStart(2, '0');
+      const lastDay = new Date(year, month, 0).getDate();
+      setGroupSchedule(await fetchGroupSchedule(currentGroup.id, `${year}-${mm}-01`, `${year}-${mm}-${lastDay}`));
+    });
+
+  const refreshAll = async () => {
+    await fetchMyGroupsFromDB();
+    await fetchScheduleFromDB();
+  };
+
   useEffect(() => {
     fetchMyGroupsFromDB();
-  }, [userName]);
+  }, [profile?.id]);
+
+  useEffect(() => {
+    setGroupSchedule({});
+    fetchScheduleFromDB();
+  }, [profile?.id, currentGroup?.id, year, month]);
+
+  // 본인 근무는 로컬 최신값, 동료 근무는 서버 조회값
+  const getMemberShifts = (member) =>
+    member.id === profile?.id ? myShifts : groupSchedule[member.id] || {};
+
+  const ensureOnline = () => {
+    if (profile) return true;
+    alert('서버에 연결되지 않았습니다. 네트워크 확인 후 다시 시도해 주세요.');
+    return false;
+  };
 
   // 1. 새 그룹 생성
   const handleCreateGroup = async () => {
@@ -94,30 +97,15 @@ export default function GroupShareTab({
       alert('그룹 이름을 입력해 주세요.');
       return;
     }
+    if (!ensureOnline()) return;
 
-    const randomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newRow = {
-      group_code: randomCode,
-      group_name: newGroupName.trim(),
-      user_name: userName || '홍숙언',
-      shifts: myShifts || {},
-      color: selectedColor
-    };
-
-    try {
-      setLoading(true);
-      const { error } = await supabase.from('group_shifts').insert([newRow]);
-      if (error) throw error;
-
+    await withLoading(async () => {
+      const group = await createGroup(newGroupName.trim(), selectedColor);
       await fetchMyGroupsFromDB();
-      setActiveGroupId(randomCode);
+      setActiveGroupId(group.id);
       setNewGroupName('');
-      alert(`🎉 '${newRow.group_name}' 그룹이 생성되었습니다!`);
-    } catch (err) {
-      alert(`그룹 생성 실패: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+      alert(`🎉 '${group.name}' 그룹이 생성되었습니다!`);
+    }, '그룹 생성 실패');
   };
 
   // 2. 코드로 그룹 입장
@@ -126,66 +114,29 @@ export default function GroupShareTab({
       alert('6자리 초대 코드를 입력해 주세요.');
       return;
     }
+    if (!ensureOnline()) return;
 
-    const code = joinCodeInput.trim().toUpperCase();
-
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('group_shifts')
-        .select('*')
-        .eq('group_code', code);
-
-      if (error || !data || data.length === 0) {
+    await withLoading(async () => {
+      let group;
+      try {
+        group = await joinGroup(joinCodeInput.trim().toUpperCase());
+      } catch (err) {
         alert('해당 초대 코드와 일치하는 그룹이 없습니다.');
         return;
       }
-
-      const groupName = data[0].group_name;
-      const groupColor = data[0].color || '#6366F1';
-      const isAlreadyMember = data.some((m) => m.user_name === userName);
-
-      if (!isAlreadyMember) {
-        const newRow = {
-          group_code: code,
-          group_name: groupName,
-          user_name: userName || '최수민',
-          shifts: myShifts || {},
-          color: groupColor
-        };
-
-        const { error: insertError } = await supabase.from('group_shifts').insert([newRow]);
-        if (insertError) throw insertError;
-      }
-
       await fetchMyGroupsFromDB();
-      setActiveGroupId(code);
+      setActiveGroupId(group.id);
       setJoinCodeInput('');
-      alert(`🎉 '${groupName}' 그룹에 참여했습니다!`);
-    } catch (err) {
-      alert(`그룹 참여 실패: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+      alert(`🎉 '${group.name}' 그룹에 참여했습니다!`);
+    }, '그룹 참여 실패');
   };
 
   // 3. 기존 그룹 색상 커스텀 변경
-  const handleChangeGroupColor = async (groupCode, hexColor) => {
-    try {
-      setLoading(true);
-      const { error } = await supabase
-        .from('group_shifts')
-        .update({ color: hexColor })
-        .eq('group_code', groupCode);
-
-      if (error) throw error;
+  const handleChangeGroupColor = (groupId, hexColor) =>
+    withLoading(async () => {
+      await updateGroupColor(groupId, hexColor);
       await fetchMyGroupsFromDB();
-    } catch (err) {
-      alert(`색상 변경 실패: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, '색상 변경 실패');
 
   // 4. 코드 복사
   const handleCopyCode = (code) => {
@@ -194,38 +145,23 @@ export default function GroupShareTab({
   };
 
   // 5. 그룹 나가기
-  const handleLeaveGroup = async (groupCode) => {
+  const handleLeaveGroup = async (groupId) => {
     if (!window.confirm('정말 이 그룹에서 나가시겠습니까?')) return;
-    try {
-      const { error } = await supabase
-        .from('group_shifts')
-        .delete()
-        .eq('group_code', groupCode)
-        .eq('user_name', userName);
-
-      if (error) throw error;
+    await withLoading(async () => {
+      await leaveGroup(groupId, profile.id);
       await fetchMyGroupsFromDB();
       setActiveGroupId(null);
-    } catch (err) {
-      alert(`그룹 나가기 실패: ${err.message}`);
-    }
+    }, '그룹 나가기 실패');
   };
 
   // 6. 그룹 삭제
-  const handleDeleteGroup = async (groupCode) => {
+  const handleDeleteGroup = async (groupId) => {
     if (!window.confirm('정말 이 그룹 전체를 삭제하시겠습니까?')) return;
-    try {
-      const { error } = await supabase
-        .from('group_shifts')
-        .delete()
-        .eq('group_code', groupCode);
-
-      if (error) throw error;
+    await withLoading(async () => {
+      await deleteGroup(groupId);
       await fetchMyGroupsFromDB();
       setActiveGroupId(null);
-    } catch (err) {
-      alert(`그룹 삭제 실패: ${err.message}`);
-    }
+    }, '그룹 삭제 실패');
   };
 
   // 달력 날짜 계산
@@ -408,7 +344,7 @@ export default function GroupShareTab({
                     <input
                       type="color"
                       value={currentThemeBg}
-                      onChange={(e) => handleChangeGroupColor(currentGroup.code, e.target.value)}
+                      onChange={(e) => handleChangeGroupColor(currentGroup.id, e.target.value)}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                     />
                   </label>
@@ -418,17 +354,19 @@ export default function GroupShareTab({
 
               <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => handleLeaveGroup(currentGroup.code)}
+                  onClick={() => handleLeaveGroup(currentGroup.id)}
                   className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-extrabold border border-slate-200 cursor-pointer"
                 >
                   나가기
                 </button>
+                {currentGroup.can_delete && (
                 <button
-                  onClick={() => handleDeleteGroup(currentGroup.code)}
+                  onClick={() => handleDeleteGroup(currentGroup.id)}
                   className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-extrabold border border-rose-200 cursor-pointer"
                 >
                   삭제
                 </button>
+                )}
               </div>
             </div>
 
@@ -446,7 +384,7 @@ export default function GroupShareTab({
               <h3 className="font-black text-base text-slate-900">
                 {year}년 {month}월 그룹 근무표
               </h3>
-              <button onClick={fetchMyGroupsFromDB} className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer">
+              <button onClick={refreshAll} className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer">
                 <RotateCcw size={12} /> 동기화
               </button>
             </div>
@@ -485,7 +423,7 @@ export default function GroupShareTab({
 
                     <div className="space-y-0.5 mt-1">
                       {currentGroup.members?.map((member) => {
-                        const shift = member.shifts?.[item.dateKey] || 'OFF';
+                        const shift = getMemberShifts(member)[item.dateKey] || 'OFF';
                         const badgeStyle = getBadgeStyle(shift);
                         const displayName = member.name?.length > 2 ? member.name.substring(0, 2) : member.name;
 
@@ -514,7 +452,7 @@ export default function GroupShareTab({
 
             <div className="grid grid-cols-2 gap-2">
               {currentGroup.members?.map((member) => {
-                const shift = member.shifts?.[selectedDayKey] || 'OFF';
+                const shift = getMemberShifts(member)[selectedDayKey] || 'OFF';
                 const badgeStyle = getBadgeStyle(shift);
 
                 return (
