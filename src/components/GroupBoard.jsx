@@ -1,36 +1,89 @@
-import React, { useEffect, useState } from 'react';
-import { MessageSquare, Send, Trash2, RotateCcw } from 'lucide-react';
-import { fetchGroupPosts, createGroupPost, deleteGroupPost } from '../lib/shiftApi';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { MessageSquare, Send, Trash2, RotateCcw, Repeat, Check, X } from 'lucide-react';
+import {
+  fetchGroupPosts,
+  createGroupPost,
+  deleteGroupPost,
+  fetchShiftSwaps,
+  createShiftSwap,
+  respondShiftSwap
+} from '../lib/shiftApi';
+import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
+import { markGroupSeen } from '../lib/groupActivity';
 
 const formatTime = (iso) => {
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+const shortDate = (key) => {
+  const [, m, d] = key.split('-').map(Number);
+  return `${m}/${d}`;
+};
+const STATUS_LABEL = { pending: '대기 중', accepted: '교환 완료', declined: '거절됨', cancelled: '취소됨' };
+const STATUS_CLS = {
+  pending: 'bg-amber-50 text-amber-700',
+  accepted: 'bg-emerald-50 text-emerald-700',
+  declined: 'bg-slate-100 text-slate-500',
+  cancelled: 'bg-slate-100 text-slate-400'
+};
+const REFRESH_MS = 60000;
 
-/** 그룹 멤버 전용 비공개 게시판 */
-export default function GroupBoard({ group, profile, themeColor, privacyBlur }) {
+/**
+ * 그룹 멤버 전용 게시판 + 근무 교환 요청
+ * @param getCode (profileId, dateKey) => 현재 보이는 근무 코드 (교환 미리보기용)
+ * @param onSwapApplied 내 근무가 서버에서 바뀌었을 때 (교환 수락) → 내 달력 재동기화
+ */
+export default function GroupBoard({ group, profile, themeColor, privacyBlur, defaultDate, getCode, onSwapApplied }) {
+  const shiftTypes = useShiftTypes();
   const [posts, setPosts] = useState([]);
+  const [swaps, setSwaps] = useState([]);
+  const [swapsAvailable, setSwapsAvailable] = useState(true);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [swapFormOpen, setSwapFormOpen] = useState(false);
+  const knownAcceptedRef = useRef(null);
 
   const names = Object.fromEntries((group.members || []).map((m) => [m.id, m.name]));
   const blurCls = privacyBlur ? 'blur-[3px] select-none' : '';
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!profile) return;
     try {
       setError('');
-      setPosts(await fetchGroupPosts(group.id));
-    } catch (err) {
-      setError(`게시글을 불러오지 못했습니다: ${err.message}`);
-    }
-  };
+      const [p, s] = await Promise.all([
+        fetchGroupPosts(group.id),
+        fetchShiftSwaps(group.id).catch(() => null) // 서버에 교환 기능이 아직 없으면 null
+      ]);
+      setPosts(p);
+      markGroupSeen(group.id, p[0]?.created_at);
+      setSwapsAvailable(s !== null);
+      const list = s || [];
+      setSwaps(list);
 
+      // 나와 관련된 교환이 새로 수락됐으면 내 근무 다시 불러오기
+      const accepted = list
+        .filter((x) => x.status === 'accepted' && (x.requester_id === profile.id || x.target_id === profile.id))
+        .map((x) => x.id);
+      if (knownAcceptedRef.current && accepted.some((id) => !knownAcceptedRef.current.has(id))) onSwapApplied?.();
+      knownAcceptedRef.current = new Set(accepted);
+    } catch (err) {
+      setError(`게시판을 불러오지 못했습니다: ${err.message}`);
+    }
+  }, [group.id, profile, onSwapApplied]);
+
+  // 처음 + 1분마다 + 앱으로 돌아올 때 새로고침
   useEffect(() => {
     load();
-  }, [group.id, profile?.id]);
+    const timer = setInterval(() => document.visibilityState === 'visible' && load(), REFRESH_MS);
+    const onVisible = () => document.visibilityState === 'visible' && load();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load]);
 
   const handleSubmit = async () => {
     if (!draft.trim() || loading) return;
@@ -56,6 +109,34 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur }) 
     }
   };
 
+  const handleRespond = async (swap, action) => {
+    const ask = { accept: '교환을 수락할까요? 두 사람의 근무가 바로 바뀝니다.', decline: '교환 요청을 거절할까요?', cancel: '교환 요청을 취소할까요?' };
+    if (!window.confirm(ask[action])) return;
+    try {
+      setLoading(true);
+      await respondShiftSwap(swap.id, action);
+      if (action === 'accept') onSwapApplied?.();
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const chip = (code) =>
+    code ? (
+      <span style={badgeStyle(shiftTypes, code)} className="px-1.5 py-0.5 rounded-md font-black">
+        {code}
+      </span>
+    ) : (
+      <span className="px-1.5 py-0.5 rounded-md font-black bg-white text-slate-300 border border-slate-200">없음</span>
+    );
+
+  const visibleSwaps = swaps.filter(
+    (s) => s.status === 'pending' || Date.now() - new Date(s.decided_at || s.created_at).getTime() < 7 * 86400000
+  );
+
   return (
     <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
       <div className="flex justify-between items-center">
@@ -72,13 +153,97 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur }) 
         <p className="text-xs font-bold text-slate-400">서버에 연결되면 게시판을 사용할 수 있습니다.</p>
       ) : (
         <>
-          <div className="flex gap-2">
+          {/* 근무 교환 */}
+          {swapsAvailable && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setSwapFormOpen((v) => !v)}
+                style={{ color: themeColor, borderColor: `${themeColor}40`, backgroundColor: `${themeColor}10` }}
+                className="w-full py-2 rounded-2xl border text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Repeat size={13} /> {swapFormOpen ? '교환 요청 닫기' : '근무 교환 요청하기'}
+              </button>
+
+              {swapFormOpen && (
+                <SwapForm
+                  group={group}
+                  profile={profile}
+                  defaultDate={defaultDate}
+                  getCode={getCode}
+                  chip={chip}
+                  blurCls={blurCls}
+                  onDone={async () => {
+                    setSwapFormOpen(false);
+                    await load();
+                  }}
+                  onError={setError}
+                />
+              )}
+
+              {visibleSwaps.map((s) => {
+                const mine = s.requester_id === profile.id;
+                const toMe = s.target_id === profile.id;
+                return (
+                  <div key={s.id} className="p-3 rounded-2xl border border-slate-100 bg-slate-50 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-[11px] font-black text-slate-700 ${blurCls}`}>
+                        {names[s.requester_id] || '알 수 없음'} → {names[s.target_id] || '알 수 없음'}
+                      </span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${STATUS_CLS[s.status]}`}>{STATUS_LABEL[s.status]}</span>
+                    </div>
+                    {s.dates.map((d) => (
+                      <div key={d} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
+                        <span className="w-10">{shortDate(d)}</span>
+                        {chip(s.snapshot?.[d]?.requester)} <span className="text-slate-300">⇄</span> {chip(s.snapshot?.[d]?.target)}
+                      </div>
+                    ))}
+                    {s.message && <p className="text-[11px] font-bold text-slate-500 break-words">“{s.message}”</p>}
+                    {s.status === 'pending' && (toMe || mine) && (
+                      <div className="flex gap-1.5 pt-0.5">
+                        {toMe && (
+                          <>
+                            <button
+                              onClick={() => handleRespond(s, 'accept')}
+                              disabled={loading}
+                              className="flex-1 py-1.5 rounded-xl bg-emerald-600 text-white text-[11px] font-black flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <Check size={12} /> 수락
+                            </button>
+                            <button
+                              onClick={() => handleRespond(s, 'decline')}
+                              disabled={loading}
+                              className="flex-1 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-[11px] font-black flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <X size={12} /> 거절
+                            </button>
+                          </>
+                        )}
+                        {mine && (
+                          <button
+                            onClick={() => handleRespond(s, 'cancel')}
+                            disabled={loading}
+                            className="flex-1 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-500 text-[11px] font-black cursor-pointer"
+                          >
+                            요청 취소
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               maxLength={1000}
               rows={2}
-              placeholder="근무 교환, 공지, 회식 일정 등을 남겨 보세요"
+              placeholder="공지, 회식 일정 등을 남겨 보세요"
+              aria-label="게시글 내용"
               className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none resize-none focus:border-indigo-300"
             />
             <button
@@ -96,15 +261,11 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur }) 
           {error && <p className="text-xs font-bold text-rose-500">{error}</p>}
 
           <div className="space-y-2">
-            {posts.length === 0 && (
-              <p className="text-xs font-bold text-slate-300 text-center py-3">아직 글이 없습니다.</p>
-            )}
+            {posts.length === 0 && <p className="text-xs font-bold text-slate-300 text-center py-3">아직 글이 없습니다.</p>}
             {posts.map((p) => (
               <div key={p.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className={`text-[11px] font-black text-slate-700 ${blurCls}`}>
-                    {names[p.author_id] || '알 수 없음'}
-                  </span>
+                  <span className={`text-[11px] font-black text-slate-700 ${blurCls}`}>{names[p.author_id] || '알 수 없음'}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-slate-400">{formatTime(p.created_at)}</span>
                     {p.author_id === profile.id && (
@@ -120,6 +281,89 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur }) 
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** 교환 요청 입력: 상대 + 날짜 1~2개 (+ 메시지) */
+function SwapForm({ group, profile, defaultDate, getCode, chip, blurCls, onDone, onError }) {
+  const others = (group.members || []).filter((m) => m.id !== profile.id);
+  const [targetId, setTargetId] = useState(others[0]?.id || '');
+  const [date1, setDate1] = useState(defaultDate || '');
+  const [date2, setDate2] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  if (!others.length) {
+    return <p className="text-xs font-bold text-slate-400 px-1">교환할 다른 멤버가 없습니다. 초대 코드를 공유해 보세요.</p>;
+  }
+
+  const dates = [...new Set([date1, date2].filter(Boolean))].sort();
+  const submit = async () => {
+    try {
+      setBusy(true);
+      await createShiftSwap(group.id, targetId, dates, message);
+      await onDone();
+    } catch (err) {
+      onError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="p-3 rounded-2xl border border-slate-200 space-y-2 text-xs font-bold text-slate-600">
+      <label className="flex items-center justify-between gap-2">
+        <span className="shrink-0">교환할 사람</span>
+        <select
+          value={targetId}
+          onChange={(e) => setTargetId(e.target.value)}
+          className={`min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 font-black ${blurCls}`}
+        >
+          {others.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {[
+        [date1, setDate1, '날짜'],
+        [date2, setDate2, '날짜 2 (선택)']
+      ].map(([value, setter, label]) => (
+        <div key={label} className="flex items-center justify-between gap-2">
+          <label className="flex items-center gap-2 min-w-0">
+            <span className="shrink-0 w-16">{label}</span>
+            <input
+              type="date"
+              value={value}
+              onChange={(e) => setter(e.target.value)}
+              className="min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 font-bold"
+            />
+          </label>
+          {value && (
+            <span className="flex items-center gap-1 shrink-0">
+              나 {chip(getCode(profile.id, value))} ⇄ {chip(getCode(targetId, value))}
+            </span>
+          )}
+        </div>
+      ))}
+      <input
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        maxLength={200}
+        placeholder="메시지 (선택) 예: 가족 행사가 있어서요 🙏"
+        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold outline-none"
+      />
+      <p className="text-[10px] text-slate-400">상대가 수락하면 두 사람의 해당 날짜 근무가 서로 바뀌어요.</p>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={busy || !targetId || !dates.length}
+        className="w-full py-2 rounded-xl bg-indigo-600 text-white font-black disabled:opacity-40 cursor-pointer"
+      >
+        교환 요청 보내기
+      </button>
     </div>
   );
 }

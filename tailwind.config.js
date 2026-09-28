@@ -1,8 +1,48 @@
 /** @type {import('tailwindcss').Config} */
+import colors from 'tailwindcss/colors';
+import plugin from 'tailwindcss/plugin';
+
+// 다크 모드: 앱에서 쓰는 색 팔레트를 CSS 변수로 바꿔 <html class="dark"> 일 때 한 번에 전환
+// (컴포넌트마다 dark: 클래스를 달지 않아도 전체 화면이 따라감)
+const PALETTES = ['slate', 'indigo', 'amber', 'rose', 'emerald', 'sky', 'violet'];
+const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+// slate: 밝기 반전 / 강조색: 옅은 배경(50~200) ↔ 진한 글자(700~950) 교환, 중간(300~600)은 유지
+const SLATE_DARK = { 50: 800, 100: 800, 200: 700, 300: 600, 400: 400, 500: 400, 600: 300, 700: 200, 800: 100, 900: 50, 950: 50 };
+const ACCENT_DARK = { 50: 950, 100: 900, 200: 800, 300: 300, 400: 400, 500: 500, 600: 600, 700: 300, 800: 200, 900: 100, 950: 50 };
+
+const rgb = (hex) => {
+  const v = parseInt(hex.replace('#', ''), 16);
+  return `${(v >> 16) & 255} ${(v >> 8) & 255} ${v & 255}`;
+};
+const varColor = (name) => `rgb(var(--c-${name}) / <alpha-value>)`;
+
+const lightVars = {
+  '--c-surface': rgb('#ffffff'),
+  '--c-page': rgb(colors.slate[100])
+};
+const darkVars = {
+  '--c-surface': rgb(colors.slate[900]),
+  '--c-page': rgb(colors.slate[950])
+};
+PALETTES.forEach((p) => {
+  const map = p === 'slate' ? SLATE_DARK : ACCENT_DARK;
+  SHADES.forEach((s) => {
+    lightVars[`--c-${p}-${s}`] = rgb(colors[p][s]);
+    darkVars[`--c-${p}-${s}`] = rgb(colors[p][map[s]]);
+  });
+});
+
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
+      colors: {
+        page: varColor('page'),
+        ...Object.fromEntries(PALETTES.map((p) => [p, Object.fromEntries(SHADES.map((s) => [s, varColor(`${p}-${s}`)]))]))
+      },
+      // 카드 배경(bg-white)만 다크에서 어둡게. 색 버튼 위 흰 글자(text-white)는 그대로 흰색
+      backgroundColor: { white: varColor('surface') },
       // 코드에서 사용 중인 Tailwind v4 명칭 호환
       boxShadow: {
         '2xs': '0 1px rgb(0 0 0 / 0.05)',
@@ -13,5 +53,9 @@ export default {
       }
     }
   },
-  plugins: []
+  plugins: [
+    plugin(({ addBase }) => {
+      addBase({ ':root': lightVars, '.dark': { ...darkVars, colorScheme: 'dark' } });
+    })
+  ]
 };

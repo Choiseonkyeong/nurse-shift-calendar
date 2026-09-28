@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { getHoliday } from '../utils/holidays';
+import { getTodayDateObj } from '../utils/dateUtils';
 import { leaveYearRange } from '../lib/allowance';
 import ShiftStats from './ShiftStats';
 
@@ -16,7 +17,7 @@ export default function AllowanceTab({
   const shiftTypes = useShiftTypes();
   const workTypes = shiftTypes.filter((t) => t.kind === 'work');
   const leaveTypes = shiftTypes.filter((t) => t.kind === 'leave');
-  const [year, month] = selectedDate ? selectedDate.split('-').map(Number) : [2026, 9];
+  const [year, month] = (selectedDate || getTodayDateObj().dateStr).split('-').map(Number);
 
   // 1. 커스텀 정산 시작일 설정 (기본값: 26일)
   const [startDay, setStartDay] = useState(shiftConfigs.startDay || 26);

@@ -58,3 +58,58 @@ describe('exportData', () => {
     expect(csv).toContain('2026-10-02,금,OFF,,"회식, 7시; ""준비"""');
   });
 });
+
+const cal = (...events) =>
+  ['BEGIN:VCALENDAR', ...events.flatMap((e) => ['BEGIN:VEVENT', ...e, 'END:VEVENT']), 'END:VCALENDAR'].join('\r\n');
+
+describe('반복 일정 (RRULE)', () => {
+  it('매주 월·수 나이트, 4회, 하루 제외(EXDATE)', () => {
+    const r = parseIcs(cal([
+      'UID:a', 'DTSTART;VALUE=DATE:20261005', 'DTEND;VALUE=DATE:20261006', 'SUMMARY:N',
+      'RRULE:FREQ=WEEKLY;BYDAY=MO,WE;COUNT=4', 'EXDATE;VALUE=DATE:20261007'
+    ]));
+    // 10/5(월) 10/7(수, 제외) 10/12(월) 10/14(수) → COUNT 는 제외 회차도 포함
+    expect(Object.keys(r.shifts)).toEqual(['2026-10-05', '2026-10-12', '2026-10-14']);
+  });
+
+  it('격주(INTERVAL=2) + UNTIL', () => {
+    const r = parseIcs(cal([
+      'UID:b', 'DTSTART;VALUE=DATE:20261001', 'DTEND;VALUE=DATE:20261002', 'SUMMARY:오프',
+      'RRULE:FREQ=WEEKLY;INTERVAL=2;UNTIL=20261031'
+    ]));
+    expect(Object.keys(r.shifts)).toEqual(['2026-10-01', '2026-10-15', '2026-10-29']);
+  });
+
+  it('매일 2일짜리 종일 일정은 펼침 없이 회차마다 2일', () => {
+    const r = parseIcs(cal([
+      'UID:c', 'DTSTART;VALUE=DATE:20261001', 'DTEND;VALUE=DATE:20261003', 'SUMMARY:D',
+      'RRULE:FREQ=DAILY;INTERVAL=4;COUNT=2'
+    ]));
+    expect(Object.keys(r.shifts)).toEqual(['2026-10-01', '2026-10-02', '2026-10-05', '2026-10-06']);
+  });
+
+  it('매월 둘째 화요일 / 매월 말일', () => {
+    const r = parseIcs(cal(
+      ['UID:d', 'DTSTART;VALUE=DATE:20261013', 'SUMMARY:교육 참석', 'RRULE:FREQ=MONTHLY;BYDAY=2TU;COUNT=3'],
+      ['UID:e', 'DTSTART;VALUE=DATE:20261031', 'SUMMARY:연차', 'RRULE:FREQ=MONTHLY;BYMONTHDAY=-1;COUNT=3']
+    ));
+    expect(Object.keys(r.notes)).toEqual(['2026-10-13', '2026-11-10', '2026-12-08']);
+    expect(Object.keys(r.shifts)).toEqual(['2026-10-31', '2026-11-30', '2026-12-31']);
+  });
+
+  it('특정 회차 수정(RECURRENCE-ID)·취소 일정', () => {
+    const r = parseIcs(cal(
+      ['UID:f', 'DTSTART;VALUE=DATE:20261001', 'SUMMARY:D', 'RRULE:FREQ=DAILY;COUNT=3'],
+      ['UID:f', 'RECURRENCE-ID;VALUE=DATE:20261002', 'DTSTART;VALUE=DATE:20261002', 'SUMMARY:E'],
+      ['UID:g', 'DTSTART;VALUE=DATE:20261010', 'SUMMARY:N', 'STATUS:CANCELLED']
+    ));
+    expect(r.shifts).toEqual({ '2026-10-01': 'D', '2026-10-02': 'E', '2026-10-03': 'D' });
+  });
+
+  it('끝이 없는 반복은 최대 2년까지만', () => {
+    const r = parseIcs(cal(['UID:h', 'DTSTART;VALUE=DATE:20261001', 'SUMMARY:D', 'RRULE:FREQ=DAILY']));
+    const keys = Object.keys(r.shifts);
+    expect(keys.length).toBeLessThanOrEqual(800);
+    expect(keys[keys.length - 1] < '2028-10-03').toBe(true);
+  });
+});

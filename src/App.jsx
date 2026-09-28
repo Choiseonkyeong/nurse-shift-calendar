@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw, Pencil, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw, Pencil, Cloud, CloudOff, Loader2, Sun, Moon, SunMoon } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
 // 첫 화면(내 근무) 외 탭은 누를 때 불러옴 → 첫 실행 속도 개선
 const AllowanceTab = lazy(() => import('./components/AllowanceTab'));
 const GroupShareTab = lazy(() => import('./components/GroupShareTab'));
 const ImportTab = lazy(() => import('./components/ImportTab'));
 import NameSetup from './components/NameSetup';
+import AccountModal from './components/AccountModal';
+import AuthLanding from './components/AuthLanding';
+import { authRedirectType, getAccountInfo } from './lib/account';
+import { getThemePref, setThemePref } from './lib/theme';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType, fetchMyNotes, saveNoteChanges } from './lib/shiftApi';
 import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
@@ -15,6 +19,7 @@ import { applyChanges, mergeWithRemote } from './lib/syncMerge';
 
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
 const LEGACY_DEFAULT_NAME = '최수민';
+const UPLOAD_TYPES_KEY = 'upload_local_types'; // 백업 복원 후 근무 종류 업로드 필요 (lib/backup.js 가 설정)
 const NAME_CONFIRMED_KEY = 'name_confirmed';
 const SYNCED_NOTES_KEY = 'synced_day_notes';
 const readJson = (key) => {
@@ -112,6 +117,8 @@ export default function App() {
       return [];
     }
   });
+  const customShiftTypesRef = useRef(customShiftTypes);
+  customShiftTypesRef.current = customShiftTypes;
   const shiftTypes = useMemo(() => {
     // 근무 시간이 비어 있으면 수당 탭의 시간 설정으로 채움 (기존 사용자 설정 유지)
     const times = shiftConfigs?.shiftTimes || {};
@@ -126,6 +133,19 @@ export default function App() {
   const [newGroupName, setNewGroupName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [privacyBlur, setPrivacyBlur] = useState(false);
+
+  // 인증 메일 링크로 열린 웹 페이지 (이메일 인증 완료 / 비밀번호 재설정)
+  const [authLanding, setAuthLanding] = useState(() => authRedirectType());
+  // 계정 창: 'link' | 'login' | null, 계정 상태: anonymous | pending | needs_password | linked
+  const [accountModal, setAccountModal] = useState(null);
+  const [accountStatus, setAccountStatus] = useState(null);
+  // 화면 테마: system → dark → light 순으로 전환
+  const [themePref, setThemePrefState] = useState(getThemePref);
+  const cycleTheme = () => {
+    const next = { system: 'dark', dark: 'light', light: 'system' }[themePref];
+    setThemePref(next);
+    setThemePrefState(next);
+  };
 
   useEffect(() => {
     localStorage.setItem('my_shift_data', JSON.stringify(myShifts || {}));
@@ -164,6 +184,8 @@ export default function App() {
   useEffect(() => {
     if (!profile || !isNativePush() || !alarmSettings.enabled) return;
     registerDevice({ prompt: false }).catch((err) => console.error('푸시 기기 등록 실패:', err.message));
+    // 프로필이 연결될 때 1회만 (알림 설정 변경은 알림 설정 화면에서 처리)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
 
   // 알림 켜진 상태에서 근무 시간/시간대 변경 → 서버 알림 설정 동기화 (디바운스)
@@ -177,6 +199,8 @@ export default function App() {
       }).catch((err) => console.error('알림 설정 동기화 실패:', err.message));
     }, 1000);
     return () => clearTimeout(timer);
+    // 근무 시간이 바뀔 때만 서버에 반영 (알림 켜기/끄기는 알림 설정 화면에서 직접 저장)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, shiftConfigs?.shiftTimes]);
 
   // ---------------- 서버 동기화 ----------------
@@ -230,16 +254,31 @@ export default function App() {
     }
   };
 
+  // effect 에서 항상 최신 함수를 쓰도록 ref 로 보관
+  const pullAndMergeRef = useRef(pullAndMerge);
+  pullAndMergeRef.current = pullAndMerge;
+
+  // 그룹에서 근무 교환이 수락되는 등 서버에서 내 근무가 바뀌었을 때
+  const resyncFromServer = useCallback(() => {
+    if (profile) pullAndMergeRef.current(profile).catch(() => setSyncStatus('offline'));
+  }, [profile]);
+
   // 서버 부트스트랩: 이름이 정해지면 익명 세션 → 프로필 → 병합
   useEffect(() => {
-    if (!userName || bootstrappedRef.current) return;
+    if (!userName || authLanding || bootstrappedRef.current) return;
     bootstrappedRef.current = true;
     (async () => {
       try {
         await ensureSession();
         const me = await ensureProfile(userName, hadStoredName);
-        await pullAndMerge(me);
+        // 백업 복원 직후: 기기의 근무 종류를 먼저 서버에 올려야 그 코드의 근무가 저장됨
+        if (localStorage.getItem(UPLOAD_TYPES_KEY)) {
+          for (const t of customShiftTypesRef.current || []) await upsertShiftType(t).catch(() => {});
+          localStorage.removeItem(UPLOAD_TYPES_KEY);
+        }
+        await pullAndMergeRef.current(me);
         setProfile(me);
+        getAccountInfo().then((a) => setAccountStatus(a.status)).catch(() => {});
 
         // 서버에 저장된 내 근무 종류(이름·색상·시간) 반영
         const serverTypes = await fetchMyShiftTypes().catch(() => null);
@@ -250,7 +289,7 @@ export default function App() {
         console.error('서버 동기화 실패 (오프라인 모드로 동작):', err.message);
       }
     })();
-  }, [userName, syncRetry]);
+  }, [userName, syncRetry, hadStoredName, authLanding]);
 
   // 앱으로 돌아오거나(다른 기기 변경 반영) 네트워크가 다시 연결되면 재동기화
   useEffect(() => {
@@ -263,7 +302,7 @@ export default function App() {
       }
       if (Date.now() - last < 30000) return;
       last = Date.now();
-      pullAndMerge(profile).catch(() => setSyncStatus('offline'));
+      pullAndMergeRef.current(profile).catch(() => setSyncStatus('offline'));
     };
     document.addEventListener('visibilitychange', resync);
     window.addEventListener('online', resync);
@@ -280,7 +319,6 @@ export default function App() {
     if (Object.keys(changes).length === 0) return;
     setSyncStatus('saving');
 
-    const snapshot = { ...(myShifts || {}) };
     const timer = setTimeout(async () => {
       try {
         await saveShiftChanges(changes);
@@ -370,9 +408,35 @@ export default function App() {
 
   const currentGroup = (groups || []).find(g => g.id === activeGroupId) || (groups || [])[0] || null;
 
+  if (authLanding) {
+    return (
+      <AuthLanding
+        type={authLanding}
+        onDone={() => {
+          window.history.replaceState(null, '', window.location.pathname);
+          setAuthLanding(null);
+        }}
+      />
+    );
+  }
+
   return (
     <ShiftTypesContext.Provider value={shiftTypes}>
-    {!userName && <NameSetup onSubmit={(name) => { setUserName(name); setTempUserName(name); }} />}
+    {!userName && !accountModal && (
+      <NameSetup
+        onSubmit={(name) => { setUserName(name); setTempUserName(name); }}
+        onLogin={() => setAccountModal('login')}
+      />
+    )}
+    {accountModal && (
+      <AccountModal
+        online={Boolean(profile)}
+        userName={userName}
+        initialMode={accountModal}
+        onClose={() => setAccountModal(null)}
+        onStatusChange={setAccountStatus}
+      />
+    )}
     {userName && needsNameConfirm && (
       <NameSetup
         confirmMode
@@ -385,7 +449,7 @@ export default function App() {
         }}
       />
     )}
-    <div className="min-h-screen bg-slate-100 flex justify-center items-start sm:py-6 font-sans">
+    <div className="min-h-screen bg-page flex justify-center items-start sm:py-6 font-sans">
       <div className="w-full max-w-md bg-white h-[100dvh] sm:h-[min(840px,calc(100dvh-3rem))] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
         
         {/* 1. 상단 프로필 헤더 */}
@@ -394,9 +458,17 @@ export default function App() {
           style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
         >
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-10 h-10 shrink-0 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-sm shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setAccountModal('link')}
+              aria-label={accountStatus === 'linked' ? '계정' : '계정 (연결 필요)'}
+              className="relative w-10 h-10 shrink-0 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-sm shadow-2xs cursor-pointer"
+            >
               {userName.substring(0, 1)}
-            </div>
+              {accountStatus && accountStatus !== 'linked' && (
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white" />
+              )}
+            </button>
             <div className="min-w-0">
               {isEditingName ? (
                 <div className="flex items-center gap-1">
@@ -435,7 +507,15 @@ export default function App() {
               <RotateCcw size={13} />
               <span>오늘</span>
             </button>
-            <button 
+            <button
+              type="button"
+              onClick={cycleTheme}
+              aria-label={`화면 테마: ${{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]} (눌러서 변경)`}
+              className="p-1.5 rounded-2xl border bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 transition cursor-pointer"
+            >
+              {themePref === 'dark' ? <Moon size={14} /> : themePref === 'light' ? <Sun size={14} /> : <SunMoon size={14} />}
+            </button>
+            <button
               onClick={() => setPrivacyBlur(!privacyBlur)}
               className={`text-xs px-2.5 py-1.5 whitespace-nowrap rounded-2xl font-black flex items-center gap-1 border transition cursor-pointer ${
                 privacyBlur ? 'bg-amber-400 text-slate-900 border-amber-300' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -477,6 +557,9 @@ export default function App() {
               importBanner={importBanner}
               onUndoImport={handleUndoImport}
               onCloseImportBanner={() => setImportBanner(null)}
+              onResolveUncertain={(dateKey) =>
+                setImportBanner((b) => (b && b.uncertain.includes(dateKey) ? { ...b, uncertain: b.uncertain.filter((k) => k !== dateKey) } : b))
+              }
             />
           )}
 
@@ -508,6 +591,7 @@ export default function App() {
               profile={profile}
               myShifts={myShifts || {}}
               privacyBlur={privacyBlur}
+              onServerShiftsChanged={resyncFromServer}
             />
           )}
 
@@ -518,10 +602,11 @@ export default function App() {
               myShifts={myShifts || {}}
               setMyShifts={setMyShifts}
               userName={userName}
-              setUserName={setUserName}
               dayNotes={dayNotes || {}}
               setDayNotes={setDayNotes}
               onImported={handleImported}
+              accountStatus={accountStatus}
+              onOpenAccount={() => setAccountModal('link')}
             />
           )}
           </Suspense>
@@ -534,12 +619,10 @@ export default function App() {
         >
           <button
             onClick={() => setActiveTab('myShift')}
-            style={
-              activeTab === 'myShift'
-                ? { backgroundColor: '#EEF2FF', color: '#4F46E5', borderRadius: '16px' }
-                : { color: '#94A3B8' }
-            }
-            className="flex flex-col items-center justify-center py-1.5 px-4 transition-all cursor-pointer"
+            aria-current={activeTab === 'myShift' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl transition-all cursor-pointer ${
+              activeTab === 'myShift' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'
+            }`}
           >
             <Calendar size={18} className={activeTab === 'myShift' ? 'stroke-[2.5]' : 'stroke-2'} />
             <span className="text-[11px] font-black mt-0.5">내 근무</span>
@@ -547,12 +630,10 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('allowance')}
-            style={
-              activeTab === 'allowance'
-                ? { backgroundColor: '#EEF2FF', color: '#4F46E5', borderRadius: '16px' }
-                : { color: '#94A3B8' }
-            }
-            className="flex flex-col items-center justify-center py-1.5 px-4 transition-all cursor-pointer"
+            aria-current={activeTab === 'allowance' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl transition-all cursor-pointer ${
+              activeTab === 'allowance' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'
+            }`}
           >
             <DollarSign size={18} className={activeTab === 'allowance' ? 'stroke-[2.5]' : 'stroke-2'} />
             <span className="text-[11px] font-black mt-0.5">연차/수당</span>
@@ -560,12 +641,10 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('groupShare')}
-            style={
-              activeTab === 'groupShare'
-                ? { backgroundColor: '#EEF2FF', color: '#4F46E5', borderRadius: '16px' }
-                : { color: '#94A3B8' }
-            }
-            className="flex flex-col items-center justify-center py-1.5 px-4 transition-all cursor-pointer"
+            aria-current={activeTab === 'groupShare' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl transition-all cursor-pointer ${
+              activeTab === 'groupShare' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'
+            }`}
           >
             <Users size={18} className={activeTab === 'groupShare' ? 'stroke-[2.5]' : 'stroke-2'} />
             <span className="text-[11px] font-black mt-0.5">그룹</span>
@@ -573,12 +652,10 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('import')}
-            style={
-              activeTab === 'import'
-                ? { backgroundColor: '#EEF2FF', color: '#4F46E5', borderRadius: '16px' }
-                : { color: '#94A3B8' }
-            }
-            className="flex flex-col items-center justify-center py-1.5 px-4 transition-all cursor-pointer"
+            aria-current={activeTab === 'import' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl transition-all cursor-pointer ${
+              activeTab === 'import' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'
+            }`}
           >
             <Upload size={18} className={activeTab === 'import' ? 'stroke-[2.5]' : 'stroke-2'} />
             <span className="text-[11px] font-black mt-0.5">등록</span>
