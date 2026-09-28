@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon } from 'lucide-react';
 import { unregisterDevice } from '../lib/pushNotifications';
+import { useShiftTypes } from '../lib/shiftTypes';
+import { parseIcs } from '../lib/icsImport';
+import RosterReview from './RosterReview';
+
+// OCR 코드는 사진 인식을 쓸 때만 불러옴
+const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
 
 export default function ImportTab({
   selectedDate,
@@ -9,8 +16,15 @@ export default function ImportTab({
   setMyShifts,
   userName,
   setUserName,
-  handleClearAllData
+  dayNotes = {},
+  setDayNotes
 }) {
+  const shiftTypes = useShiftTypes();
+  const [ocrProgress, setOcrProgress] = useState(null); // { p, msg }
+  const [ocrResult, setOcrResult] = useState(null);
+  const [icsPreview, setIcsPreview] = useState(null); // { shifts, notes, eventCount, fileName }
+  const [icsOverwrite, setIcsOverwrite] = useState(true);
+  const [icsWithNotes, setIcsWithNotes] = useState(true);
   const [statusMessage, setStatusMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
@@ -232,7 +246,92 @@ export default function ImportTab({
     }
   };
 
-  // 3. 본인 이름 선택 시 저장 및 자동 달력 연/월 이동
+
+  // 2. 근무표 사진 인식 (Tesseract.js, 기기 내 처리)
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const [y, m] = (selectedDate || '').split('-').map(Number);
+    const now = new Date();
+    try {
+      setIsProcessing(true);
+      setStatusMessage('');
+      setOcrProgress({ p: 0, msg: '준비 중...' });
+      const result = await recognizeRosterLazy(file, {
+        year: y || now.getFullYear(),
+        month: m || now.getMonth() + 1,
+        shiftTypes,
+        onProgress: (p, msg) => setOcrProgress({ p, msg })
+      });
+      if (result.error) {
+        setStatusMessage(`❌ ${result.error}`);
+      } else {
+        setOcrResult(result);
+      }
+    } catch (err) {
+      console.error(err);
+      setStatusMessage(`❌ 사진 인식 실패: ${err.message}`);
+    } finally {
+      setOcrProgress(null);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleApplyOcr = ({ name, shifts, yearMonth }) => {
+    setMyShifts?.((prev) => ({ ...(prev || {}), ...shifts }));
+    if (name && setUserName && !userName) setUserName(name);
+    setSelectedDate?.(`${yearMonth}-01`);
+    setOcrResult(null);
+    setStatusMessage(`🎉 [${name}] ${yearMonth.replace('-', '년 ')}월 근무 ${Object.keys(shifts).length}일을 저장했습니다.`);
+  };
+
+  // 3. 휴대폰 캘린더(.ics) 가져오기
+  const handleIcsUpload = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      if (!/BEGIN:VCALENDAR/i.test(text)) throw new Error('캘린더(.ics) 파일이 아닙니다.');
+      const parsed = parseIcs(text, shiftTypes);
+      if (!Object.keys(parsed.shifts).length && !Object.keys(parsed.notes).length) {
+        throw new Error('가져올 일정이 없습니다.');
+      }
+      setIcsPreview({ ...parsed, fileName: file.name });
+    } catch (err) {
+      setStatusMessage(`❌ ${err.message}`);
+    }
+  };
+
+  const handleApplyIcs = () => {
+    const { shifts, notes } = icsPreview;
+    setMyShifts?.((prev) => {
+      const next = { ...(prev || {}) };
+      Object.entries(shifts).forEach(([k, v]) => {
+        if (icsOverwrite || !next[k]) next[k] = v;
+      });
+      return next;
+    });
+    if (icsWithNotes && setDayNotes) {
+      setDayNotes((prev) => {
+        const next = { ...(prev || {}) };
+        Object.entries(notes).forEach(([k, v]) => {
+          if (!next[k]) next[k] = v.slice(0, 500);
+          else if (!next[k].includes(v)) next[k] = `${next[k]} / ${v}`.slice(0, 500);
+        });
+        return next;
+      });
+    }
+    const first = Object.keys({ ...shifts, ...(icsWithNotes ? notes : {}) }).sort()[0];
+    if (first) setSelectedDate?.(first);
+    setIcsPreview(null);
+    setStatusMessage(
+      `🎉 캘린더에서 근무 ${Object.keys(shifts).length}일${icsWithNotes ? `, 메모 ${Object.keys(notes).length}건` : ''}을 가져왔습니다.`
+    );
+  };
+
+  // 본인 이름 선택 시 저장 및 자동 달력 연/월 이동
   const handleSelectName = (selectedName) => {
     const targetShifts = parsedDataByName[selectedName] || {};
 
@@ -292,26 +391,58 @@ export default function ImportTab({
           </label>
         </div>
 
-        {/* 2~3. 사진 인식 / 폰 캘린더(.ics) — 실제 분석 기능 개발 전까지 비활성화 */}
-        {[
-          { icon: <Camera size={20} />, title: '근무표 사진 / 카메라 촬영 인식', bg: '#F5F3FF', fg: '#7C3AED', chip: '#EDE9FE' },
-          { icon: <Smartphone size={20} />, title: '휴대폰 기본 캘린더(.ics) 가져오기', bg: '#F0F9FF', fg: '#0284C7', chip: '#E0F2FE' }
-        ].map((item) => (
-          <div
-            key={item.title}
-            style={{ backgroundColor: item.bg }}
-            className="p-4 rounded-3xl flex items-center gap-3 opacity-70"
-          >
-            <div style={{ backgroundColor: item.chip, color: item.fg }} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
-              {item.icon}
+        {/* 2. 근무표 사진 인식 */}
+        <div style={{ backgroundColor: '#F5F3FF' }} className="p-4 rounded-3xl space-y-3">
+          <div className="flex items-center gap-3">
+            <div style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+              <Camera size={20} />
             </div>
             <div className="flex-1 text-left">
-              <h3 className="font-black text-sm text-slate-800">{item.title}</h3>
-              <p className="text-xs text-slate-500 mt-0.5">곧 지원 예정입니다. 지금은 엑셀 파일로 가져와 주세요.</p>
+              <h3 className="font-black text-sm text-slate-800">근무표 사진 / 카메라 촬영 인식</h3>
+              <p className="text-xs text-slate-500 mt-0.5">표 전체가 반듯하게 나오도록 밝은 곳에서 찍어 주세요. 사진은 기기 밖으로 전송되지 않아요.</p>
             </div>
-            <span className="px-2 py-1 rounded-lg bg-white text-[10px] font-black text-slate-400 shrink-0">준비 중</span>
           </div>
-        ))}
+          {ocrProgress ? (
+            <div className="space-y-1.5">
+              <div className="h-2 bg-white rounded-full overflow-hidden">
+                <div style={{ width: `${Math.round(ocrProgress.p * 100)}%`, backgroundColor: '#7C3AED' }} className="h-full transition-all" />
+              </div>
+              <p className="text-[11px] font-bold text-violet-700 flex items-center gap-1.5">
+                <Loader2 size={12} className="animate-spin" /> {ocrProgress.msg}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <label style={{ backgroundColor: '#7C3AED' }} className="flex items-center justify-center gap-1.5 py-2.5 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
+                <Camera size={14} /> 촬영하기
+                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
+              </label>
+              <label className="flex items-center justify-center gap-1.5 py-2.5 bg-white text-violet-700 border border-violet-200 font-extrabold text-xs rounded-2xl cursor-pointer hover:bg-violet-50">
+                <ImageIcon size={14} /> 앨범에서 선택
+                <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
+              </label>
+            </div>
+          )}
+        </div>
+
+        {/* 3. 휴대폰 캘린더(.ics) */}
+        <div style={{ backgroundColor: '#F0F9FF' }} className="p-4 rounded-3xl space-y-3">
+          <div className="flex items-center gap-3">
+            <div style={{ backgroundColor: '#E0F2FE', color: '#0284C7' }} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+              <Smartphone size={20} />
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="font-black text-sm text-slate-800">휴대폰 캘린더(.ics) 가져오기</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                구글 캘린더: 설정 → 가져오기/내보내기 → 내보내기. 일정 제목이 D·데이·나이트·오프·연차 등이면 근무로, 나머지는 메모로 저장돼요.
+              </p>
+            </div>
+          </div>
+          <label style={{ backgroundColor: '#0284C7' }} className="flex items-center justify-center gap-1.5 py-2.5 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
+            <Upload size={14} /> .ics 파일 선택
+            <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
+          </label>
+        </div>
 
         {/* 상태 메시지 */}
         {statusMessage && (
@@ -338,9 +469,53 @@ export default function ImportTab({
         </div>
       </div>
 
+      {ocrResult && (
+        <RosterReview result={ocrResult} defaultName={userName} onApply={handleApplyOcr} onClose={() => setOcrResult(null)} />
+      )}
+
+      {icsPreview && createPortal(
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
+          <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-3 shadow-xl border border-slate-100">
+            <div className="flex justify-between items-center">
+              <h3 className="font-extrabold text-sm text-slate-900">캘린더 가져오기</h3>
+              <button onClick={() => setIcsPreview(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-xs font-bold text-slate-500 break-all">{icsPreview.fileName} · 일정 {icsPreview.eventCount}개</p>
+            <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="p-3 bg-indigo-50 rounded-2xl">
+                <p className="text-lg font-black text-indigo-700">{Object.keys(icsPreview.shifts).length}</p>
+                <p className="text-[11px] font-bold text-indigo-500">근무일</p>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-2xl">
+                <p className="text-lg font-black text-slate-700">{Object.keys(icsPreview.notes).length}</p>
+                <p className="text-[11px] font-bold text-slate-500">메모(일반 일정)</p>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+              <input type="checkbox" checked={icsOverwrite} onChange={(e) => setIcsOverwrite(e.target.checked)} />
+              이미 입력된 근무도 덮어쓰기
+            </label>
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+              <input type="checkbox" checked={icsWithNotes} onChange={(e) => setIcsWithNotes(e.target.checked)} />
+              일반 일정은 날짜 메모로 가져오기
+            </label>
+            <button
+              onClick={handleApplyIcs}
+              disabled={!Object.keys(icsPreview.shifts).length && !icsWithNotes}
+              className="w-full py-3 rounded-2xl bg-sky-600 text-white text-sm font-black disabled:opacity-40 cursor-pointer"
+            >
+              가져오기
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* 추출된 전체 근무자 목록 선택 모달 */}
-      {showNameModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+      {showNameModal && createPortal(
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
             <div className="flex justify-between items-center border-b pb-2 border-slate-100">
               <h3 className="font-extrabold text-sm text-slate-900">본인 이름 선택</h3>
@@ -363,7 +538,8 @@ export default function ImportTab({
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
