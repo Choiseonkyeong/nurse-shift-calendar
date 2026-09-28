@@ -8,6 +8,7 @@ import { getSupabase } from '../supabaseClient';
 import { ensureProfile } from './shiftApi';
 
 const PASSWORD_SET_KEY = 'account_password_set';
+const SOCIAL_PROVIDERS = ['kakao', 'google'];
 
 // 계정을 바꿀 때 지우는 이 기기 데이터 (근무·메모·근무 종류·그룹 캐시·동기화 기준점)
 export const ACCOUNT_DATA_KEYS = [
@@ -61,10 +62,13 @@ export async function getAccountInfo({ refresh = false } = {}) {
   } catch (e) {
     /* 무시 */
   }
+  // 카카오·구글로 연결된 계정은 비밀번호 없이 그 계정으로 로그인
+  const social = (user?.identities || []).map((i) => i.provider).filter((p) => SOCIAL_PROVIDERS.includes(p));
   let status = 'anonymous';
-  if (email && !user?.is_anonymous) status = passwordSet ? 'linked' : 'needs_password';
+  if (social.length && !user?.is_anonymous) status = 'linked';
+  else if (email && !user?.is_anonymous) status = passwordSet ? 'linked' : 'needs_password';
   else if (pendingEmail) status = 'pending';
-  return { status, email, pendingEmail };
+  return { status, email, pendingEmail, social };
 }
 
 /** 1단계: 이메일 연결 (인증 메일 발송) */

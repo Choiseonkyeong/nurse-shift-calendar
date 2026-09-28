@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Modal from './Modal';
+import SocialButtons from './SocialButtons';
+import { PROVIDERS } from '../lib/socialAuth';
 import { X, ShieldCheck, Mail, KeyRound, LogIn, Loader2, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
 import {
   getAccountInfo,
@@ -21,13 +23,13 @@ const primaryBtn =
  * @param online  서버 연결 여부 (profile 존재)
  * @param initialMode 'link' | 'login'
  */
-export default function AccountModal({ online, userName, initialMode = 'link', onClose, onStatusChange }) {
+export default function AccountModal({ online, userName, initialMode = 'link', initialMessage = null, onClose, onStatusChange }) {
   const [mode, setMode] = useState(initialMode);
   const [info, setInfo] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPasswordValue] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(null); // { type: 'error'|'ok', text }
+  const [message, setMessage] = useState(initialMessage); // { type: 'error'|'ok', text }
 
   const refresh = async (opts) => {
     try {
@@ -88,14 +90,17 @@ export default function AccountModal({ online, userName, initialMode = 'link', o
       setMessage({ type: 'ok', text: '계정 연결이 끝났어요. 새 폰에서는 이 이메일과 비밀번호로 로그인하면 돼요.' });
     });
 
+  const confirmReplace = () =>
+    !userName || // 첫 실행이면 지울 데이터가 없음
+    window.confirm(
+      '이 기기에 있는 근무·메모는 지워지고 로그인한 계정의 데이터로 바뀝니다.\n(필요하면 먼저 [백업 파일 저장]을 해 두세요)\n\n로그인할까요?'
+    );
+  const socialError = (err) => setMessage({ type: 'error', text: friendlyAuthError(err) });
+  const socialLabel = (ids) => ids.map((id) => PROVIDERS.find((p) => p.id === id)?.label || id).join('·');
+
   const handleLogin = () =>
     run(async () => {
-      if (
-        !window.confirm(
-          '이 기기에 있는 근무·메모는 지워지고 로그인한 계정의 데이터로 바뀝니다.\n(필요하면 먼저 [백업 파일 저장]을 해 두세요)\n\n로그인할까요?'
-        )
-      )
-        return;
+      if (!confirmReplace()) return;
       await signInWithEmail(email, password, userName);
       window.location.reload();
     });
@@ -164,8 +169,9 @@ export default function AccountModal({ online, userName, initialMode = 'link', o
               <>
                 <p className="text-xs font-bold text-slate-600 bg-amber-50 border border-amber-100 rounded-2xl p-3 flex gap-2">
                   <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5" />
-                  지금은 이 기기에만 묶인 임시 계정이에요. 앱을 지우거나 폰을 바꾸면 근무·그룹에 다시 들어올 수 없어요. 이메일을 연결해 두세요.
+                  지금은 이 기기에만 묶인 임시 계정이에요. 앱을 지우거나 폰을 바꾸면 근무·그룹에 다시 들어올 수 없어요. 카카오·Google 계정이나 이메일을 연결해 두세요.
                 </p>
+                <SocialButtons mode="link" verb="계정 연결" disabled={busy} onError={socialError} />
                 <input
                   type="email"
                   inputMode="email"
@@ -199,7 +205,16 @@ export default function AccountModal({ online, userName, initialMode = 'link', o
               </>
             )}
 
-            {(status === 'needs_password' || status === 'linked') && (
+            {status === 'linked' && info.social?.length > 0 && (
+              <p className="text-xs font-bold text-emerald-700 bg-emerald-50 rounded-2xl p-3 flex gap-2">
+                <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
+                <span>
+                  <b>{socialLabel(info.social)}</b> 계정에 연결되어 있어요{info.email ? ` (${info.email})` : ''}. 새 폰에서는 [기존 계정으로 로그인 → {socialLabel(info.social.slice(0, 1))}로 로그인]을 누르면 돼요.
+                </span>
+              </p>
+            )}
+
+            {(status === 'needs_password' || status === 'linked') && !info.social?.length && (
               <>
                 <p className="text-xs font-bold text-emerald-700 bg-emerald-50 rounded-2xl p-3 flex gap-2">
                   <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
@@ -226,8 +241,9 @@ export default function AccountModal({ online, userName, initialMode = 'link', o
         ) : (
           <div className="space-y-3">
             <p className="text-xs font-bold text-slate-500">
-              다른 폰에서 이메일을 연결해 둔 계정으로 로그인하면 근무·메모·그룹을 그대로 불러와요.
+              다른 폰에서 연결해 둔 계정으로 로그인하면 근무·메모·그룹을 그대로 불러와요.
             </p>
+            <SocialButtons mode="login" verb="로그인" disabled={busy} beforeStart={confirmReplace} onError={socialError} />
             <input
               type="email"
               inputMode="email"

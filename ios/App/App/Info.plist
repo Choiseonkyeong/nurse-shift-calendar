@@ -14,8 +14,19 @@
 	<false/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.nurseshift.app.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.nurseshift.app</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDisplayName</key>
-        <string>NurseShift</string>
+        <string>근무표</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

@@ -115,7 +115,7 @@ export function renderMonthCanvas({ year, month, myShifts = {}, shiftTypes = [],
   ctx.fillStyle = '#CBD5E1';
   ctx.font = `700 22px ${FONT}`;
   ctx.textAlign = 'right';
-  ctx.fillText('간호사 근무표 앱', W - PAD, H - 40);
+  ctx.fillText('근무표 앱', W - PAD, H - 40);
   return canvas;
 }
 
