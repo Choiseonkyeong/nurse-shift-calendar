@@ -7,13 +7,6 @@ const unwrap = ({ data, error }) => {
   return data;
 };
 
-/** 세션 확보: 없으면 익명 로그인 (Supabase Auth > Anonymous Sign-ins 활성화 필요) */
-export async function ensureSession() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) return session;
-  return unwrap(await supabase.auth.signInAnonymously()).session;
-}
-
 /** 내 프로필 조회/생성. claimLegacy=true 이면 같은 이름의 레거시(group_shifts) 데이터 연결 */
 export async function ensureProfile(displayName, claimLegacy = false) {
   return unwrap(await supabase.rpc('ensure_profile', {
