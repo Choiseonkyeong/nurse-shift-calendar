@@ -1,6 +1,6 @@
 {
   "appId": "com.nurseshift.app",
-  "appName": "NurseShift",
+  "appName": "근무표",
   "webDir": "dist",
   "android": {
     "allowMixedContent": false

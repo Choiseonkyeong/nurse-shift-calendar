@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">NurseShift</string>
-    <string name="title_activity_main">NurseShift</string>
+    <string name="app_name">근무표</string>
+    <string name="title_activity_main">근무표</string>
     <string name="package_name">com.nurseshift.app</string>
     <string name="custom_url_scheme">com.nurseshift.app</string>
     <string name="widget_description">오늘·내일 근무를 홈 화면에서 바로 확인</string>
