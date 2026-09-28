@@ -1,4 +1,14 @@
-@import url('https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
+/* Tailwind 로컬 번들 (CDN 의존 제거 → 앱 오프라인 실행 시에도 스타일 유지) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 노치/상태바/홈 인디케이터 여백
+   Android(Capacitor 8 SystemBars)는 --safe-area-inset-* 를 주입, iOS/웹은 env() 사용 */
+:root {
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+}
 
 * {
   box-sizing: border-box;

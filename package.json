@@ -6,16 +6,26 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "vite build && cap sync",
+    "android:open": "cap open android",
+    "android:apk": "vite build && cap sync android && cd android && ./gradlew assembleDebug",
+    "ios:open": "cap open ios"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0",
+    "@capacitor-firebase/messaging": "^8.5.2",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@supabase/supabase-js": "^2.45.0",
+    "firebase": "^12.19.0",
+    "lucide-react": "^0.263.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "lucide-react": "^0.263.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.0.3",

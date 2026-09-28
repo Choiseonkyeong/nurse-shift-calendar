@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
 import AllowanceTab from './components/AllowanceTab';
 import GroupShareTab from './components/GroupShareTab';
 import ImportTab from './components/ImportTab';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
+import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts } from './lib/shiftApi';
+import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
 
 export default function App() {
   const today = getTodayDateObj();
@@ -13,7 +15,11 @@ export default function App() {
   const [selectedDate, _setSelectedDate] = useState(today.dateStr);
   const setSelectedDate = (raw) => _setSelectedDate(toDateKey(raw));
 
+  // 기존 사용자 여부 (레거시 group_shifts 데이터 연결 판단용) — 저장 effect 실행 전에 판정
+  const [hadStoredName] = useState(() => localStorage.getItem('shift_user_name') !== null);
   const [userName, setUserName] = useState(() => localStorage.getItem('shift_user_name') || '최수민');
+  const [profile, setProfile] = useState(null);
+  const syncedShiftsRef = useRef(null); // 서버에 반영된 마지막 근무 스냅샷 (null = 아직 동기화 전)
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempUserName, setTempUserName] = useState(userName);
 
@@ -53,6 +59,16 @@ export default function App() {
     }
   });
 
+  // 근무 시작 알림 설정 (웹: 브라우저 알림, 앱: 서버 푸시)
+  const [alarmSettings, setAlarmSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('shift_alarm_settings');
+      return saved ? JSON.parse(saved) : { enabled: false, minutesBefore: 60 };
+    } catch (e) {
+      return { enabled: false, minutesBefore: 60 };
+    }
+  });
+
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
@@ -74,6 +90,81 @@ export default function App() {
     localStorage.setItem('shift_user_name', userName);
   }, [userName]);
 
+  useEffect(() => {
+    localStorage.setItem('shift_alarm_settings', JSON.stringify(alarmSettings));
+  }, [alarmSettings]);
+
+  // 앱 실행 시 FCM 토큰 재등록 (토큰 갱신/재설치 대비, 권한 팝업 없이)
+  useEffect(() => {
+    if (!profile || !isNativePush() || !alarmSettings.enabled) return;
+    registerDevice({ prompt: false }).catch((err) => console.error('푸시 기기 등록 실패:', err.message));
+  }, [profile?.id]);
+
+  // 알림 켜진 상태에서 근무 시간/시간대 변경 → 서버 알림 설정 동기화 (디바운스)
+  useEffect(() => {
+    if (!profile || !isNativePush() || !alarmSettings.enabled) return;
+    const timer = setTimeout(() => {
+      saveReminderSettings({
+        enabled: true,
+        minutesBefore: alarmSettings.minutesBefore,
+        shiftTimes: shiftConfigs?.shiftTimes
+      }).catch((err) => console.error('알림 설정 동기화 실패:', err.message));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [profile?.id, shiftConfigs?.shiftTimes]);
+
+  // 서버 부트스트랩: 익명 세션 → 프로필 → 서버/로컬 근무 병합 (로컬 우선) 후 차이분 업로드
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await ensureSession();
+        const me = await ensureProfile(userName, hadStoredName);
+        const remote = await fetchMyShifts();
+        if (cancelled) return;
+
+        const local = Object.fromEntries(Object.entries(myShifts || {}).filter(([, v]) => v));
+        const merged = { ...remote, ...local };
+        const result = await saveShiftChanges(diffShifts(remote, merged));
+        if (result?.skipped?.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', result.skipped);
+
+        if (cancelled) return;
+        syncedShiftsRef.current = merged;
+        setProfile(me);
+        setMyShifts(merged);
+      } catch (err) {
+        console.error('서버 동기화 실패 (오프라인 모드로 동작):', err.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 근무 변경 → 서버 반영 (디바운스)
+  useEffect(() => {
+    if (!profile || !syncedShiftsRef.current) return;
+    const changes = diffShifts(syncedShiftsRef.current, myShifts || {});
+    if (Object.keys(changes).length === 0) return;
+
+    const snapshot = { ...(myShifts || {}) };
+    const timer = setTimeout(async () => {
+      try {
+        await saveShiftChanges(changes);
+        syncedShiftsRef.current = snapshot;
+      } catch (err) {
+        console.error('근무 저장 실패:', err.message);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [myShifts, profile]);
+
+  // 이름 변경 → 프로필 반영
+  useEffect(() => {
+    if (!profile || profile.display_name === userName) return;
+    updateDisplayName(profile.id, userName)
+      .then(() => setProfile((p) => ({ ...p, display_name: userName })))
+      .catch((err) => console.error('이름 저장 실패:', err.message));
+  }, [userName, profile]);
+
   const handleSaveName = () => {
     if (tempUserName.trim()) {
       setUserName(tempUserName.trim());
@@ -89,10 +180,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center items-start sm:py-6 font-sans">
-      <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[840px] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
+      <div className="w-full max-w-md bg-white h-[100dvh] sm:h-[840px] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
         
         {/* 1. 상단 프로필 헤더 */}
-        <div className="bg-white px-5 py-4 border-b border-slate-100 flex justify-between items-center z-10 shrink-0">
+        <div
+          className="bg-white px-5 py-4 border-b border-slate-100 flex justify-between items-center z-10 shrink-0"
+          style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-sm shadow-2xs">
               {userName.substring(0, 1)}
@@ -139,7 +233,10 @@ export default function App() {
         </div>
 
         {/* 2. 탭 메인 컨텐츠 영역 (하단 패딩 확보) */}
-        <div className="p-4 flex-1 overflow-y-auto bg-slate-50/50 pb-20">
+        <div
+          className="p-4 flex-1 overflow-y-auto bg-slate-50/50"
+          style={{ paddingBottom: 'calc(5rem + var(--safe-bottom))' }}
+        >
           {activeTab === 'myShift' && (
             <MyShiftTab
               selectedDate={selectedDate}
@@ -148,6 +245,9 @@ export default function App() {
               setMyShifts={setMyShifts}
               shiftConfigs={shiftConfigs}
               userName={userName}
+              profile={profile}
+              alarmSettings={alarmSettings}
+              setAlarmSettings={setAlarmSettings}
             />
           )}
 
@@ -175,6 +275,7 @@ export default function App() {
               setSelectedDate={setSelectedDate}
               shiftConfigs={shiftConfigs}
               userName={userName}
+              profile={profile}
               myShifts={myShifts || {}}
               privacyBlur={privacyBlur}
             />
@@ -193,7 +294,10 @@ export default function App() {
         </div>
 
         {/* 3. 프레임 바닥에 완벽 밀착시킨 하단 네비게이션 탭 */}
-        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-3 py-2 flex justify-around items-center z-50">
+        <div
+          className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-3 py-2 flex justify-around items-center z-50"
+          style={{ paddingBottom: 'calc(0.5rem + var(--safe-bottom))' }}
+        >
           <button
             onClick={() => setActiveTab('myShift')}
             style={
