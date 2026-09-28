@@ -151,7 +151,7 @@ export default function MyShiftTab({
       timers.push(setTimeout(() => {
         new Notification(`⏰ [근무 알림] ${userName} 님!`, {
           body: `잠시 후 (${startTimeStr}) ${code} 근무가 시작됩니다. 준비해 주세요!`,
-          icon: '/favicon.ico'
+          icon: '/icon-192.png'
         });
       }, delay));
     });

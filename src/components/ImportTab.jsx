@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download } from 'lucide-react';
 import { unregisterDevice } from '../lib/pushNotifications';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
 import RosterReview from './RosterReview';
+import { toCsv, toIcs } from '../lib/exportData';
+import { shareFile } from '../lib/shareCalendar';
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
 const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
@@ -308,6 +310,26 @@ export default function ImportTab({
     );
   };
 
+  // 4. 내보내기 (백업 / 다른 캘린더로 옮기기)
+  const handleExport = async (kind) => {
+    const hasData = Object.values(myShifts || {}).some(Boolean) || Object.values(dayNotes || {}).some(Boolean);
+    if (!hasData) {
+      setStatusMessage('❌ 내보낼 근무·메모가 없습니다.');
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    try {
+      const result = await shareFile(
+        kind === 'csv'
+          ? { fileName: `nurse-shift-${stamp}.csv`, mimeType: 'text/csv', data: toCsv(myShifts, dayNotes, shiftTypes), title: '근무표 (엑셀)' }
+          : { fileName: `nurse-shift-${stamp}.ics`, mimeType: 'text/calendar', data: toIcs(myShifts, dayNotes), title: '근무표 (캘린더)' }
+      );
+      if (result !== 'cancelled') setStatusMessage(kind === 'csv' ? '✅ 엑셀(CSV) 파일로 내보냈습니다.' : '✅ 캘린더(.ics) 파일로 내보냈습니다.');
+    } catch (err) {
+      setStatusMessage(`❌ 내보내기 실패: ${err.message}`);
+    }
+  };
+
   // 본인 이름 선택 시 저장 및 자동 달력 연/월 이동
   const handleSelectName = (selectedName) => {
     const targetShifts = parsedDataByName[selectedName] || {};
@@ -419,6 +441,35 @@ export default function ImportTab({
             <Upload size={14} /> .ics 파일 선택
             <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
           </label>
+        </div>
+
+        {/* 4. 내보내기 */}
+        <div className="p-4 rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+              <Download size={20} />
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="font-black text-sm text-slate-800">내 근무표 내보내기 (백업)</h3>
+              <p className="text-xs text-slate-500 mt-0.5">엑셀로 보관하거나, 구글·아이폰 캘린더로 옮길 수 있어요. .ics 는 이 앱으로 다시 가져올 수 있어요.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleExport('csv')}
+              className="py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-extrabold text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+            >
+              엑셀(CSV)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport('ics')}
+              className="py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-extrabold text-sky-700 hover:bg-sky-50 cursor-pointer"
+            >
+              캘린더(.ics)
+            </button>
+          </div>
         </div>
 
         {/* 상태 메시지 */}

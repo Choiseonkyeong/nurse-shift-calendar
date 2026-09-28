@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { useShiftTypes, findShiftType } from '../lib/shiftTypes';
+import { useShiftTypes } from '../lib/shiftTypes';
+import { getHoliday } from '../utils/holidays';
+import { leaveYearRange } from '../lib/allowance';
+import ShiftStats from './ShiftStats';
 
 export default function AllowanceTab({
   myShifts = {},
@@ -115,11 +118,25 @@ export default function AllowanceTab({
   const totalNightHours = workTypes.reduce((sum, t) => sum + (shiftCounts[t.code] || 0) * nightHoursOf(t.code), 0);
 
   const totalNightPay = Math.round(totalNightHours * Number(hourlyWage || 0) * 0.5);
+
+  // 휴일근무 가산수당: 공휴일(선택 시 일요일 포함)에 근무한 횟수 × 인정 시간 × 시급 × 50%
+  const holidayPay = shiftConfigs.holidayPay || { hours: 8, includeSunday: false };
+  const workCodes = new Set(workTypes.map((t) => t.code));
+  const holidayWorkDays = Object.entries(myShifts || {}).filter(([dateKey, code]) => {
+    if (dateKey < startDateStr || dateKey > endDateStr || !workCodes.has(code)) return false;
+    const [y, m, d] = dateKey.split('-').map(Number);
+    return Boolean(getHoliday(dateKey)) || (holidayPay.includeSunday && new Date(y, m - 1, d).getDay() === 0);
+  });
+  const holidayHours = holidayWorkDays.length * (Number(holidayPay.hours) || 0);
+  const totalHolidayPay = Math.round(holidayHours * Number(hourlyWage || 0) * 0.5);
+  const setHolidayPay = (patch) => setShiftConfigs?.({ ...shiftConfigs, holidayPay: { ...holidayPay, ...patch } });
   // 연차 사용: 달력에 기록한 올해 연차를 자동 집계 + 앱 사용 전 이미 쓴 연차(수동 입력)
   // 휴가 종류별 차감 일수 적용 (연차 1, 반차 0.5, 병가 0 ...)
+  // 연차 기준: 회계연도(1/1~12/31) 또는 입사일 기준(입사 기념일~다음 기념일 전날)
+  const leaveRange = leaveYearRange(selectedDate, vacation.basis, vacation.hireDate);
   const leaveUsage = Object.fromEntries(leaveTypes.map((t) => [t.code, 0]));
   Object.entries(myShifts || {}).forEach(([dateKey, code]) => {
-    if (dateKey.startsWith(`${year}-`) && leaveUsage[code] !== undefined) leaveUsage[code] += 1;
+    if (dateKey >= leaveRange.start && dateKey <= leaveRange.end && leaveUsage[code] !== undefined) leaveUsage[code] += 1;
   });
   const calendarLeaveDays = leaveTypes.reduce(
     (sum, t) => sum + leaveUsage[t.code] * (t.leaveDays ?? 1),
@@ -220,7 +237,7 @@ export default function AllowanceTab({
           </div>
         </div>
 
-        {/* 휴가 종류별 올해 사용 내역 */}
+        {/* 휴가 종류별 사용 내역 (연차 기준 기간) */}
         <div className="flex flex-wrap gap-1.5">
           {leaveTypes.map((t) => (
             <span
@@ -235,7 +252,7 @@ export default function AllowanceTab({
         </div>
 
         <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-2xl border border-slate-100">
-          <span className="text-[11px] font-bold text-slate-500">앱 사용 전 올해 이미 쓴 연차</span>
+          <span className="text-[11px] font-bold text-slate-500">앱 사용 전 이미 쓴 연차</span>
           <div className="flex items-center gap-1">
               <input
                 type="number"
@@ -250,6 +267,40 @@ export default function AllowanceTab({
               <span className="text-xs font-bold text-slate-500 shrink-0">개</span>
           </div>
         </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-100">
+          <span className="text-[11px] font-bold text-slate-500 shrink-0">연차 기준</span>
+          <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
+            <select
+              value={vacation.basis || 'calendar'}
+              onChange={(e) => {
+                const val = { ...vacation, basis: e.target.value };
+                setVacation(val);
+                if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
+              }}
+              className="bg-white border border-slate-200 px-2 py-1 rounded-lg text-xs font-black text-slate-700 outline-none"
+            >
+              <option value="calendar">회계연도 (1/1)</option>
+              <option value="hire">입사일 기준</option>
+            </select>
+            {vacation.basis === 'hire' && (
+              <input
+                type="date"
+                aria-label="입사일"
+                value={vacation.hireDate || ''}
+                onChange={(e) => {
+                  const val = { ...vacation, hireDate: e.target.value };
+                  setVacation(val);
+                  if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
+                }}
+                className="w-[8.5rem] bg-white border border-slate-200 px-2 py-1 rounded-lg text-xs font-bold outline-none"
+              />
+            )}
+          </div>
+        </div>
+        <p className="text-[10px] font-bold text-slate-400 px-1">
+          집계 기간: {leaveRange.start} ~ {leaveRange.end}
+        </p>
       </div>
 
       {/* 3. 월 야간근로수당 계산기 세션 (자유 정산 시작일 설정 기능) */}
@@ -259,16 +310,16 @@ export default function AllowanceTab({
         <div className="space-y-2">
           <div className="flex justify-between items-center">
             <h3 className="font-black text-sm text-indigo-900 flex items-center gap-1.5">
-              <span>🧮</span> {month}월 야간근로수당 계산기
+              <span>🧮</span> {month}월 수당 계산기
             </h3>
-            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">
+            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 whitespace-nowrap">
               {startDateStr.slice(5)} ~ {endDateStr.slice(5)}
             </span>
           </div>
 
           {/* 정산 시작일 선택 옵션 바 */}
           <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-2xl border border-slate-100 text-xs font-bold">
-            <span className="text-slate-600">월 정산 시작일 기준</span>
+            <span className="text-slate-600 whitespace-nowrap">정산 시작일</span>
             <div className="flex items-center gap-1">
               <select
                 value={startDay}
@@ -311,15 +362,59 @@ export default function AllowanceTab({
             />
           </div>
 
-          <div className="pt-3 border-t border-indigo-100/80 flex justify-between items-center">
-            <span className="font-black text-slate-900 text-sm">{month}월 총 야간수당:</span>
-            <span className={`text-2xl font-black text-indigo-600 ${blurCls}`}>
-              {totalNightPay.toLocaleString()} <span className="text-base">원</span>
-            </span>
+          <div className="pt-2 border-t border-indigo-100/60 space-y-2">
+            <div className="flex justify-between items-center font-bold text-slate-600">
+              <span>휴일 근무:</span>
+              <span className="font-black text-indigo-950 text-sm">
+                {holidayWorkDays.length} 회 ({holidayHours}시간)
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-500">
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={Boolean(holidayPay.includeSunday)}
+                  onChange={(e) => setHolidayPay({ includeSunday: e.target.checked })}
+                />
+                일요일도 휴일로
+              </label>
+              <label className="flex items-center gap-1">
+                1회 인정
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  aria-label="휴일근무 1회 인정 시간"
+                  value={holidayPay.hours ?? 8}
+                  onChange={(e) => setHolidayPay({ hours: Number(e.target.value) || 0 })}
+                  className="w-12 py-1 text-center font-black bg-white border border-slate-200 rounded-lg outline-none"
+                />
+                시간
+              </label>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-indigo-100/80 space-y-1.5">
+            <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+              <span>야간 가산수당</span>
+              <span className={blurCls}>{totalNightPay.toLocaleString()} 원</span>
+            </div>
+            <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+              <span>휴일 가산수당</span>
+              <span className={blurCls}>{totalHolidayPay.toLocaleString()} 원</span>
+            </div>
+            <div className="flex justify-between items-center pt-1">
+              <span className="font-black text-slate-900 text-sm">{month}월 가산수당 합계:</span>
+              <span className={`text-2xl font-black text-indigo-600 ${blurCls}`}>
+                {(totalNightPay + totalHolidayPay).toLocaleString()} <span className="text-base">원</span>
+              </span>
+            </div>
+            <p className="text-[10px] font-bold text-slate-400">통상시급 × 50% 가산분만 계산한 예상 금액입니다. 병원 규정에 따라 다를 수 있어요.</p>
           </div>
         </div>
       </div>
 
+      <ShiftStats myShifts={myShifts} initialYear={year} />
     </div>
   );
 }

@@ -119,31 +119,33 @@ export function renderMonthCanvas({ year, month, myShifts = {}, shiftTypes = [],
   return canvas;
 }
 
-/** 이미지 공유: 앱 → 공유 시트, 웹 → 공유 지원 시 공유, 아니면 다운로드 */
-export async function shareMonthImage(opts) {
-  const canvas = renderMonthCanvas(opts);
-  const fileName = `shift-${opts.year}-${pad(opts.month)}.png`;
-  const dataUrl = canvas.toDataURL('image/png');
-
+/**
+ * 파일 공유/저장: 앱 → 공유 시트(카톡·드라이브·파일 저장), 웹 → 공유 지원 시 공유, 아니면 다운로드
+ * @param data  base64 문자열(binary) 또는 일반 텍스트
+ */
+export async function shareFile({ fileName, mimeType, data, isBase64 = false, title }) {
   if (Capacitor.isNativePlatform()) {
-    const [{ Filesystem, Directory }, { Share }] = await Promise.all([
+    const [{ Filesystem, Directory, Encoding }, { Share }] = await Promise.all([
       import('@capacitor/filesystem'),
       import('@capacitor/share')
     ]);
     const { uri } = await Filesystem.writeFile({
-      path: `shift-${opts.year}-${pad(opts.month)}.png`,
-      data: dataUrl.split(',')[1],
-      directory: Directory.Cache
+      path: fileName,
+      data,
+      directory: Directory.Cache,
+      ...(isBase64 ? {} : { encoding: Encoding.UTF8 })
     });
-    await Share.share({ title: fileName, files: [uri], dialogTitle: '근무표 공유' });
+    await Share.share({ title: title || fileName, files: [uri], dialogTitle: title || fileName });
     return 'shared';
   }
 
-  const blob = await (await fetch(dataUrl)).blob();
-  const file = new File([blob], fileName, { type: 'image/png' });
+  const blob = isBase64
+    ? new Blob([Uint8Array.from(atob(data), (c) => c.charCodeAt(0))], { type: mimeType })
+    : new Blob([data], { type: `${mimeType};charset=utf-8` });
+  const file = new File([blob], fileName, { type: mimeType });
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: fileName });
+      await navigator.share({ files: [file], title: title || fileName });
       return 'shared';
     } catch (err) {
       if (err.name === 'AbortError') return 'cancelled';
@@ -157,4 +159,16 @@ export async function shareMonthImage(opts) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   return 'downloaded';
+}
+
+/** 이번 달 근무표 이미지 공유/저장 */
+export async function shareMonthImage(opts) {
+  const canvas = renderMonthCanvas(opts);
+  return shareFile({
+    fileName: `shift-${opts.year}-${pad(opts.month)}.png`,
+    mimeType: 'image/png',
+    data: canvas.toDataURL('image/png').split(',')[1],
+    isBase64: true,
+    title: `${opts.year}년 ${opts.month}월 근무표`
+  });
 }

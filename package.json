@@ -10,7 +10,8 @@
     "cap:sync": "vite build && cap sync",
     "android:open": "cap open android",
     "android:apk": "vite build && cap sync android && cd android && ./gradlew assembleDebug",
-    "ios:open": "cap open ios"
+    "ios:open": "cap open ios",
+    "test": "TZ=Asia/Seoul vitest run"
   },
   "dependencies": {
     "@capacitor-firebase/messaging": "^8.5.2",
@@ -37,6 +38,7 @@
     "autoprefixer": "^10.4.14",
     "postcss": "^8.4.27",
     "tailwindcss": "^3.3.3",
-    "vite": "^4.4.5"
+    "vite": "^4.4.5",
+    "vitest": "^0.34.6"
   }
 }
