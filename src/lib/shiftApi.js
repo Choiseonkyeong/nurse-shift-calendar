@@ -129,3 +129,21 @@ export async function upsertShiftType(t) {
 export async function deleteShiftType(code) {
   unwrap(await supabase.rpc('delete_my_shift_type', { p_code: code }));
 }
+
+// ---------------- 날짜별 메모 (본인 전용) ----------------
+
+/** { 'YYYY-MM-DD': '메모' } */
+export async function fetchMyNotes() {
+  const rows = unwrap(await supabase.from('day_notes').select('note_date, body')) || [];
+  return Object.fromEntries(rows.map((r) => [r.note_date, r.body]));
+}
+
+/** changes: { 'YYYY-MM-DD': '메모' | null(삭제) } */
+export async function saveNoteChanges(profileId, changes) {
+  const upserts = Object.entries(changes)
+    .filter(([, body]) => body)
+    .map(([note_date, body]) => ({ profile_id: profileId, note_date, body: body.slice(0, 500) }));
+  const deletes = Object.entries(changes).filter(([, body]) => !body).map(([d]) => d);
+  if (upserts.length) unwrap(await supabase.from('day_notes').upsert(upserts));
+  if (deletes.length) unwrap(await supabase.from('day_notes').delete().eq('profile_id', profileId).in('note_date', deletes));
+}

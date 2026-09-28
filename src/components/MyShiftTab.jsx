@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
@@ -17,8 +17,19 @@ export default function MyShiftTab({
   alarmSettings,
   setAlarmSettings,
   onSaveShiftType,
-  onDeleteShiftType
+  onDeleteShiftType,
+  dayNotes = {},
+  setDayNotes
 }) {
+  // 메모 수정: 빈 값이면 삭제
+  const setNote = (dateKey, text) => {
+    setDayNotes((prev) => {
+      const next = { ...(prev || {}) };
+      if (text.trim()) next[dateKey] = text.slice(0, 500);
+      else delete next[dateKey];
+      return next;
+    });
+  };
   const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
   
   // 근무 직접 수정 모달 상태
@@ -346,7 +357,10 @@ export default function MyShiftTab({
                     : 'border-slate-100 bg-slate-50/30 hover:bg-slate-50'
                 }`}
               >
-                <span className="text-[11px] font-black text-slate-700 px-0.5">{item.day}</span>
+                <div className="flex items-start justify-between">
+                  <span className="text-[11px] font-black text-slate-700 px-0.5">{item.day}</span>
+                  {dayNotes[item.dateKey] && <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400" title="메모 있음" />}
+                </div>
 
                 {shift ? (
                   <div
@@ -404,8 +418,39 @@ export default function MyShiftTab({
             >
               근무 삭제 (빈 칸으로 설정)
             </button>
+
+            <label className="block space-y-1 pt-1 border-t border-slate-100">
+              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                <StickyNote size={12} className="text-amber-500" /> 메모 (나만 보기)
+              </span>
+              <textarea
+                value={dayNotes[editingDateKey] || ''}
+                onChange={(e) => setNote(editingDateKey, e.target.value)}
+                rows={2}
+                maxLength={500}
+                placeholder="예: 교육 준비물, 인계 사항, 약속"
+                className="w-full px-3 py-2 bg-amber-50/50 border border-amber-100 rounded-2xl text-xs font-bold text-slate-700 outline-none focus:border-amber-300 resize-none"
+              />
+            </label>
           </div>
         </div>
+      )}
+
+      {/* 선택한 날짜 메모 */}
+      {!quickMode && (
+        <button
+          type="button"
+          onClick={() => { setEditingDateKey(selectedDate); setIsEditModalOpen(true); }}
+          className="w-full text-left bg-white p-4 rounded-3xl shadow-xs border border-slate-100 flex items-start gap-2 cursor-pointer hover:bg-slate-50 transition"
+        >
+          <StickyNote size={15} className="text-amber-500 mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[11px] font-black text-slate-400">{selectedDate} 메모</p>
+            <p className={`text-xs font-bold whitespace-pre-wrap break-words ${dayNotes[selectedDate] ? 'text-slate-700' : 'text-slate-300'}`}>
+              {dayNotes[selectedDate] || '메모가 없습니다. 눌러서 추가하세요.'}
+            </p>
+          </div>
+        </button>
       )}
 
       {isTypeManagerOpen && (

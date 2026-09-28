@@ -5,7 +5,7 @@ import AllowanceTab from './components/AllowanceTab';
 import GroupShareTab from './components/GroupShareTab';
 import ImportTab from './components/ImportTab';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
-import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType } from './lib/shiftApi';
+import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType, fetchMyNotes, saveNoteChanges } from './lib/shiftApi';
 import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 
@@ -50,6 +50,16 @@ export default function App() {
       return {};
     }
   });
+
+  // 날짜별 개인 메모 { 'YYYY-MM-DD': '메모' }
+  const [dayNotes, setDayNotes] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('day_notes') || '{}') || {};
+    } catch (e) {
+      return {};
+    }
+  });
+  const syncedNotesRef = useRef(null);
 
   const [groups, setGroups] = useState(() => {
     try {
@@ -117,6 +127,10 @@ export default function App() {
     localStorage.setItem('custom_shift_types', JSON.stringify(customShiftTypes || []));
   }, [customShiftTypes]);
 
+  useEffect(() => {
+    localStorage.setItem('day_notes', JSON.stringify(dayNotes || {}));
+  }, [dayNotes]);
+
   // 앱 실행 시 FCM 토큰 재등록 (토큰 갱신/재설치 대비, 권한 팝업 없이)
   useEffect(() => {
     if (!profile || !isNativePush() || !alarmSettings.enabled) return;
@@ -159,6 +173,16 @@ export default function App() {
         // 서버에 저장된 내 근무 종류(이름·색상·시간) 반영
         const serverTypes = await fetchMyShiftTypes().catch(() => null);
         if (!cancelled && serverTypes?.length) setCustomShiftTypes(serverTypes);
+
+        // 메모: 서버 + 로컬 병합 (로컬 우선) 후 차이분 업로드
+        const remoteNotes = await fetchMyNotes();
+        if (cancelled) return;
+        const localNotes = Object.fromEntries(Object.entries(dayNotes || {}).filter(([, v]) => v));
+        const mergedNotes = { ...remoteNotes, ...localNotes };
+        const noteChanges = diffShifts(remoteNotes, mergedNotes);
+        if (Object.keys(noteChanges).length) await saveNoteChanges(me.id, noteChanges);
+        syncedNotesRef.current = mergedNotes;
+        setDayNotes(mergedNotes);
       } catch (err) {
         console.error('서버 동기화 실패 (오프라인 모드로 동작):', err.message);
       }
@@ -183,6 +207,23 @@ export default function App() {
     }, 600);
     return () => clearTimeout(timer);
   }, [myShifts, profile]);
+
+  // 메모 변경 → 서버 반영 (디바운스)
+  useEffect(() => {
+    if (!profile || !syncedNotesRef.current) return;
+    const changes = diffShifts(syncedNotesRef.current, dayNotes || {});
+    if (Object.keys(changes).length === 0) return;
+    const snapshot = { ...(dayNotes || {}) };
+    const timer = setTimeout(async () => {
+      try {
+        await saveNoteChanges(profile.id, changes);
+        syncedNotesRef.current = snapshot;
+      } catch (err) {
+        console.error('메모 저장 실패:', err.message);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [dayNotes, profile]);
 
   // 이름 변경 → 프로필 반영
   useEffect(() => {
@@ -297,6 +338,8 @@ export default function App() {
               alarmSettings={alarmSettings}
               setAlarmSettings={setAlarmSettings}
               onSaveShiftType={handleSaveShiftType}
+              dayNotes={dayNotes || {}}
+              setDayNotes={setDayNotes}
               onDeleteShiftType={handleDeleteShiftType}
             />
           )}
