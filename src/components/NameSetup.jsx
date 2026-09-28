@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { CalendarHeart } from 'lucide-react';
 
 /** 첫 실행: 이름 입력 (그룹 멤버에게 보이는 이름) */
-export default function NameSetup({ onSubmit, initialName = '', confirmMode = false }) {
+export default function NameSetup({ onSubmit, onLogin, initialName = '', confirmMode = false }) {
   const [name, setName] = useState(initialName);
   const trimmed = name.trim();
 
@@ -41,6 +41,11 @@ export default function NameSetup({ onSubmit, initialName = '', confirmMode = fa
         >
           {confirmMode ? '확인' : '시작하기'}
         </button>
+        {!confirmMode && onLogin && (
+          <button type="button" onClick={onLogin} className="w-full text-xs font-bold text-slate-400 underline cursor-pointer">
+            이미 계정이 있어요 (다른 폰에서 쓰던 데이터 불러오기)
+          </button>
+        )}
       </form>
     </div>,
     document.body

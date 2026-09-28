@@ -25,7 +25,7 @@ export function toCsv(myShifts = {}, dayNotes = {}, shiftTypes = []) {
   return `\uFEFF${rows.map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`;
 }
 
-const icsText = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsText = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 
 /** RFC 5545: 한 줄 75바이트 이하로 접기 */
 function fold(line) {

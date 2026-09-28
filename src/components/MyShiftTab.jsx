@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle } from 'lucide-react';
+import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
@@ -25,7 +25,8 @@ export default function MyShiftTab({
   setDayNotes,
   importBanner,
   onUndoImport,
-  onCloseImportBanner
+  onCloseImportBanner,
+  onResolveUncertain
 }) {
   // 방금 가져온 근무 중 인식이 불확실한 날짜 (달력에 노란 테두리)
   const uncertainSet = new Set(importBanner?.uncertain || []);
@@ -38,7 +39,7 @@ export default function MyShiftTab({
       return next;
     });
   };
-  const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
+  const [year, month] = (selectedDate || toDateKey(new Date())).split('-').map(Number);
   
   // 근무 직접 수정 모달 상태
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -186,6 +187,7 @@ export default function MyShiftTab({
     if (quickMode) {
       // 빠른 입력: 팝업 없이 선택한 근무를 바로 적용
       setMyShifts((prev) => ({ ...(prev || {}), [dateKey]: quickCode }));
+      onResolveUncertain?.(dateKey);
       return;
     }
     setEditingDateKey(dateKey);
@@ -197,6 +199,7 @@ export default function MyShiftTab({
     if (!editingDateKey) return;
     const updated = { ...myShifts, [editingDateKey]: code };
     setMyShifts(updated);
+    onResolveUncertain?.(editingDateKey);
     setIsEditModalOpen(false);
   };
 
@@ -406,10 +409,13 @@ export default function MyShiftTab({
             const badgeStyle = getBadgeStyle(shift);
 
             return (
-              <div
+              <button
+                type="button"
                 key={item.dateKey}
                 onClick={() => handleDayClick(item.dateKey)}
-                className={`min-h-[64px] p-1.5 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
+                aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${dayNotes[item.dateKey] ? ' 메모 있음' : ''}`}
+                aria-pressed={isSelected}
+                className={`min-h-[64px] w-full min-w-0 text-left p-1.5 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
                   isSelected
                     ? 'border-indigo-600 ring-2 ring-indigo-200 bg-indigo-50/20'
                     : uncertainSet.has(item.dateKey)
@@ -435,7 +441,7 @@ export default function MyShiftTab({
                 ) : (
                   <div className="text-[10px] text-slate-300 font-bold text-center pb-1 whitespace-nowrap">{quickMode ? '' : '+ 수정'}</div>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>

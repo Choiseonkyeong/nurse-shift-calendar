@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Copy, LogOut, Trash2, RotateCcw, Palette } from 'lucide-react';
-import { addMonthsKey } from '../utils/dateUtils';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Copy, RotateCcw, Palette } from 'lucide-react';
+import { addMonthsKey, getTodayDateObj } from '../utils/dateUtils';
+import { hasUnread } from '../lib/groupActivity';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import { dayNumberClass, getHoliday } from '../utils/holidays';
 import GroupBoard from './GroupBoard';
@@ -11,7 +12,8 @@ import {
   updateGroupColor,
   leaveGroup,
   deleteGroup,
-  fetchGroupSchedule
+  fetchGroupSchedule,
+  fetchGroupActivity
 } from '../lib/shiftApi';
 
 export default function GroupShareTab({
@@ -27,12 +29,18 @@ export default function GroupShareTab({
   setSelectedDate,
   profile,
   myShifts = {},
-  privacyBlur = false
+  privacyBlur = false,
+  onServerShiftsChanged
 }) {
   // 보안 모드: 화면 공유/캡처 시 동료 이름 가리기
   const blurCls = privacyBlur ? 'blur-[3px] select-none' : '';
-  const [selectedDayKey, setSelectedDayKey] = useState(selectedDate || '2026-09-07');
-  const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
+  const todayKey = getTodayDateObj().dateStr;
+  const [selectedDayKey, setSelectedDayKey] = useState(selectedDate || todayKey);
+  const [year, month] = (selectedDate || todayKey).split('-').map(Number);
+  // 다른 탭에서 날짜를 바꾸면 그룹 탭 선택 날짜도 따라감
+  useEffect(() => {
+    if (selectedDate) setSelectedDayKey(selectedDate);
+  }, [selectedDate]);
   const [loading, setLoading] = useState(false);
 
   // 기본 추천 색상 5종 + 무한 커스텀 컬러 선택
@@ -55,7 +63,7 @@ export default function GroupShareTab({
   const [groupSchedule, setGroupSchedule] = useState({ shifts: {}, styles: {} });
   const shiftTypes = useShiftTypes();
 
-  const withLoading = async (fn, failLabel) => {
+  const withLoading = useCallback(async (fn, failLabel) => {
     try {
       setLoading(true);
       return await fn();
@@ -65,23 +73,35 @@ export default function GroupShareTab({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // 그룹 목록의 '새 글'·'교환 요청' 표시 { groupId: { lastPostAt, pendingSwaps } }
+  const [activity, setActivity] = useState({});
 
   // 내가 참여 중인 그룹 목록 + 멤버 조회
-  const fetchMyGroupsFromDB = () =>
-    withLoading(async () => {
-      if (!profile) return;
-      setGroups(await fetchMyGroups());
-    });
+  const fetchMyGroupsFromDB = useCallback(
+    () =>
+      withLoading(async () => {
+        if (!profile) return;
+        const list = await fetchMyGroups();
+        setGroups(list);
+        fetchGroupActivity(list.map((g) => g.id), profile.id).then(setActivity).catch(() => {});
+      }),
+    [profile, setGroups, withLoading]
+  );
 
   // 현재 그룹의 선택 월 근무표 조회
-  const fetchScheduleFromDB = () =>
-    withLoading(async () => {
-      if (!profile || !currentGroup) return;
-      const mm = String(month).padStart(2, '0');
-      const lastDay = new Date(year, month, 0).getDate();
-      setGroupSchedule(await fetchGroupSchedule(currentGroup.id, `${year}-${mm}-01`, `${year}-${mm}-${lastDay}`));
-    });
+  const currentGroupId = currentGroup?.id;
+  const fetchScheduleFromDB = useCallback(
+    () =>
+      withLoading(async () => {
+        if (!profile || !currentGroupId) return;
+        const mm = String(month).padStart(2, '0');
+        const lastDay = new Date(year, month, 0).getDate();
+        setGroupSchedule(await fetchGroupSchedule(currentGroupId, `${year}-${mm}-01`, `${year}-${mm}-${lastDay}`));
+      }),
+    [profile, currentGroupId, year, month, withLoading]
+  );
 
   const refreshAll = async () => {
     await fetchMyGroupsFromDB();
@@ -90,12 +110,38 @@ export default function GroupShareTab({
 
   useEffect(() => {
     fetchMyGroupsFromDB();
-  }, [profile?.id]);
+  }, [fetchMyGroupsFromDB]);
 
   useEffect(() => {
     setGroupSchedule({ shifts: {}, styles: {} });
     fetchScheduleFromDB();
-  }, [profile?.id, currentGroup?.id, year, month]);
+  }, [fetchScheduleFromDB]);
+
+  // 그룹 근무표 자동 새로고침: 1분마다(화면이 보일 때) + 앱으로 돌아올 때
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (currentGroupId) fetchScheduleFromDB();
+      else fetchMyGroupsFromDB();
+    };
+    const timer = setInterval(refresh, 60000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [currentGroupId, fetchScheduleFromDB, fetchMyGroupsFromDB]);
+
+  // 교환 수락 등으로 서버 근무가 바뀜 → 그룹 근무표 + 내 달력 다시 불러오기
+  const handleSwapApplied = useCallback(() => {
+    fetchScheduleFromDB();
+    onServerShiftsChanged?.();
+  }, [fetchScheduleFromDB, onServerShiftsChanged]);
+
+  const getCode = useCallback(
+    (profileId, dateKey) => (profileId === profile?.id ? myShifts[dateKey] : groupSchedule.shifts[profileId]?.[dateKey]) || '',
+    [profile?.id, myShifts, groupSchedule]
+  );
 
   // 본인 근무는 로컬 최신값, 동료 근무는 서버 조회값
   const getMemberShifts = (member) =>
@@ -295,8 +341,7 @@ export default function GroupShareTab({
                   type="button"
                   disabled={loading}
                   onClick={handleJoinGroup}
-                  style={{ backgroundColor: '#4F46E5' }}
-                  className="w-full py-2.5 text-white font-black text-xs rounded-2xl hover:bg-indigo-700 transition cursor-pointer shadow-xs"
+                  className="w-full py-2.5 bg-indigo-600 text-white font-black text-xs rounded-2xl hover:bg-indigo-700 transition cursor-pointer shadow-xs"
                 >
                   {loading ? '조회 중...' : '그룹 참여하기'}
                 </button>
@@ -315,8 +360,18 @@ export default function GroupShareTab({
                       style={{ backgroundColor: g.color || '#6366F1' }}
                       className="p-3.5 text-white rounded-2xl flex items-center justify-between cursor-pointer shadow-xs transition hover:opacity-95"
                     >
-                      <span className="font-black text-sm">{g.name} ({g.members?.length || 1}명)</span>
-                      <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">입장하기 &gt;</span>
+                      <span className="font-black text-sm min-w-0 truncate">{g.name} ({g.members?.length || 1}명)</span>
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        {activity[g.id]?.pendingSwaps > 0 && (
+                          <span className="text-[10px] font-black bg-amber-300 text-amber-950 px-2 py-0.5 rounded-lg">
+                            교환 요청 {activity[g.id].pendingSwaps}
+                          </span>
+                        )}
+                        {hasUnread(g.id, activity[g.id]?.lastPostAt) && (
+                          <span className="text-[10px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-lg">새 글</span>
+                        )}
+                        <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">입장 &gt;</span>
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -402,8 +457,8 @@ export default function GroupShareTab({
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <h3 className="font-black text-base text-slate-900 text-center">
-                  {year}년 {month}월 그룹 근무표
+                <h3 className="font-black text-base text-slate-900 text-center whitespace-nowrap">
+                  {year}년 {month}월
                 </h3>
                 <button
                   type="button"
@@ -414,7 +469,7 @@ export default function GroupShareTab({
                   <ChevronRight size={18} />
                 </button>
               </div>
-              <button onClick={refreshAll} className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer">
+              <button onClick={refreshAll} className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap">
                 <RotateCcw size={12} /> 동기화
               </button>
             </div>
@@ -435,15 +490,18 @@ export default function GroupShareTab({
                 const isSelected = selectedDayKey === item.dateKey;
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={item.dateKey}
                     onClick={() => setSelectedDayKey(item.dateKey)}
+                    aria-label={`${item.dateKey}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}`}
+                    aria-pressed={isSelected}
                     style={
                       isSelected
                         ? { borderColor: currentThemeBg, backgroundColor: `${currentThemeBg}15` }
                         : {}
                     }
-                    className={`min-h-[70px] p-1 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
+                    className={`min-h-[70px] w-full min-w-0 text-left p-1 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
                       isSelected
                         ? 'ring-2 ring-offset-1'
                         : 'border-slate-100 bg-slate-50/30 hover:bg-slate-50'
@@ -475,7 +533,7 @@ export default function GroupShareTab({
                         );
                       })}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -489,7 +547,7 @@ export default function GroupShareTab({
             <div className="grid grid-cols-2 gap-2">
               {currentGroup.members?.map((member) => {
                 const shift = getMemberShifts(member)[selectedDayKey] || '';
-                const memberStyle = shift ? getMemberBadgeStyle(member, shift) : { backgroundColor: '#F8FAFC', color: '#CBD5E1' };
+                const memberStyle = shift ? getMemberBadgeStyle(member, shift) : undefined;
 
                 return (
                   <div
@@ -497,7 +555,7 @@ export default function GroupShareTab({
                     className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center"
                   >
                     <span className={`font-extrabold text-xs text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
-                    <span style={memberStyle} className="px-3 py-1 rounded-xl font-black text-xs">
+                    <span style={memberStyle} className={`px-3 py-1 rounded-xl font-black text-xs ${shift ? '' : 'bg-slate-50 text-slate-300'}`}>
                       {shift || '미입력'}
                     </span>
                   </div>
@@ -506,7 +564,15 @@ export default function GroupShareTab({
             </div>
           </div>
 
-          <GroupBoard group={currentGroup} profile={profile} themeColor={currentThemeBg} privacyBlur={privacyBlur} />
+          <GroupBoard
+            group={currentGroup}
+            profile={profile}
+            themeColor={currentThemeBg}
+            privacyBlur={privacyBlur}
+            defaultDate={selectedDayKey}
+            getCode={getCode}
+            onSwapApplied={handleSwapApplied}
+          />
 
         </div>
       )}

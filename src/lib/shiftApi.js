@@ -160,6 +160,7 @@ export async function saveNoteChanges(profileId, changes) {
 
 /** 최신 글 50개 [{ id, author_id, body, created_at }] */
 export async function fetchGroupPosts(groupId) {
+  const supabase = await getSupabase();
   return unwrap(await supabase
     .from('group_posts')
     .select('id, author_id, body, created_at')
@@ -176,4 +177,60 @@ export async function createGroupPost(groupId, authorId, body) {
 export async function deleteGroupPost(postId) {
   const supabase = await getSupabase();
   unwrap(await supabase.from('group_posts').delete().eq('id', postId));
+}
+
+// ---------------- 근무 교환 요청 ----------------
+
+/** 그룹의 최근 교환 요청 [{ id, requester_id, target_id, dates, snapshot, message, status, created_at, decided_at }] */
+export async function fetchShiftSwaps(groupId) {
+  const supabase = await getSupabase();
+  return unwrap(await supabase
+    .from('shift_swaps')
+    .select('id, requester_id, target_id, dates, snapshot, message, status, created_at, decided_at')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+    .limit(30)) || [];
+}
+
+export async function createShiftSwap(groupId, targetId, dates, message) {
+  const supabase = await getSupabase();
+  return unwrap(await supabase.rpc('create_shift_swap', {
+    p_group_id: groupId,
+    p_target_id: targetId,
+    p_dates: dates,
+    p_message: message || null
+  }));
+}
+
+/** action: accept | decline | cancel */
+export async function respondShiftSwap(swapId, action) {
+  const supabase = await getSupabase();
+  return unwrap(await supabase.rpc('respond_shift_swap', { p_swap_id: swapId, p_action: action }));
+}
+
+/** 그룹별 최신 글 시각 + 나에게 온 대기 중 교환 요청 수 (목록의 '새 글' 표시용) */
+export async function fetchGroupActivity(groupIds, myProfileId) {
+  if (!groupIds.length) return {};
+  const supabase = await getSupabase();
+  const result = Object.fromEntries(groupIds.map((id) => [id, { lastPostAt: null, pendingSwaps: 0 }]));
+  const posts = unwrap(await supabase
+    .from('group_posts')
+    .select('group_id, created_at')
+    .in('group_id', groupIds)
+    .order('created_at', { ascending: false })
+    .limit(200)) || [];
+  posts.forEach((p) => {
+    if (!result[p.group_id].lastPostAt) result[p.group_id].lastPostAt = p.created_at;
+  });
+  // shift_swaps 테이블이 아직 없는 서버(마이그레이션 전)에서도 게시판은 동작하도록 오류 무시
+  const { data: swaps } = await supabase
+    .from('shift_swaps')
+    .select('group_id')
+    .in('group_id', groupIds)
+    .eq('target_id', myProfileId)
+    .eq('status', 'pending');
+  (swaps || []).forEach((s) => {
+    result[s.group_id].pendingSwaps += 1;
+  });
+  return result;
 }

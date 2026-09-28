@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive } from 'lucide-react';
 import { unregisterDevice } from '../lib/pushNotifications';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
 import { toCsv, toIcs } from '../lib/exportData';
+import { createBackup, parseBackup, restoreBackup } from '../lib/backup';
 import { shareFile } from '../lib/shareCalendar';
 
 const ROSTER_NAME_KEY = 'roster_name'; // 근무표 속 내 이름 (앱 이름과 다를 때 기억)
@@ -19,10 +20,11 @@ export default function ImportTab({
   myShifts = {},
   setMyShifts,
   userName,
-  setUserName,
   dayNotes = {},
   setDayNotes,
-  onImported
+  onImported,
+  accountStatus,
+  onOpenAccount
 }) {
   const shiftTypes = useShiftTypes();
   const [ocrProgress, setOcrProgress] = useState(null); // { p, msg }
@@ -346,6 +348,43 @@ export default function ImportTab({
     );
   };
 
+  // 0. 전체 백업 파일 저장 / 복원
+  const handleBackupSave = async () => {
+    try {
+      const stamp = new Date().toISOString().slice(0, 10);
+      const result = await shareFile({
+        fileName: `nurse-shift-backup-${stamp}.json`,
+        mimeType: 'application/json',
+        data: JSON.stringify(createBackup(), null, 2),
+        title: '근무표 전체 백업'
+      });
+      if (result !== 'cancelled') setStatusMessage('✅ 백업 파일을 저장했습니다. 카톡 나에게 보내기·드라이브 등에 보관해 두세요.');
+    } catch (err) {
+      setStatusMessage(`❌ 백업 실패: ${err.message}`);
+    }
+  };
+
+  const handleBackupRestore = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const { data, summary } = parseBackup(await file.text());
+      const when = summary.exportedAt ? new Date(summary.exportedAt).toLocaleString('ko-KR') : '알 수 없음';
+      if (
+        !window.confirm(
+          `백업 (${when})\n근무 ${summary.shifts}일 · 메모 ${summary.notes}건 · 근무 종류 ${summary.types}개\n\n` +
+            '이 기기의 근무·메모·설정을 백업 내용으로 바꾸고, 서버에도 반영합니다. 복원할까요?'
+        )
+      )
+        return;
+      restoreBackup(data);
+      window.location.reload();
+    } catch (err) {
+      setStatusMessage(`❌ ${err.message}`);
+    }
+  };
+
   // 4. 내보내기 (백업 / 다른 캘린더로 옮기기)
   const handleExport = async (kind) => {
     const hasData = Object.values(myShifts || {}).some(Boolean) || Object.values(dayNotes || {}).some(Boolean);
@@ -373,9 +412,54 @@ export default function ImportTab({
           <Upload size={18} className="text-indigo-600" /> 스마트 근무표 & 캘린더 가져오기
         </h2>
 
+        {/* 0. 계정 · 전체 백업 */}
+        <div
+          className={`p-4 rounded-3xl border space-y-3 ${
+            accountStatus === 'linked' ? 'bg-emerald-50/60 border-emerald-100' : 'bg-amber-50/70 border-amber-100'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                accountStatus === 'linked' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+              }`}
+            >
+              {accountStatus === 'linked' ? <ShieldCheck size={20} /> : <ShieldAlert size={20} />}
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="font-black text-sm text-slate-800">계정 · 백업</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {accountStatus === 'linked'
+                  ? '이메일 계정에 연결되어 있어요. 폰을 바꿔도 로그인하면 그대로예요.'
+                  : '계정이 연결되지 않았어요. 폰을 바꾸거나 앱을 지우면 데이터를 잃을 수 있어요.'}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={onOpenAccount}
+              className="py-2.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-extrabold text-indigo-700 hover:bg-indigo-50 cursor-pointer"
+            >
+              {accountStatus === 'linked' ? '계정 관리' : '계정 연결'}
+            </button>
+            <button
+              type="button"
+              onClick={handleBackupSave}
+              className="py-2.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-extrabold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center justify-center gap-1"
+            >
+              <Archive size={12} /> 백업 저장
+            </button>
+            <label className="py-2.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-extrabold text-slate-700 hover:bg-slate-50 cursor-pointer text-center">
+              백업 복원
+              <input type="file" accept=".json,application/json" onChange={handleBackupRestore} className="hidden" />
+            </label>
+          </div>
+        </div>
+
         {/* 1. 엑셀 근무표 선택 */}
-        <div style={{ borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' }} className="p-5 border-2 border-dashed rounded-3xl text-center space-y-3">
-          <div style={{ backgroundColor: '#D1FAE5', color: '#059669' }} className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto font-black">
+        <div className="p-5 border-2 border-dashed border-emerald-200 bg-emerald-50 rounded-3xl text-center space-y-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto font-black bg-emerald-100 text-emerald-600">
             <FileSpreadsheet size={20} />
           </div>
           <div>
@@ -387,9 +471,8 @@ export default function ImportTab({
             </p>
           </div>
 
-          <label 
-            style={{ backgroundColor: '#059669' }} 
-            className="inline-flex items-center gap-1.5 px-6 py-2.5 text-white font-extrabold text-xs rounded-2xl shadow-2xs transition cursor-pointer hover:opacity-90"
+          <label
+            className="inline-flex items-center gap-1.5 px-6 py-2.5 bg-emerald-600 text-white font-extrabold text-xs rounded-2xl shadow-2xs transition cursor-pointer hover:opacity-90"
           >
             {isProcessing ? <Loader2 size={14} className="animate-spin" /> : null}
             <span>엑셀 파일 선택</span>
@@ -404,9 +487,9 @@ export default function ImportTab({
         </div>
 
         {/* 2. 근무표 사진 인식 */}
-        <div style={{ backgroundColor: '#F5F3FF' }} className="p-4 rounded-3xl space-y-3">
+        <div className="p-4 rounded-3xl space-y-3 bg-violet-50">
           <div className="flex items-center gap-3">
-            <div style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-violet-100 text-violet-600">
               <Camera size={20} />
             </div>
             <div className="flex-1 text-left">
@@ -417,7 +500,7 @@ export default function ImportTab({
           {ocrProgress ? (
             <div className="space-y-1.5">
               <div className="h-2 bg-white rounded-full overflow-hidden">
-                <div style={{ width: `${Math.round(ocrProgress.p * 100)}%`, backgroundColor: '#7C3AED' }} className="h-full transition-all" />
+                <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-violet-600" />
               </div>
               <p className="text-[11px] font-bold text-violet-700 flex items-center gap-1.5">
                 <Loader2 size={12} className="animate-spin" /> {ocrProgress.msg}
@@ -425,7 +508,7 @@ export default function ImportTab({
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              <label style={{ backgroundColor: '#7C3AED' }} className="flex items-center justify-center gap-1.5 py-2.5 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
+              <label className="flex items-center justify-center gap-1.5 py-2.5 bg-violet-600 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
                 <Camera size={14} /> 촬영하기
                 <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
               </label>
@@ -438,9 +521,9 @@ export default function ImportTab({
         </div>
 
         {/* 3. 휴대폰 캘린더(.ics) */}
-        <div style={{ backgroundColor: '#F0F9FF' }} className="p-4 rounded-3xl space-y-3">
+        <div className="p-4 rounded-3xl space-y-3 bg-sky-50">
           <div className="flex items-center gap-3">
-            <div style={{ backgroundColor: '#E0F2FE', color: '#0284C7' }} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-sky-100 text-sky-600">
               <Smartphone size={20} />
             </div>
             <div className="flex-1 text-left">
@@ -450,7 +533,7 @@ export default function ImportTab({
               </p>
             </div>
           </div>
-          <label style={{ backgroundColor: '#0284C7' }} className="flex items-center justify-center gap-1.5 py-2.5 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
+          <label className="flex items-center justify-center gap-1.5 py-2.5 bg-sky-600 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
             <Upload size={14} /> .ics 파일 선택
             <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
           </label>
