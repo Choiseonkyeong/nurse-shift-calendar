@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
 import AllowanceTab from './components/AllowanceTab';
@@ -7,6 +7,7 @@ import ImportTab from './components/ImportTab';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts } from './lib/shiftApi';
 import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
+import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 
 export default function App() {
   const today = getTodayDateObj();
@@ -69,6 +70,16 @@ export default function App() {
     }
   });
 
+  // 사용자 정의 근무 종류 (기본 D/E/N/M/OFF/연차 외 추가·색상 변경)
+  const [customShiftTypes, setCustomShiftTypes] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('custom_shift_types') || '[]') || [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const shiftTypes = useMemo(() => mergeShiftTypes(customShiftTypes), [customShiftTypes]);
+
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
@@ -93,6 +104,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('shift_alarm_settings', JSON.stringify(alarmSettings));
   }, [alarmSettings]);
+
+  useEffect(() => {
+    localStorage.setItem('custom_shift_types', JSON.stringify(customShiftTypes || []));
+  }, [customShiftTypes]);
 
   // 앱 실행 시 FCM 토큰 재등록 (토큰 갱신/재설치 대비, 권한 팝업 없이)
   useEffect(() => {
@@ -179,6 +194,7 @@ export default function App() {
   const currentGroup = (groups || []).find(g => g.id === activeGroupId) || (groups || [])[0] || null;
 
   return (
+    <ShiftTypesContext.Provider value={shiftTypes}>
     <div className="min-h-screen bg-slate-100 flex justify-center items-start sm:py-6 font-sans">
       <div className="w-full max-w-md bg-white h-[100dvh] sm:h-[min(840px,calc(100dvh-3rem))] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
         
@@ -354,5 +370,6 @@ export default function App() {
 
       </div>
     </div>
+    </ShiftTypesContext.Provider>
   );
 }

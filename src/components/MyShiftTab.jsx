@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser } from 'lucide-react';
+import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { isNativePush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 
@@ -21,6 +22,11 @@ export default function MyShiftTab({
   const [editingDateKey, setEditingDateKey] = useState('');
 
   const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
+
+  const shiftTypes = useShiftTypes();
+  // 빠른 입력: null = 꺼짐, '' = 지우기, 그 외 = 선택한 근무 코드
+  const [quickCode, setQuickCode] = useState(null);
+  const quickMode = quickCode !== null;
 
   // 알림 권한 요청 및 타이머 등록
   const requestNotificationPermission = async () => {
@@ -139,6 +145,11 @@ export default function MyShiftTab({
   // 날짜 클릭 시 수정 모달 오픈
   const handleDayClick = (dateKey) => {
     setSelectedDate(dateKey);
+    if (quickMode) {
+      // 빠른 입력: 팝업 없이 선택한 근무를 바로 적용
+      setMyShifts((prev) => ({ ...(prev || {}), [dateKey]: quickCode }));
+      return;
+    }
     setEditingDateKey(dateKey);
     setIsEditModalOpen(true);
   };
@@ -167,23 +178,14 @@ export default function MyShiftTab({
   }
 
   // 근무 카운트 산출
-  const shiftCounts = { D: 0, E: 0, N: 0, M: 0, OFF: 0, 연차: 0 };
+  const shiftCounts = Object.fromEntries(shiftTypes.map((t) => [t.code, 0]));
   Object.entries(myShifts || {}).forEach(([key, val]) => {
     if (key.startsWith(`${year}-${String(month).padStart(2, '0')}`) && val) {
       if (shiftCounts[val] !== undefined) shiftCounts[val]++;
     }
   });
 
-  const getBadgeStyle = (shift) => {
-    switch (shift) {
-      case 'D': return { backgroundColor: '#FEF08A', color: '#854D0E' };
-      case 'E': return { backgroundColor: '#FFEDD5', color: '#9A3412' };
-      case 'N': return { backgroundColor: '#E0F2FE', color: '#0369A1' };
-      case 'M': return { backgroundColor: '#F3E8FF', color: '#6B21A8' };
-      case '연차': return { backgroundColor: '#FFE4E6', color: '#E11D48' };
-      default: return { backgroundColor: '#F1F5F9', color: '#475569' };
-    }
-  };
+  const getBadgeStyle = (code) => badgeStyle(shiftTypes, code);
 
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
@@ -227,14 +229,17 @@ export default function MyShiftTab({
 
         {/* 근무 요약 칩 */}
         {/* 달력 근무 칩과 동일한 색상 사용, 0건은 흐리게 */}
-        <div className="grid grid-cols-6 gap-1.5 pt-1 text-center">
+        <div
+          className="grid gap-1.5 pt-1 text-center"
+          style={{ gridTemplateColumns: `repeat(${Math.min(Object.keys(shiftCounts).length, 6)}, minmax(0, 1fr))` }}
+        >
           {Object.entries(shiftCounts).map(([code, count]) => (
             <div
               key={code}
               style={getBadgeStyle(code)}
               className={`py-2 rounded-2xl flex flex-col items-center gap-0.5 transition ${count === 0 ? 'opacity-40' : ''}`}
             >
-              <span className="text-[11px] font-black leading-none">{code}</span>
+              <span className="text-[11px] font-black leading-none truncate max-w-full px-0.5">{code}</span>
               <span className="text-base font-black leading-tight">{count}</span>
             </div>
           ))}
@@ -243,6 +248,54 @@ export default function MyShiftTab({
 
       {/* 2. 메인 근무 달력 */}
       <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+        {/* 빠른 입력: 근무를 고르고 날짜를 연속으로 터치 */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-400">
+              {quickMode
+                ? quickCode === '' ? '지울 날짜를 터치하세요' : `터치하는 날짜에 ${quickCode} 입력`
+                : '날짜를 눌러 근무를 입력하세요'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setQuickCode(quickMode ? null : (shiftTypes[0]?.code || ''))}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-2xl text-xs font-black border transition cursor-pointer ${
+                quickMode ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Zap size={13} className={quickMode ? 'fill-white' : ''} />
+              {quickMode ? '빠른 입력 끝내기' : '빠른 입력'}
+            </button>
+          </div>
+
+          {quickMode && (
+            <div className="flex flex-wrap gap-1.5 p-0.5">
+              {shiftTypes.map((t) => (
+                <button
+                  key={t.code}
+                  type="button"
+                  onClick={() => setQuickCode(t.code)}
+                  style={{ backgroundColor: t.bg, color: t.fg }}
+                  className={`shrink-0 px-3.5 py-2 rounded-full text-xs font-black transition cursor-pointer ${
+                    quickCode === t.code ? 'ring-2 ring-offset-1 ring-indigo-500 scale-105' : 'opacity-80'
+                  }`}
+                >
+                  {t.code}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setQuickCode('')}
+                className={`shrink-0 px-3 py-2 rounded-full text-xs font-black bg-white border border-slate-200 text-slate-500 flex items-center gap-1 transition cursor-pointer ${
+                  quickCode === '' ? 'ring-2 ring-offset-1 ring-indigo-500' : ''
+                }`}
+              >
+                <Eraser size={12} /> 지우기
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* 요일 헤더 */}
         <div className="grid grid-cols-7 text-center font-bold text-xs border-b border-slate-100 pb-2">
           <span className="text-rose-500">일</span>
@@ -283,7 +336,7 @@ export default function MyShiftTab({
                     {shift}
                   </div>
                 ) : (
-                  <div className="text-[10px] text-slate-300 font-bold text-center pb-1 whitespace-nowrap">+ 수정</div>
+                  <div className="text-[10px] text-slate-300 font-bold text-center pb-1 whitespace-nowrap">{quickMode ? '' : '+ 수정'}</div>
                 )}
               </div>
             );
@@ -312,18 +365,11 @@ export default function MyShiftTab({
 
             {/* 근무 선택 버튼 그리드 */}
             <div className="grid grid-cols-2 gap-2">
-              {[
-                { code: 'D', label: 'Day (데이)', color: '#FEF08A', textColor: '#854D0E' },
-                { code: 'E', label: 'Evening (이브닝)', color: '#FFEDD5', textColor: '#9A3412' },
-                { code: 'N', label: 'Night (나이트)', color: '#E0F2FE', textColor: '#0369A1' },
-                { code: 'M', label: 'Mid (미드)', color: '#F3E8FF', textColor: '#6B21A8' },
-                { code: 'OFF', label: 'OFF (휴무)', color: '#F1F5F9', textColor: '#475569' },
-                { code: '연차', label: '연차 (휴가)', color: '#FFE4E6', textColor: '#E11D48' }
-              ].map((item) => (
+              {shiftTypes.map((item) => (
                 <button
                   key={item.code}
                   onClick={() => handleSelectShiftCode(item.code)}
-                  style={{ backgroundColor: item.color, color: item.textColor }}
+                  style={{ backgroundColor: item.bg, color: item.fg }}
                   className="py-3 px-3 rounded-2xl font-black text-xs flex items-center justify-between shadow-2xs hover:scale-[1.02] transition cursor-pointer"
                 >
                   <span>{item.label}</span>

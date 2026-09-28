@@ -77,16 +77,18 @@ export async function deleteGroup(groupId) {
   if (!rows || rows.length === 0) throw new Error('그룹을 만든 사람만 삭제할 수 있습니다.');
 }
 
-/** 그룹 근무표 → { [profileId]: { 'YYYY-MM-DD': 'D' } } */
+/** 그룹 근무표 → { shifts: { [profileId]: { 'YYYY-MM-DD': 'D' } }, styles: { [profileId]: { D: { bg, fg } } } } */
 export async function fetchGroupSchedule(groupId, from, to) {
   const rows = unwrap(await supabase.rpc('get_group_schedule', {
     p_group_id: groupId,
     p_from: from,
     p_to: to
   })) || [];
-  const byMember = {};
+  const shifts = {};
+  const styles = {};
   rows.forEach((r) => {
-    (byMember[r.profile_id] ||= {})[r.work_date] = r.code;
+    (shifts[r.profile_id] ||= {})[r.work_date] = r.code;
+    (styles[r.profile_id] ||= {})[r.code] = { bg: r.bg_color, fg: r.text_color };
   });
-  return byMember;
+  return { shifts, styles };
 }
