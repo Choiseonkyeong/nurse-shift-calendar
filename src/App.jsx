@@ -8,6 +8,7 @@ import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType, fetchMyNotes, saveNoteChanges } from './lib/shiftApi';
 import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
+import { syncWidget } from './lib/widgetSync';
 
 export default function App() {
   const today = getTodayDateObj();
@@ -130,6 +131,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('day_notes', JSON.stringify(dayNotes || {}));
   }, [dayNotes]);
+
+  // Android 홈 화면 위젯 (오늘/내일 근무)
+  useEffect(() => {
+    syncWidget(myShifts || {}, shiftTypes);
+  }, [myShifts, shiftTypes]);
 
   // 앱 실행 시 FCM 토큰 재등록 (토큰 갱신/재설치 대비, 권한 팝업 없이)
   useEffect(() => {
@@ -387,6 +393,8 @@ export default function App() {
               setMyShifts={setMyShifts}
               userName={userName}
               setUserName={setUserName}
+              dayNotes={dayNotes || {}}
+              setDayNotes={setDayNotes}
             />
           )}
         </div>

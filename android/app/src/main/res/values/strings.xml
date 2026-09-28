@@ -4,4 +4,5 @@
     <string name="title_activity_main">NurseShift</string>
     <string name="package_name">com.nurseshift.app</string>
     <string name="custom_url_scheme">com.nurseshift.app</string>
+    <string name="widget_description">오늘·내일 근무를 홈 화면에서 바로 확인</string>
 </resources>
