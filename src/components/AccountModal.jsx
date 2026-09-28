@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import Modal from './Modal';
-import { X, ShieldCheck, Mail, KeyRound, LogIn, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, ShieldCheck, Mail, KeyRound, LogIn, Loader2, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
 import {
   getAccountInfo,
   linkEmail,
   setPassword,
   signInWithEmail,
   sendPasswordReset,
+  deleteMyAccount,
   friendlyAuthError
 } from '../lib/account';
 
@@ -103,6 +104,15 @@ export default function AccountModal({ online, userName, initialMode = 'link', o
     run(async () => {
       await sendPasswordReset(email);
       setMessage({ type: 'ok', text: '비밀번호 재설정 메일을 보냈어요. 메일의 링크에서 새 비밀번호를 정한 뒤 로그인해 주세요.' });
+    });
+
+  // 계정 삭제: '삭제' 를 직접 입력해야 진행 (실수 방지)
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const handleDeleteAccount = () =>
+    run(async () => {
+      await deleteMyAccount();
+      window.location.reload();
     });
 
   const status = info?.status;
@@ -248,6 +258,63 @@ export default function AccountModal({ online, userName, initialMode = 'link', o
             </button>
           </div>
         )}
+
+        {online && mode === 'link' && (
+          <div className="pt-3 border-t border-slate-100 space-y-2">
+            {!deleteOpen ? (
+              <button
+                type="button"
+                onClick={() => setDeleteOpen(true)}
+                className="w-full text-[11px] font-bold text-slate-400 hover:text-rose-500 flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <Trash2 size={12} /> 계정 삭제
+              </button>
+            ) : (
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-100 space-y-2">
+                <p className="text-xs font-bold text-rose-700">
+                  계정과 서버의 모든 데이터(근무·메모·근무 종류·설정·그룹 참여·게시글·교환 요청)가 삭제되고 되돌릴 수 없어요.
+                  필요하면 먼저 [등록 → 백업 저장]을 해 두세요.
+                </p>
+                <input
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  placeholder="확인을 위해 '삭제' 입력"
+                  aria-label="계정 삭제 확인"
+                  className={inputCls}
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteOpen(false);
+                      setDeleteConfirm('');
+                    }}
+                    className="flex-1 py-2 rounded-2xl bg-white border border-slate-200 text-xs font-black text-slate-600 cursor-pointer"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    disabled={busy || deleteConfirm.trim() !== '삭제'}
+                    className="flex-1 py-2 rounded-2xl bg-rose-600 text-white text-xs font-black disabled:opacity-40 cursor-pointer"
+                  >
+                    영구 삭제
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <a
+          href="/privacy.html"
+          target="_blank"
+          rel="noopener"
+          className="block text-center text-[11px] font-bold text-slate-400 underline"
+        >
+          개인정보처리방침
+        </a>
 
         {message && (
           <p

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createFakeState, seedAccount, confirmPendingEmail } from './fakeSupabase.js';
-import { openApp, readLocal, waitSaved } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved } from './helpers.js';
 
 test('이메일 계정 연결: 인증 메일 → 인증 확인 → 비밀번호 설정', async ({ page }) => {
   const state = createFakeState();
@@ -70,4 +70,33 @@ test('인증 메일 링크로 열린 웹 페이지: 완료 안내 후 앱 데이
   await expect(page.getByRole('heading', { name: '김간호 님의 근무표' })).toBeVisible();
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-01': 'D' });
   expect(page.url()).not.toContain('access_token');
+});
+
+test('계정 삭제: 확인 문구 입력 후 서버·기기 데이터 모두 삭제, 첫 화면으로', async ({ page }) => {
+  const state = createFakeState();
+  await openApp(page, { state, local: { my_shift_data: { '2026-09-01': 'D' } } });
+  await waitSaved(page);
+  const pid = Object.keys(state.profiles)[0];
+  await expect.poll(() => state.shifts[pid]).toEqual({ '2026-09-01': 'D' });
+
+  await page.getByRole('button', { name: /^계정/ }).click();
+  await page.getByRole('button', { name: '계정 삭제' }).click();
+  const confirmBtn = page.getByRole('button', { name: '영구 삭제' });
+  await expect(confirmBtn).toBeDisabled();
+  await page.getByLabel('계정 삭제 확인').fill('삭제');
+  await confirmBtn.click();
+
+  await expect(page.getByText('환영합니다!')).toBeVisible();
+  expect(state.profiles[pid]).toBeUndefined();
+  expect(state.shifts[pid]).toBeUndefined();
+  expect(await readLocal(page, 'my_shift_data')).toEqual({}); // 앱이 빈 저장소로 다시 시작
+});
+
+test('개인정보처리방침 페이지', async ({ page }) => {
+  await openApp(page);
+  await tab(page, '등록').click();
+  const [popup] = await Promise.all([page.waitForEvent('popup'), page.getByRole('link', { name: '개인정보처리방침' }).click()]);
+  await expect(popup.getByRole('heading', { name: '개인정보처리방침' })).toBeVisible();
+  await expect(popup.getByText(/기기 안에서만/)).toBeVisible();
+  await expect(popup.getByText(/계정 삭제/).first()).toBeVisible();
 });
