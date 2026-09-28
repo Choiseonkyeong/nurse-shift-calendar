@@ -211,7 +211,7 @@ export default function GroupShareTab({
             
             <div className="flex justify-between items-center">
               <h2 className="text-base font-black text-indigo-950 flex items-center gap-2">
-                <Users size={18} className="text-indigo-600" /> 어플 내 공유 그룹 관리
+                <Users size={18} className="text-indigo-600" /> 내 그룹
               </h2>
               <button
                 onClick={fetchMyGroupsFromDB}
