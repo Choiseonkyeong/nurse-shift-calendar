@@ -3,7 +3,7 @@
 // 실제 발송은 서버(pg_cron → Edge Function send-shift-reminders)가 담당하므로 앱이 종료돼 있어도 도착한다.
 import { Capacitor } from '@capacitor/core';
 import { FirebaseMessaging } from '@capacitor-firebase/messaging';
-import { supabase } from '../supabaseClient';
+import { getSupabase } from '../supabaseClient';
 
 const TOKEN_KEY = 'push_fcm_token';
 const CHANNEL_ID = 'shift-reminders';
@@ -28,6 +28,7 @@ export function toStartTimes(shiftTimes = {}) {
 }
 
 async function registerToken(token) {
+  const supabase = await getSupabase();
   if (!token) return;
   unwrap(await supabase.rpc('register_device_token', {
     p_token: token,
@@ -74,6 +75,7 @@ export async function registerDevice({ prompt = true } = {}) {
 
 /** 서버 알림 설정 저장 (근무 시작 시각 포함) */
 export async function saveReminderSettings({ enabled, minutesBefore, shiftTimes }) {
+  const supabase = await getSupabase();
   return unwrap(await supabase.rpc('set_notification_settings', {
     p_enabled: enabled,
     p_minutes: minutesBefore,
@@ -99,6 +101,7 @@ export async function unregisterDevice() {
   const token = localStorage.getItem(TOKEN_KEY);
   if (!isNativePush() || !token) return;
   try {
+    const supabase = await getSupabase();
     unwrap(await supabase.rpc('unregister_device_token', { p_token: token }));
     await FirebaseMessaging.deleteToken();
   } catch (err) {

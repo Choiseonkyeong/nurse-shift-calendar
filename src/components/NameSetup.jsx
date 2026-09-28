@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { CalendarHeart } from 'lucide-react';
 
 /** 첫 실행: 이름 입력 (그룹 멤버에게 보이는 이름) */
-export default function NameSetup({ onSubmit }) {
-  const [name, setName] = useState('');
+export default function NameSetup({ onSubmit, initialName = '', confirmMode = false }) {
+  const [name, setName] = useState(initialName);
   const trimmed = name.trim();
 
   const submit = (e) => {
@@ -19,8 +19,12 @@ export default function NameSetup({ onSubmit }) {
           <CalendarHeart size={24} />
         </div>
         <div className="space-y-1">
-          <h2 className="font-black text-lg text-slate-900">환영합니다!</h2>
-          <p className="text-xs font-bold text-slate-500">이름을 알려 주세요. 그룹 동료에게 이 이름으로 보여요.</p>
+          <h2 className="font-black text-lg text-slate-900">{confirmMode ? '이름을 확인해 주세요' : '환영합니다!'}</h2>
+          <p className="text-xs font-bold text-slate-500">
+            {confirmMode
+              ? '예전 버전의 기본 이름이 설정되어 있어요. 본인 이름이 맞는지 확인해 주세요.'
+              : '이름을 알려 주세요. 그룹 동료에게 이 이름으로 보여요.'}
+          </p>
         </div>
         <input
           autoFocus
@@ -35,7 +39,7 @@ export default function NameSetup({ onSubmit }) {
           disabled={!trimmed}
           className="w-full py-3 rounded-2xl bg-indigo-600 text-white text-sm font-black disabled:opacity-40 cursor-pointer"
         >
-          시작하기
+          {confirmMode ? '확인' : '시작하기'}
         </button>
       </form>
     </div>,

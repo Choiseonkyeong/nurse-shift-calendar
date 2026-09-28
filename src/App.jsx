@@ -1,17 +1,21 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw, Pencil, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
-import AllowanceTab from './components/AllowanceTab';
-import GroupShareTab from './components/GroupShareTab';
-import ImportTab from './components/ImportTab';
+// 첫 화면(내 근무) 외 탭은 누를 때 불러옴 → 첫 실행 속도 개선
+const AllowanceTab = lazy(() => import('./components/AllowanceTab'));
+const GroupShareTab = lazy(() => import('./components/GroupShareTab'));
+const ImportTab = lazy(() => import('./components/ImportTab'));
 import NameSetup from './components/NameSetup';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType, fetchMyNotes, saveNoteChanges } from './lib/shiftApi';
 import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 import { syncWidget } from './lib/widgetSync';
+import { applyChanges, mergeWithRemote } from './lib/syncMerge';
 
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
+const LEGACY_DEFAULT_NAME = '최수민';
+const NAME_CONFIRMED_KEY = 'name_confirmed';
 const SYNCED_NOTES_KEY = 'synced_day_notes';
 const readJson = (key) => {
   try {
@@ -21,16 +25,6 @@ const readJson = (key) => {
     return null;
   }
 };
-/** { 날짜: 값|null } 변경분 적용 (null/빈값 = 삭제) */
-const applyChanges = (base = {}, changes = {}) => {
-  const next = { ...(base || {}) };
-  Object.entries(changes).forEach(([k, v]) => {
-    if (v) next[k] = v;
-    else delete next[k];
-  });
-  return next;
-};
-
 export default function App() {
   const today = getTodayDateObj();
   const [activeTab, setActiveTab] = useState('myShift');
@@ -42,6 +36,10 @@ export default function App() {
   const [hadStoredName] = useState(() => localStorage.getItem('shift_user_name') !== null);
   // 첫 실행이면 빈 이름 → 이름 입력 화면 표시 후 서버 연결
   const [userName, setUserName] = useState(() => localStorage.getItem('shift_user_name') || '');
+  // 예전 버전 기본 이름('최수민')이 그대로 저장된 사용자: 한 번 이름 확인
+  const [needsNameConfirm, setNeedsNameConfirm] = useState(
+    () => localStorage.getItem('shift_user_name') === LEGACY_DEFAULT_NAME && !localStorage.getItem(NAME_CONFIRMED_KEY)
+  );
   // 서버 동기화 상태: connecting | saved | saving | offline
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [profile, setProfile] = useState(null);
@@ -207,10 +205,8 @@ export default function App() {
     try {
       const remote = await fetchMyShifts();
       const local = myShiftsRef.current || {};
-      const base = syncedShiftsRef.current || readJson(SYNCED_SHIFTS_KEY);
-      // base 가 없으면 이전 버전 사용자 → 기기 값 전체를 변경분으로 취급 (기존 동작 유지)
-      const localChanges = base ? diffShifts(base, local) : Object.fromEntries(Object.entries(local).filter(([, v]) => v));
-      const merged = applyChanges(remote, localChanges);
+      // 기준 스냅샷이 없으면 이전 버전 사용자 → 기기 값 전체 우선 (기존 동작 유지)
+      const merged = mergeWithRemote(remote, local, syncedShiftsRef.current || readJson(SYNCED_SHIFTS_KEY));
       const result = await saveShiftChanges(diffShifts(remote, merged));
       if (result?.skipped?.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', result.skipped);
       markSyncedShifts(merged);
@@ -220,11 +216,7 @@ export default function App() {
       try {
         const remoteNotes = await fetchMyNotes();
         const localNotes = dayNotesRef.current || {};
-        const baseNotes = syncedNotesRef.current || readJson(SYNCED_NOTES_KEY);
-        const noteChanges = baseNotes
-          ? diffShifts(baseNotes, localNotes)
-          : Object.fromEntries(Object.entries(localNotes).filter(([, v]) => v));
-        const mergedNotes = applyChanges(remoteNotes, noteChanges);
+        const mergedNotes = mergeWithRemote(remoteNotes, localNotes, syncedNotesRef.current || readJson(SYNCED_NOTES_KEY));
         const upload = diffShifts(remoteNotes, mergedNotes);
         if (Object.keys(upload).length) await saveNoteChanges(me.id, upload);
         markSyncedNotes(mergedNotes);
@@ -349,6 +341,22 @@ export default function App() {
     setCustomShiftTypes((prev) => (prev || []).filter((t) => t.code !== code));
   };
 
+  // 사진/엑셀 가져오기 → 내 근무표에 바로 등록하고 달력으로 이동 (되돌리기 가능)
+  const [importBanner, setImportBanner] = useState(null);
+  const handleImported = ({ name, source, yearMonth, shifts, uncertain = [] }) => {
+    const current = myShiftsRef.current || {};
+    const previous = Object.fromEntries(Object.keys(shifts).map((k) => [k, current[k] || null]));
+    setMyShifts((prev) => ({ ...(prev || {}), ...shifts }));
+    setSelectedDate(`${yearMonth}-01`);
+    setActiveTab('myShift');
+    setImportBanner({ name, source, yearMonth, count: Object.keys(shifts).length, uncertain, previous, keys: Object.keys(shifts) });
+  };
+  const handleUndoImport = () => {
+    if (!importBanner) return;
+    setMyShifts((prev) => applyChanges(prev || {}, importBanner.previous));
+    setImportBanner(null);
+  };
+
   const handleSaveName = () => {
     if (tempUserName.trim()) {
       setUserName(tempUserName.trim().slice(0, 30));
@@ -365,6 +373,18 @@ export default function App() {
   return (
     <ShiftTypesContext.Provider value={shiftTypes}>
     {!userName && <NameSetup onSubmit={(name) => { setUserName(name); setTempUserName(name); }} />}
+    {userName && needsNameConfirm && (
+      <NameSetup
+        confirmMode
+        initialName={userName}
+        onSubmit={(name) => {
+          localStorage.setItem(NAME_CONFIRMED_KEY, '1');
+          setNeedsNameConfirm(false);
+          setUserName(name);
+          setTempUserName(name);
+        }}
+      />
+    )}
     <div className="min-h-screen bg-slate-100 flex justify-center items-start sm:py-6 font-sans">
       <div className="w-full max-w-md bg-white h-[100dvh] sm:h-[min(840px,calc(100dvh-3rem))] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
         
@@ -432,6 +452,13 @@ export default function App() {
           className="p-4 flex-1 overflow-y-auto bg-slate-50/50"
           style={{ paddingBottom: 'calc(5rem + var(--safe-bottom))' }}
         >
+          <Suspense
+            fallback={
+              <div className="flex justify-center py-16 text-slate-300">
+                <Loader2 size={22} className="animate-spin" />
+              </div>
+            }
+          >
           {activeTab === 'myShift' && (
             <MyShiftTab
               selectedDate={selectedDate}
@@ -447,6 +474,9 @@ export default function App() {
               dayNotes={dayNotes || {}}
               setDayNotes={setDayNotes}
               onDeleteShiftType={handleDeleteShiftType}
+              importBanner={importBanner}
+              onUndoImport={handleUndoImport}
+              onCloseImportBanner={() => setImportBanner(null)}
             />
           )}
 
@@ -491,8 +521,10 @@ export default function App() {
               setUserName={setUserName}
               dayNotes={dayNotes || {}}
               setDayNotes={setDayNotes}
+              onImported={handleImported}
             />
           )}
+          </Suspense>
         </div>
 
         {/* 3. 프레임 바닥에 완벽 밀착시킨 하단 네비게이션 탭 */}

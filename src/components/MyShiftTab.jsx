@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
@@ -22,8 +22,13 @@ export default function MyShiftTab({
   onSaveShiftType,
   onDeleteShiftType,
   dayNotes = {},
-  setDayNotes
+  setDayNotes,
+  importBanner,
+  onUndoImport,
+  onCloseImportBanner
 }) {
+  // 방금 가져온 근무 중 인식이 불확실한 날짜 (달력에 노란 테두리)
+  const uncertainSet = new Set(importBanner?.uncertain || []);
   // 메모 수정: 빈 값이면 삭제
   const setNote = (dateKey, text) => {
     setDayNotes((prev) => {
@@ -151,7 +156,7 @@ export default function MyShiftTab({
       timers.push(setTimeout(() => {
         new Notification(`⏰ [근무 알림] ${userName} 님!`, {
           body: `잠시 후 (${startTimeStr}) ${code} 근무가 시작됩니다. 준비해 주세요!`,
-          icon: '/favicon.ico'
+          icon: '/icon-192.png'
         });
       }, delay));
     });
@@ -223,6 +228,32 @@ export default function MyShiftTab({
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
       
+      {/* 사진/엑셀 가져오기 결과 */}
+      {importBanner && (
+        <div className="bg-indigo-600 text-white p-4 rounded-3xl shadow-xs space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-black leading-snug">
+              {importBanner.source}에서 {Number(importBanner.yearMonth.slice(5))}월 근무 {importBanner.count}일을 등록했어요
+              <span className="block text-[11px] font-bold text-indigo-200 mt-0.5">근무표 이름: {importBanner.name}</span>
+            </p>
+            <button onClick={onCloseImportBanner} className="text-indigo-200 hover:text-white cursor-pointer shrink-0" aria-label="닫기">
+              <X size={16} />
+            </button>
+          </div>
+          {importBanner.uncertain.length > 0 && (
+            <p className="text-[11px] font-bold bg-white/15 rounded-xl px-2.5 py-1.5 flex items-center gap-1.5">
+              <AlertTriangle size={12} className="shrink-0" /> 노란 테두리 {importBanner.uncertain.length}일은 사진과 비교해 확인해 주세요 (눌러서 수정)
+            </p>
+          )}
+          <button
+            onClick={onUndoImport}
+            className="flex items-center gap-1 text-[11px] font-black bg-white text-indigo-700 px-3 py-1.5 rounded-xl cursor-pointer"
+          >
+            <Undo2 size={12} /> 되돌리기
+          </button>
+        </div>
+      )}
+
       {/* 1. 월간 요약 카드 & 알림 버튼 */}
       <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
         <div className="flex justify-between items-center">
@@ -381,7 +412,9 @@ export default function MyShiftTab({
                 className={`min-h-[64px] p-1.5 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
                   isSelected
                     ? 'border-indigo-600 ring-2 ring-indigo-200 bg-indigo-50/20'
-                    : 'border-slate-100 bg-slate-50/30 hover:bg-slate-50'
+                    : uncertainSet.has(item.dateKey)
+                      ? 'border-amber-400 ring-2 ring-amber-200 bg-amber-50'
+                      : 'border-slate-100 bg-slate-50/30 hover:bg-slate-50'
                 }`}
               >
                 <div className="flex items-start justify-between">
