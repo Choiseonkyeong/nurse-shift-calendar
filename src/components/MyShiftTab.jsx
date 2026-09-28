@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield } from 'lucide-react';
+import { isNativePush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 
 export default function MyShiftTab({
   selectedDate,
@@ -7,7 +8,10 @@ export default function MyShiftTab({
   myShifts = {},
   setMyShifts,
   shiftConfigs = {},
-  userName = '최수민'
+  userName = '최수민',
+  profile,
+  alarmSettings,
+  setAlarmSettings
 }) {
   const [year, month] = (selectedDate || '2026-09-01').split('-').map(Number);
   
@@ -15,21 +19,7 @@ export default function MyShiftTab({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingDateKey, setEditingDateKey] = useState('');
 
-  // 알람 설정 상태 (localStorage 저장)
-  const [alarmSettings, setAlarmSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('shift_alarm_settings');
-      return saved ? JSON.parse(saved) : { enabled: false, minutesBefore: 60 };
-    } catch (e) {
-      return { enabled: false, minutesBefore: 60 };
-    }
-  });
-
   const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem('shift_alarm_settings', JSON.stringify(alarmSettings));
-  }, [alarmSettings]);
 
   // 알림 권한 요청 및 타이머 등록
   const requestNotificationPermission = async () => {
@@ -50,8 +40,41 @@ export default function MyShiftTab({
     return true;
   };
 
+  const formatLead = (m) => (m >= 60 ? `${m / 60}시간` : `${m}분`);
+
+  // 네이티브 앱: 서버 푸시(FCM) — 앱이 종료돼 있어도 알림 도착
+  const handleToggleNativeAlarm = async (minutes) => {
+    if (!profile) {
+      alert('서버에 연결되지 않았습니다. 네트워크 확인 후 다시 시도해 주세요.');
+      return;
+    }
+    const turningOn = !alarmSettings.enabled || minutes !== undefined;
+    const minutesBefore = minutes || alarmSettings.minutesBefore;
+    try {
+      if (turningOn) {
+        const granted = await enablePushReminders({ minutesBefore, shiftTimes: shiftConfigs.shiftTimes });
+        if (!granted) {
+          alert('알림 권한이 거부되었습니다. 휴대폰 설정 > 앱 > 알림에서 허용해 주세요.');
+          return;
+        }
+        setAlarmSettings({ enabled: true, minutesBefore });
+        alert(`🔔 근무 시작 ${formatLead(minutesBefore)} 전 알림이 설정되었습니다.\n앱을 종료해도 알림이 도착합니다.`);
+      } else {
+        await disablePushReminders({ minutesBefore });
+        setAlarmSettings({ ...alarmSettings, enabled: false });
+        alert('🔕 알림이 해제되었습니다.');
+      }
+    } catch (err) {
+      alert(`알림 설정 실패: ${err.message}`);
+    } finally {
+      setIsAlarmModalOpen(false);
+    }
+  };
+
   // 알림 설정 토글/변경
   const handleToggleAlarm = async (minutes) => {
+    if (isNativePush()) return handleToggleNativeAlarm(minutes);
+
     if (!alarmSettings.enabled || minutes !== undefined) {
       const granted = await requestNotificationPermission();
       if (!granted) return;

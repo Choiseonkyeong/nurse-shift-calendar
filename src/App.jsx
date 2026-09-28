@@ -6,6 +6,7 @@ import GroupShareTab from './components/GroupShareTab';
 import ImportTab from './components/ImportTab';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts } from './lib/shiftApi';
+import { isNativePush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
 
 export default function App() {
   const today = getTodayDateObj();
@@ -58,6 +59,16 @@ export default function App() {
     }
   });
 
+  // 근무 시작 알림 설정 (웹: 브라우저 알림, 앱: 서버 푸시)
+  const [alarmSettings, setAlarmSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('shift_alarm_settings');
+      return saved ? JSON.parse(saved) : { enabled: false, minutesBefore: 60 };
+    } catch (e) {
+      return { enabled: false, minutesBefore: 60 };
+    }
+  });
+
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
@@ -78,6 +89,29 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('shift_user_name', userName);
   }, [userName]);
+
+  useEffect(() => {
+    localStorage.setItem('shift_alarm_settings', JSON.stringify(alarmSettings));
+  }, [alarmSettings]);
+
+  // 앱 실행 시 FCM 토큰 재등록 (토큰 갱신/재설치 대비, 권한 팝업 없이)
+  useEffect(() => {
+    if (!profile || !isNativePush() || !alarmSettings.enabled) return;
+    registerDevice({ prompt: false }).catch((err) => console.error('푸시 기기 등록 실패:', err.message));
+  }, [profile?.id]);
+
+  // 알림 켜진 상태에서 근무 시간/시간대 변경 → 서버 알림 설정 동기화 (디바운스)
+  useEffect(() => {
+    if (!profile || !isNativePush() || !alarmSettings.enabled) return;
+    const timer = setTimeout(() => {
+      saveReminderSettings({
+        enabled: true,
+        minutesBefore: alarmSettings.minutesBefore,
+        shiftTimes: shiftConfigs?.shiftTimes
+      }).catch((err) => console.error('알림 설정 동기화 실패:', err.message));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [profile?.id, shiftConfigs?.shiftTimes]);
 
   // 서버 부트스트랩: 익명 세션 → 프로필 → 서버/로컬 근무 병합 (로컬 우선) 후 차이분 업로드
   useEffect(() => {
@@ -211,6 +245,9 @@ export default function App() {
               setMyShifts={setMyShifts}
               shiftConfigs={shiftConfigs}
               userName={userName}
+              profile={profile}
+              alarmSettings={alarmSettings}
+              setAlarmSettings={setAlarmSettings}
             />
           )}
 

@@ -1,0 +1,4 @@
+# Supabase CLI 설정 (supabase functions deploy 시 참조)
+[functions.send-shift-reminders]
+# pg_cron 에서 x-cron-secret 헤더로 호출하므로 JWT 검증 비활성화
+verify_jwt = false
