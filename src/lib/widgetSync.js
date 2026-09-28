@@ -1,5 +1,5 @@
 // src/lib/widgetSync.js
-// Android 홈 화면 위젯에 앞으로 14일 근무를 전달 (웹/iOS 에서는 아무것도 하지 않음)
+// Android·iOS 홈 화면 위젯에 앞으로 14일 근무를 전달 (웹에서는 아무것도 하지 않음)
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { findShiftType } from './shiftTypes';
 
@@ -29,7 +29,7 @@ export function buildWidgetData(myShifts = {}, shiftTypes = [], today = new Date
 let lastPayload = '';
 
 export async function syncWidget(myShifts, shiftTypes) {
-  if (Capacitor.getPlatform() !== 'android') return;
+  if (!['android', 'ios'].includes(Capacitor.getPlatform())) return;
   const payload = JSON.stringify(buildWidgetData(myShifts, shiftTypes));
   // updatedAt 을 제외한 내용이 같으면 생략
   const body = payload.replace(/"updatedAt":"[^"]*"/, '');

@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useMemo, useState } from 'react';
 import { X, Delete, Repeat } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
@@ -59,8 +60,9 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose }) {
     onApply(toApply);
   };
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+  // 하단 탭바보다 위에 뜨도록 body 에 렌더링
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
       <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100 max-h-[85dvh] overflow-y-auto">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
@@ -176,6 +178,7 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose }) {
           {overwrite ? entries.length : entries.length - conflicts}일에 적용하기
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

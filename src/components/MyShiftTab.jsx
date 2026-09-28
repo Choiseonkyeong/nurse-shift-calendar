@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Calendar as CalendarIcon, Clock, Bell, BellOff, Edit3, Check, X, Shield, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2 } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
 import { getHoliday, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { isNativePush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
+import { shareMonthImage } from '../lib/shareCalendar';
 
 export default function MyShiftTab({
   selectedDate,
@@ -13,7 +15,7 @@ export default function MyShiftTab({
   myShifts = {},
   setMyShifts,
   shiftConfigs = {},
-  userName = '최수민',
+  userName = '',
   profile,
   alarmSettings,
   setAlarmSettings,
@@ -157,6 +159,19 @@ export default function MyShiftTab({
     return () => timers.forEach(clearTimeout);
   }, [alarmSettings?.enabled, alarmSettings?.minutesBefore, myShifts, shiftConfigs.shiftTimes, shiftTypes, userName, dayTick]);
 
+  // 이번 달 근무표 이미지 공유/저장
+  const [isSharing, setIsSharing] = useState(false);
+  const handleShareImage = async () => {
+    try {
+      setIsSharing(true);
+      await shareMonthImage({ year, month, myShifts, shiftTypes, userName });
+    } catch (err) {
+      alert(`이미지 공유 실패: ${err.message}`);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   // 이전/다음 달 이동
   const goMonth = (delta) => setSelectedDate(addMonthsKey(selectedDate, delta));
 
@@ -220,7 +235,7 @@ export default function MyShiftTab({
             >
               <ChevronLeft size={18} />
             </button>
-            <h2 className="text-lg font-black text-slate-900 min-w-[7rem] text-center">{year}년 {month}월</h2>
+            <h2 className="text-lg font-black text-slate-900 min-w-[6.5rem] text-center whitespace-nowrap">{year}년 {month}월</h2>
             <button
               type="button"
               aria-label="다음 달"
@@ -231,18 +246,29 @@ export default function MyShiftTab({
             </button>
           </div>
 
+          <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleShareImage}
+            disabled={isSharing}
+            aria-label="근무표 이미지 공유"
+            className="p-2 rounded-2xl border bg-slate-50 text-slate-500 border-slate-200 hover:text-indigo-600 transition cursor-pointer"
+          >
+            {isSharing ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
+          </button>
           {/* 알람 설정 버튼 */}
           <button
             onClick={() => setIsAlarmModalOpen(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-black transition border cursor-pointer ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-2xl text-xs font-black transition border cursor-pointer whitespace-nowrap ${
               alarmSettings.enabled
                 ? 'bg-amber-50 text-amber-600 border-amber-200'
                 : 'bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600'
             }`}
           >
             {alarmSettings.enabled ? <Bell size={13} className="fill-amber-500" /> : <BellOff size={13} />}
-            <span>{alarmSettings.enabled ? `${alarmSettings.minutesBefore >= 60 ? `${alarmSettings.minutesBefore / 60}시간` : `${alarmSettings.minutesBefore}분`} 전 알림` : '알림 설정'}</span>
+            <span>{alarmSettings.enabled ? `${alarmSettings.minutesBefore >= 60 ? `${alarmSettings.minutesBefore / 60}시간` : `${alarmSettings.minutesBefore}분`} 전` : '알림'}</span>
           </button>
+          </div>
         </div>
 
         {/* 근무 요약 칩 */}
@@ -383,8 +409,8 @@ export default function MyShiftTab({
       </div>
 
       {/* 3. 근무 직접 수정 모달 (팝업) */}
-      {isEditModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+      {isEditModalOpen && createPortal(
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
           <div className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
@@ -437,7 +463,8 @@ export default function MyShiftTab({
               />
             </label>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 선택한 날짜 메모 */}
@@ -482,8 +509,8 @@ export default function MyShiftTab({
       )}
 
       {/* 4. 알람 시간 설정 모달 */}
-      {isAlarmModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+      {isAlarmModalOpen && createPortal(
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
           <div className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
@@ -528,7 +555,8 @@ export default function MyShiftTab({
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

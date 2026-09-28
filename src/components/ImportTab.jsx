@@ -4,6 +4,7 @@ import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, L
 import { unregisterDevice } from '../lib/pushNotifications';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
+import { cellToCode } from '../lib/rosterParse';
 import RosterReview from './RosterReview';
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
@@ -32,37 +33,22 @@ export default function ImportTab({
   const [extractedNames, setExtractedNames] = useState([]);
   const [detectedYearMonth, setDetectedYearMonth] = useState('2026-09');
 
-  const loadScript = (src) => {
-    return new Promise((resolve, reject) => {
-      if (document.querySelector(`script[src="${src}"]`)) {
-        resolve();
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = src;
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  };
-
   // 1. 엑셀 파서 (7명 전원 정밀 추출 및 줄바꿈/특수문자 정제)
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
 
     setIsProcessing(true);
     setStatusMessage('⏳ 엑셀 근무표 연도/월 및 데이터 분석 중...');
 
     try {
-      await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
-
-      const reader = new FileReader();
-      reader.onload = (evt) => {
+      // 앱에 포함된 xlsx 사용 (CDN 불필요 → 오프라인/앱에서도 동작)
+      const XLSX = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      {
         try {
-          const bstr = evt.target.result;
-          const XLSX = window.XLSX;
-          const workbook = XLSX.read(bstr, { type: 'binary' });
+          const workbook = XLSX.read(buffer, { type: 'array' });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
 
@@ -193,18 +179,10 @@ export default function ImportTab({
 
               Object.entries(colToDateMap).forEach(([colStr, dateKey]) => {
                 const c = parseInt(colStr, 10);
-                let rawShift = String(row[c] || '').trim().toUpperCase();
+                const rawShift = String(row[c] || '').trim();
 
-                // 표기 통일: 주(주간)→D, 야(야간)→N, 휴/오프/휴무→OFF (앱 근무 코드로 저장·집계되도록)
-                const ALIASES = { '주': 'D', '야': 'N', '휴': 'OFF' };
-                let finalShift = '';
-                if (['D', 'E', 'N', 'M', 'OFF', '연차'].includes(rawShift)) {
-                  finalShift = rawShift;
-                } else if (ALIASES[rawShift]) {
-                  finalShift = ALIASES[rawShift];
-                } else if (rawShift.includes('OFF') || rawShift === '오프' || rawShift === '휴무') {
-                  finalShift = 'OFF';
-                }
+                // 표기 통일: 사용자 근무 종류 + 데이/나이트/오프/주/야/휴//, O 등 (사진 인식과 같은 규칙)
+                const finalShift = cellToCode(rawShift.split('\n')[0], shiftTypes) || '';
 
                 if (finalShift) {
                   personShifts[dateKey] = finalShift;
@@ -237,11 +215,10 @@ export default function ImportTab({
         } finally {
           setIsProcessing(false);
         }
-      };
-      reader.readAsBinaryString(file);
+      }
     } catch (err) {
       console.error(err);
-      setStatusMessage('❌ 파서 로드 실패');
+      setStatusMessage('❌ 엑셀 파일을 열 수 없습니다.');
       setIsProcessing(false);
     }
   };
@@ -455,7 +432,13 @@ export default function ImportTab({
         <div className="pt-3 border-t border-slate-100 text-center">
           <button
             onClick={async () => {
-              if (window.confirm('저장된 근무표 및 그룹 데이터를 모두 초기화하시겠습니까?')) {
+              if (
+                window.confirm(
+                  '⚠️ 이 기기의 근무표·메모·설정을 모두 지우고 처음 상태로 돌아갑니다.\n\n' +
+                    '아직 로그인 기능이 없어 초기화하면 서버에 저장된 근무와 참여 중인 그룹에도 다시 접근할 수 없습니다. (복구 불가)\n\n' +
+                    '정말 초기화할까요?'
+                )
+              ) {
                 await unregisterDevice(); // 초기화 후 이전 계정 알림이 오지 않도록 토큰 해제
                 localStorage.clear();
                 window.location.reload();
@@ -464,7 +447,7 @@ export default function ImportTab({
             className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-500 hover:text-rose-700 hover:underline cursor-pointer"
           >
             <Trash2 size={14} />
-            <span>앱 저장 데이터 전체 초기화 및 로그아웃</span>
+            <span>전체 초기화 (복구 불가)</span>
           </button>
         </div>
       </div>
