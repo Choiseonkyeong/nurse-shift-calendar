@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createFakeState, seedGroupWithMate, installFakeSupabase } from './fakeSupabase.js';
-import { openApp, readLocal, tab, waitSaved } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved, confirmOk } from './helpers.js';
 
 async function setup(page, { myShifts = {}, mateShifts = {} } = {}) {
   const state = createFakeState();
@@ -23,8 +23,8 @@ test('교환 요청을 보내면 대기 중으로 표시, 취소 가능', async 
   await expect(page.getByText('대기 중')).toBeVisible();
   expect(state.swaps[0]).toMatchObject({ target_id: mate.id, dates: ['2026-09-29'], snapshot: { '2026-09-29': { requester: 'D', target: 'N' } } });
 
-  page.on('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '요청 취소' }).click();
+  await confirmOk(page);
   await expect(page.getByText('취소됨')).toBeVisible();
 });
 
@@ -50,8 +50,8 @@ test('받은 교환 요청 수락 → 두 사람 근무가 바뀌고 내 달력�
   await expect(page.getByText('새 글')).toBeVisible();
 
   await page.getByText('7병동 (2명)').click();
-  page.on('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '수락' }).click();
+  await confirmOk(page);
   await expect(page.getByText('교환 완료')).toBeVisible();
 
   expect(state.shifts[me.id]['2026-09-29']).toBe('D');
@@ -117,8 +117,8 @@ test('그룹 만들기 → 초대 링크 공유 → 동료가 링크로 열어 �
   await expect(page.getByText('이번 주 회식 금요일 7시!')).toBeVisible();
 
   // 동료가 나가기
-  mate.on('dialog', (d) => d.accept());
   await mate.getByRole('button', { name: '나가기', exact: true }).click();
+  await confirmOk(mate);
   await expect.poll(() => state.groups[0].members.length).toBe(1);
   await mate.close();
 });

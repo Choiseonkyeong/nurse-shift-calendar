@@ -9,6 +9,7 @@ const GroupShareTab = lazy(lazyImport(() => import('./components/GroupShareTab')
 const ImportTab = lazy(lazyImport(() => import('./components/ImportTab')));
 import NameSetup from './components/NameSetup';
 import Toaster from './components/Toaster';
+import ConfirmHost from './components/ConfirmHost';
 import { closeTopModal } from './components/Modal';
 import { toast } from './lib/toast';
 import AccountModal from './components/AccountModal';
@@ -901,6 +902,7 @@ export default function App() {
       </div>
     </div>
     <Toaster />
+    <ConfirmHost />
     </ShiftTypesContext.Provider>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from '../lib/toast';
 import Modal from './Modal';
+import { confirmDialog } from '../lib/confirm';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive, ChevronRight } from 'lucide-react';
 import { unregisterDevice } from '../lib/pushNotifications';
 import { useShiftTypes } from '../lib/shiftTypes';
@@ -387,10 +388,13 @@ export default function ImportTab({
       const { data, summary } = parseBackup(await file.text());
       const when = summary.exportedAt ? new Date(summary.exportedAt).toLocaleString('ko-KR') : '알 수 없음';
       if (
-        !window.confirm(
-          `백업 (${when})\n근무 ${summary.shifts}일 · 메모 ${summary.notes}건 · 근무 종류 ${summary.types}개\n\n` +
-            '이 기기의 근무·메모·설정을 백업 내용으로 바꾸고, 서버에도 반영합니다. 복원할까요?'
-        )
+        !(await confirmDialog({
+          title: '백업을 복원할까요?',
+          message:
+            `${when} 백업\n근무 ${summary.shifts}일 · 메모 ${summary.notes}건 · 근무 종류 ${summary.types}개\n\n` +
+            '이 기기의 근무·메모·설정을 백업 내용으로 바꾸고, 서버에도 반영해요.',
+          confirmText: '복원'
+        }))
       )
         return;
       restoreBackup(data);
@@ -585,13 +589,16 @@ export default function ImportTab({
           <button
             onClick={async () => {
               if (
-                window.confirm(
-                  '⚠️ 이 기기의 근무표·메모·설정을 모두 지우고 처음 상태로 돌아갑니다.\n\n' +
+                await confirmDialog({
+                  title: '전체 초기화할까요?',
+                  message:
+                    '이 기기의 근무표·메모·설정을 모두 지우고 처음 상태로 돌아가요.\n\n' +
                     (accountStatus === 'linked'
-                      ? '연결된 계정의 서버 데이터는 남아 있어서, 다시 로그인하면 불러올 수 있어요.\n\n'
-                      : '계정을 연결하지 않아서 서버에 저장된 근무와 참여 중인 그룹에도 다시 들어갈 수 없어요. (복구 불가)\n\n') +
-                    '정말 초기화할까요?'
-                )
+                      ? '연결된 계정의 서버 데이터는 남아 있어서, 다시 로그인하면 불러올 수 있어요.'
+                      : '계정을 연결하지 않아서 서버에 저장된 근무와 참여 중인 그룹에도 다시 들어갈 수 없어요. (복구 불가)'),
+                  confirmText: '초기화',
+                  danger: true
+                })
               ) {
                 await unregisterDevice(); // 초기화 후 이전 계정 알림이 오지 않도록 토큰 해제
                 localStorage.clear();

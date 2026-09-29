@@ -26,3 +26,6 @@ export const tab = (page, label) => page.getByRole('button', { name: label, exac
 
 /** 서버 동기화 완료 표시까지 대기 */
 export const waitSaved = (page) => page.getByText('서버에 저장됨').waitFor();
+
+/** 앱 확인 창에서 확인 버튼 누르기 */
+export const confirmOk = (page) => page.locator('[data-confirm-ok]').click();

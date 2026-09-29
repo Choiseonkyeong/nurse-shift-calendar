@@ -36,7 +36,7 @@ const LOGOS = {
  * 카카오 / Google 버튼 (Supabase 에서 켜 둔 것만 표시)
  * @param mode 'link' = 지금 계정에 연결 | 'login' = 그 계정으로 로그인
  * @param verb 버튼 문구 끝말 (예: '계정 연결', '로그인', '시작')
- * @param beforeStart 시작 전 확인. false 를 돌려주면 취소
+ * @param beforeStart 시작 전 확인 (Promise 가능). false 를 돌려주면 취소
  */
 export default function SocialButtons({ mode, verb, beforeStart, onError, disabled = false, exclude = [] }) {
   const [providers, setProviders] = useState([]);
@@ -54,7 +54,7 @@ export default function SocialButtons({ mode, verb, beforeStart, onError, disabl
   if (!shown.length) return null;
 
   const start = async (provider) => {
-    if (beforeStart && beforeStart() === false) return;
+    if (beforeStart && (await beforeStart()) === false) return;
     setBusy(provider);
     try {
       await startSocialAuth(provider, mode);

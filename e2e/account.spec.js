@@ -50,7 +50,6 @@ test('새 폰: 첫 화면에서 기존 계정으로 로그인 → 계정 데이�
   await page.getByRole('button', { name: /이미 계정이 있어요/ }).click();
   await page.getByPlaceholder('이메일 주소').fill('me@example.com');
   await page.getByPlaceholder('비밀번호').fill('wrong-pw');
-  page.on('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '로그인', exact: true }).click();
   await expect(page.getByText(/비밀번호가 올바르지 않습니다/)).toBeVisible();
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { confirmDialog } from '../lib/confirm';
 import { toast, formatDateKo } from '../lib/toast';
 import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Share2, RotateCcw, Palette } from 'lucide-react';
 import { shareText, webOrigin } from '../lib/shareCalendar';
@@ -223,7 +224,7 @@ export default function GroupShareTab({
 
   // 5. 그룹 나가기
   const handleLeaveGroup = async (groupId) => {
-    if (!window.confirm('정말 이 그룹에서 나가시겠습니까?')) return;
+    if (!(await confirmDialog({ title: '이 그룹에서 나갈까요?', message: '다시 들어오려면 초대 코드가 필요해요.', confirmText: '나가기', danger: true }))) return;
     await withLoading(async () => {
       await leaveGroup(groupId, profile.id);
       await fetchMyGroupsFromDB();
@@ -233,7 +234,7 @@ export default function GroupShareTab({
 
   // 6. 그룹 삭제
   const handleDeleteGroup = async (groupId) => {
-    if (!window.confirm('정말 이 그룹 전체를 삭제하시겠습니까?')) return;
+    if (!(await confirmDialog({ title: '그룹을 삭제할까요?', message: '모든 멤버에게서 그룹과 게시판이 사라지고 되돌릴 수 없어요.', confirmText: '삭제', danger: true }))) return;
     await withLoading(async () => {
       await deleteGroup(groupId);
       await fetchMyGroupsFromDB();
