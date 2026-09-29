@@ -34,3 +34,11 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* 좁은 화면의 시간 입력칸: 시계 아이콘을 숨겨 "오전 07:30" 이 잘리지 않게 (칸을 누르면 시간 선택창이 열림) */
+.time-compact::-webkit-calendar-picker-indicator {
+  display: none;
+}
+.time-compact {
+  cursor: pointer;
+}

@@ -38,13 +38,13 @@ test('근무표 사진: 내 이름이 없으면 이름만 고르면 등록', asy
 
   // 고른 이름은 '근무표 속 내 이름'으로 저장 → 다음 사진은 묻지 않고 바로 등록
   await tab(page, '등록').click();
-  await expect(page.getByLabel('근무표 속 내 이름')).toHaveValue('오세훈');
+  await expect(page.getByText('근무표에서 찾을 내 이름:')).toContainText('오세훈');
   await page.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
   await expect(page.getByText(/근무표 이름: 오세훈/)).toBeVisible({ timeout: 200000 });
   await expect(page.getByText('본인 이름 선택')).toHaveCount(0);
 });
 
-test('닉네임 사용자: 근무표 속 내 이름 입력 → 사진 자동 등록, 새 폰 로그인 시에도 유지', async ({ page, browser }) => {
+test('닉네임 사용자: 이름을 따로 입력하지 않아도 한 번 고르면 기억, 새 폰 로그인 시에도 유지', async ({ page, browser }) => {
   test.setTimeout(240000);
   const state = createFakeState();
   const { profile } = seedAccount(state, { email: 'me@example.com', password: 'secret12', name: '뽀송이' });
@@ -60,15 +60,24 @@ test('닉네임 사용자: 근무표 속 내 이름 입력 → 사진 자동 등
 
   await login(page);
   await tab(page, '등록').click();
-  await page.getByLabel('근무표 속 내 이름').fill('서지수');
-  await page.getByLabel('근무표 속 내 이름').press('Enter');
+  // 입력칸 없이 시작 (처음엔 '근무표에서 찾을 내 이름' 줄도 없음)
+  await expect(page.getByText('근무표에서 찾을 내 이름:')).toHaveCount(0);
+  await page.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
+  await expect(page.getByText('본인 이름 선택')).toBeVisible({ timeout: 200000 });
+  await page.getByRole('button', { name: '서지수', exact: true }).click();
   await expect.poll(() => state.settings[profile.id]?.settings?.roster_name).toBe('서지수');
+
+  // 기억한 이름은 한 줄로 보이고 바꿀 수 있음
+  await tab(page, '등록').click();
+  await page.getByRole('button', { name: '변경', exact: true }).click();
+  await expect(page.getByLabel('근무표 속 내 이름')).toHaveValue('서지수');
+  await page.keyboard.press('Escape');
 
   // 새 폰: 로그인하면 근무표 속 이름이 돌아오고, 사진은 바로 내 줄로 등록
   const other = await browser.newPage();
   await login(other);
   await tab(other, '등록').click();
-  await expect(other.getByLabel('근무표 속 내 이름')).toHaveValue('서지수');
+  await expect(other.getByText('근무표에서 찾을 내 이름:')).toContainText('서지수');
   await other.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
   await expect(other.getByText(/근무표 이름: 서지수/)).toBeVisible({ timeout: 200000 });
   expect((await readLocal(other, 'my_shift_data'))['2026-09-01']).toBe('OFF');
@@ -157,5 +166,5 @@ test('새 배포 후 오래 열린 탭: 사진 인식 파일을 못 찾으면 �
   await expect(page.getByText(/앱이 최신 버전으로 업데이트됐어요/)).toBeVisible({ timeout: 30000 });
   expect(failed).toBe(true);
   // 새로고침 후에도 등록 탭 (사진 올리는 버튼이 보임)
-  await expect(page.getByLabel('근무표 속 내 이름')).toBeVisible();
+  await expect(page.getByText('앨범에서 선택')).toBeVisible();
 });

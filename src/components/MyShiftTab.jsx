@@ -509,7 +509,7 @@ export default function MyShiftTab({
                 <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
                   <Edit3 size={16} className="text-indigo-600" /> 근무 직접 수정
                 </h3>
-                <p className="text-xs font-bold text-slate-400 mt-0.5">{editingDateKey}</p>
+                <p className="text-xs font-bold text-slate-400 mt-0.5">{formatDateKo(editingDateKey)}</p>
               </div>
               <button
                 onClick={() => setIsEditModalOpen(false)}

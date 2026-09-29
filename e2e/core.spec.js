@@ -59,6 +59,25 @@ test('동기화: 다른 기기 변경은 반영, 오프라인에서 지운 근�
   await expect.poll(() => state.shifts[pid]).toEqual({ '2026-09-01': 'D', '2026-09-02': 'M' });
 });
 
+test('잠깐 끊겼다가 다시 연결되면 새로고침 없이 바로 서버에 저장', async ({ page, context }) => {
+  const state = await openApp(page);
+  await waitSaved(page);
+  const pid = Object.keys(state.profiles)[0];
+
+  // 앱을 연 직후(30초 이내) 연결이 끊김 → 근무 입력
+  state.offline = true;
+  await context.setOffline(true);
+  await day(page, '9월 10일').click();
+  await page.getByRole('button', { name: /Day \(데이\)/ }).click();
+  await expect(page.getByText('오프라인 · 기기 저장')).toBeVisible();
+
+  // 다시 연결 → 바로 저장
+  state.offline = false;
+  await context.setOffline(false);
+  await expect(page.getByText('서버에 저장됨')).toBeVisible({ timeout: 10000 });
+  await expect.poll(() => state.shifts[pid]?.['2026-09-10']).toBe('D');
+});
+
 test('모든 팝업이 하단 탭바 위에 표시', async ({ page }) => {
   await openApp(page);
   const navCovers = () =>
@@ -122,7 +141,7 @@ test('수당 탭: 휴일·야간 가산, 입사일 기준 연차, 통계', async
 
   await page.locator('select:has(option[value=hire])').selectOption('hire');
   await page.getByLabel('입사일').fill('2021-11-01');
-  await expect(page.getByText('집계 기간: 2025-11-01 ~ 2026-10-31')).toBeVisible();
+  await expect(page.getByText('집계 기간: 2025.11.01 ~ 2026.10.31')).toBeVisible();
 
   await expect(page.getByText('최장 연속N').locator('..')).toContainText('2일');
 });

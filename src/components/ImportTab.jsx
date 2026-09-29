@@ -45,7 +45,9 @@ export default function ImportTab({
   const [pendingImport, setPendingImport] = useState(null);
   const [rosterDraft, setRosterDraft] = useState(rosterName);
   useEffect(() => setRosterDraft(rosterName), [rosterName]);
+  const [editingRoster, setEditingRoster] = useState(false);
   const saveRosterDraft = () => {
+    setEditingRoster(false);
     const v = rosterDraft.trim().slice(0, 30);
     setRosterDraft(v);
     if (v !== rosterName) setRosterName?.(v);
@@ -462,10 +464,10 @@ export default function ImportTab({
           </div>
           <div>
             <h3 className="font-black text-sm text-slate-800">
-              엑셀 근무표 파일(.xlsx, .csv) 가져오기
+              엑셀 근무표 가져오기
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              공유받은 엑셀 근무표 파일을 올려주세요.
+              공유받은 엑셀 파일(.xlsx, .csv)을 올려 주세요.
             </p>
           </div>
 
@@ -484,32 +486,41 @@ export default function ImportTab({
           </label>
         </div>
 
-        {/* 근무표 속 내 이름 (앱 이름이 닉네임일 때) */}
-        <div className="p-4 rounded-3xl border border-slate-100 bg-white space-y-2">
-          <label htmlFor="roster-name" className="block text-xs font-black text-slate-800">
-            근무표 속 내 이름
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="roster-name"
-              value={rosterDraft}
-              onChange={(e) => setRosterDraft(e.target.value)}
-              onBlur={saveRosterDraft}
-              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-              maxLength={30}
-              placeholder={userName ? `${userName} (앱 이름과 같으면 비워 두세요)` : '예: 최간호'}
-              className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-indigo-400"
-            />
-            {rosterDraft !== rosterName && (
-              <button type="button" onClick={saveRosterDraft} className="px-3 rounded-2xl bg-indigo-600 text-white text-xs font-black cursor-pointer">
-                저장
-              </button>
+        {/* 근무표 속 내 이름: 따로 입력할 필요 없음. 사진·엑셀에서 이름을 한 번 고르면 기억 → 그때부터만 한 줄로 표시 */}
+        {(rosterName || editingRoster) && (
+          <div className="px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-2 text-xs font-bold text-slate-500">
+            {editingRoster ? (
+              <>
+                <input
+                  id="roster-name"
+                  aria-label="근무표 속 내 이름"
+                  autoFocus
+                  value={rosterDraft}
+                  onChange={(e) => setRosterDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveRosterDraft();
+                    if (e.key === 'Escape') setEditingRoster(false);
+                  }}
+                  maxLength={30}
+                  placeholder="근무표에 적힌 내 이름"
+                  className="flex-1 min-w-0 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-400"
+                />
+                <button type="button" onClick={saveRosterDraft} className="shrink-0 px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-black cursor-pointer">
+                  저장
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 min-w-0 truncate">
+                  근무표에서 찾을 내 이름: <b className="text-slate-800">{rosterName}</b>
+                </span>
+                <button type="button" onClick={() => setEditingRoster(true)} className="shrink-0 text-indigo-600 font-black underline cursor-pointer">
+                  변경
+                </button>
+              </>
             )}
           </div>
-          <p className="text-[11px] font-bold text-slate-400">
-            앱 이름(닉네임)과 근무표에 적힌 이름이 다르면 입력하세요. 사진·엑셀에서 이 이름의 줄을 자동으로 등록해요. 새 폰에서 로그인해도 유지돼요.
-          </p>
-        </div>
+        )}
 
         {/* 3. 휴대폰 캘린더(.ics) */}
         <div className="p-4 rounded-3xl space-y-3 bg-sky-50">

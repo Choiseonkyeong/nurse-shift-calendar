@@ -32,7 +32,8 @@ export default function GroupShareTab({
   profile,
   myShifts = {},
   privacyBlur = false,
-  onServerShiftsChanged
+  onServerShiftsChanged,
+  requireName
 }) {
   // 보안 모드: 화면 공유/캡처 시 동료 이름 가리기
   const blurCls = privacyBlur ? 'blur-[3px] select-none' : '';
@@ -168,6 +169,8 @@ export default function GroupShareTab({
       return;
     }
     if (!ensureOnline()) return;
+    // 이름 없이 시작한 경우: 그룹에서 보일 이름을 먼저 정하고 이어서 진행
+    if (requireName?.(() => handleCreateGroup())) return;
 
     await withLoading(async () => {
       const group = await createGroup(newGroupName.trim(), selectedColor);
@@ -185,6 +188,7 @@ export default function GroupShareTab({
       return;
     }
     if (!ensureOnline()) return;
+    if (requireName?.(() => handleJoinGroup())) return;
 
     await withLoading(async () => {
       let group;
