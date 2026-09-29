@@ -276,7 +276,7 @@ export default function GroupShareTab({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 items-stretch">
+            <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-3 items-stretch">
               
               {/* 새 그룹 생성 (무한 커스텀 컬러 선택기) */}
               <div className="p-4 border border-indigo-100 bg-white rounded-3xl space-y-3 flex flex-col justify-between shadow-xs">
@@ -534,10 +534,14 @@ export default function GroupShareTab({
                           <div
                             key={member.id}
                             style={memberStyle}
-                            className="flex justify-between items-center px-1.5 py-0.5 rounded-lg text-[9px] font-black"
+                            className="flex justify-between items-center gap-px overflow-hidden whitespace-nowrap tracking-tighter px-0.5 min-[380px]:px-1.5 py-0.5 rounded-lg text-[9px] font-black"
                           >
-                            <span className={`truncate ${blurCls}`}>{displayName}</span>
-                            <span className="ml-0.5 font-bold">{shift}</span>
+                            {/* 좁은 화면: 이름 첫 글자만 (칸이 좁아 근무 코드가 잘리지 않게) */}
+                            <span className={`min-w-0 truncate ${blurCls}`}>
+                              <span className="min-[380px]:hidden">{[...(member.name || '')][0]}</span>
+                              <span className="hidden min-[380px]:inline">{displayName}</span>
+                            </span>
+                            <span className="shrink-0 font-bold">{shift}</span>
                           </div>
                         );
                       })}
@@ -561,11 +565,14 @@ export default function GroupShareTab({
                 return (
                   <div
                     key={member.id}
-                    className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center"
+                    className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center gap-1 min-w-0"
                   >
-                    <span className={`font-extrabold text-xs text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
-                    <span style={memberStyle} className={`px-3 py-1 rounded-xl font-black text-xs ${shift ? '' : 'bg-slate-50 text-slate-300'}`}>
-                      {shift || '미입력'}
+                    <span className={`min-w-0 truncate font-extrabold text-xs text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
+                    <span
+                      style={memberStyle}
+                      className={`shrink-0 whitespace-nowrap px-2 min-[380px]:px-3 py-1 rounded-xl font-black text-xs ${shift ? '' : 'bg-slate-50 text-slate-300'}`}
+                    >
+                      {shift || '없음'}
                     </span>
                   </div>
                 );

@@ -41,9 +41,11 @@ export default function Modal({ onClose, label, children, align = 'center', zInd
     const focusables = () => [...overlay.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
 
     // 자동 포커스 지정(autoFocus)이 없으면 첫 입력칸, 없으면 첫 버튼
+    // 터치 화면(폰)에서는 입력칸에 포커스하면 키보드가 올라와 창을 가리므로 창 자체에만 포커스
     if (!overlay.contains(document.activeElement)) {
+      const touch = window.matchMedia?.('(pointer: coarse)').matches;
       const list = focusables();
-      (list.find((el) => /INPUT|TEXTAREA|SELECT/.test(el.tagName)) || list[0] || overlay).focus({ preventScroll: true });
+      (touch ? overlay : list.find((el) => /INPUT|TEXTAREA|SELECT/.test(el.tagName)) || list[0] || overlay).focus({ preventScroll: true });
     }
 
     // 문서 전체에서 받음: 창 안 내용이 바뀌어 포커스가 창 밖(body)으로 빠져도 Esc·Tab 이 동작하도록

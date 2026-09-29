@@ -98,6 +98,17 @@ test('모든 팝업이 하단 탭바 위에 표시', async ({ page }) => {
   }
 });
 
+test('폰(터치 화면): 날짜를 눌러도 메모칸에 자동 포커스하지 않음 (키보드가 근무 버튼을 가리지 않게)', async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 360, height: 720 } });
+  const page = await context.newPage();
+  await openApp(page);
+  await page.getByRole('button', { name: /^9월 10일 (?!\()/ }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('근무 직접 수정')).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toMatch(/INPUT|TEXTAREA/);
+  await context.close();
+});
+
 test('달력 날짜는 버튼(스크린리더로 날짜·근무를 읽음)', async ({ page }) => {
   await openApp(page, { local: { my_shift_data: { '2026-09-24': 'D' } } });
   await expect(page.getByRole('button', { name: '9월 24일 D 근무 추석' })).toBeVisible();

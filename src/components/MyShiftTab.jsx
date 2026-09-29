@@ -468,7 +468,7 @@ export default function MyShiftTab({
                 onClick={() => handleDayClick(item.dateKey)}
                 aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${dayNotes[item.dateKey] ? ' 메모 있음' : ''}`}
                 aria-pressed={isSelected}
-                className={`min-h-[64px] w-full min-w-0 text-left p-1.5 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
+                className={`min-h-[64px] w-full min-w-0 text-left p-1 min-[360px]:p-1.5 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
                   isSelected
                     ? 'border-indigo-600 ring-2 ring-indigo-200 bg-indigo-50/20'
                     : uncertainSet.has(item.dateKey)
@@ -487,7 +487,9 @@ export default function MyShiftTab({
                 {shift ? (
                   <div
                     style={badgeStyle}
-                    className="w-full py-1 text-center rounded-xl font-black text-xs shadow-2xs mt-1"
+                    className={`w-full py-1 text-center rounded-xl font-black shadow-2xs mt-1 whitespace-nowrap overflow-hidden tracking-tighter ${
+                      [...shift].length >= 3 ? 'text-[9px] min-[360px]:text-[10px]' : 'text-[10px] min-[360px]:text-xs'
+                    }`}
                   >
                     {shift}
                   </div>

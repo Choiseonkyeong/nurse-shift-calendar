@@ -220,8 +220,8 @@ export default function AllowanceTab({
         </h3>
 
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="p-3 bg-rose-50/50 border border-rose-100 rounded-2xl flex flex-col items-center justify-center">
-            <span className="text-[10px] font-extrabold text-rose-400 block mb-1">총 부여 연차</span>
+          <div className="px-1 py-3 bg-rose-50/50 border border-rose-100 rounded-2xl flex flex-col items-center justify-center">
+            <span className="text-[10px] font-extrabold text-rose-400 block mb-1 whitespace-nowrap">총 부여 연차</span>
             <div className="flex items-center justify-center gap-0.5 w-full">
               <input
                 type="number"
@@ -231,13 +231,13 @@ export default function AllowanceTab({
                   setVacation(val);
                   if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
                 }}
-                className="w-12 text-center text-lg font-black text-rose-950 bg-transparent outline-none p-0"
+                className="w-10 text-center text-lg font-black text-rose-950 bg-transparent outline-none p-0"
               />
               <span className="text-xs font-bold text-rose-900 shrink-0">개</span>
             </div>
           </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col items-center justify-center">
+          <div className="px-1 py-3 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-slate-400 block mb-1">사용 연차</span>
             <div className="text-lg font-black text-slate-800">
               {totalUsed} <span className="text-xs font-bold text-slate-700">개</span>
@@ -245,7 +245,7 @@ export default function AllowanceTab({
             <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap">달력 {calendarLeaveDays}일 포함</span>
           </div>
 
-          <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-col items-center justify-center">
+          <div className="px-1 py-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-indigo-400 block mb-1">잔여 연차</span>
             <div className="text-lg font-black text-indigo-950">
               {remainingVacation} <span className="text-xs font-bold">개</span>
@@ -253,7 +253,8 @@ export default function AllowanceTab({
           </div>
         </div>
 
-        {/* 휴가 종류별 사용 내역 (연차 기준 기간) */}
+        {/* 휴가 종류별 사용 내역 (연차 기준 기간) — 종류가 여럿일 때만 (하나면 '사용 연차'와 같은 내용) */}
+        {leaveTypes.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
           {leaveTypes.map((t) => (
             <span
@@ -266,6 +267,7 @@ export default function AllowanceTab({
             </span>
           ))}
         </div>
+        )}
 
         <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-2xl border border-slate-100">
           <span className="text-[11px] font-bold text-slate-500">앱 사용 전 이미 쓴 연차</span>

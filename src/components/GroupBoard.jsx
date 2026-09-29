@@ -329,22 +329,24 @@ function SwapForm({ group, profile, defaultDate, getCode, chip, blurCls, onDone,
       </label>
       {[
         [date1, setDate1, '날짜'],
-        [date2, setDate2, '날짜 2 (선택)']
+        [date2, setDate2, '추가 날짜']
       ].map(([value, setter, label]) => (
-        <div key={label} className="flex items-center justify-between gap-2">
-          <label className="flex items-center gap-2 min-w-0">
+        <div key={label} className="space-y-1">
+          <label className="flex items-center gap-2">
             <span className="shrink-0 w-16">{label}</span>
             <input
               type="date"
               value={value}
               onChange={(e) => setter(e.target.value)}
-              className="min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 font-bold"
+              className="min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 font-bold"
             />
           </label>
-          {value && (
-            <span className="flex items-center gap-1 shrink-0">
+          {value ? (
+            <span className="flex items-center gap-1 pl-[72px]">
               나 {chip(getCode(profile.id, value))} ⇄ {chip(getCode(targetId, value))}
             </span>
+          ) : (
+            label !== '날짜' && <span className="block pl-[72px] text-[10px] text-slate-400">하루 더 바꿀 때만 (선택)</span>
           )}
         </div>
       ))}
