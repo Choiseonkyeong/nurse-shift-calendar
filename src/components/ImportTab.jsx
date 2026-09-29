@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Modal from './Modal';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive } from 'lucide-react';
 import { unregisterDevice } from '../lib/pushNotifications';
@@ -8,8 +8,7 @@ import { cellToCode } from '../lib/rosterParse';
 import { toCsv, toIcs } from '../lib/exportData';
 import { createBackup, parseBackup, restoreBackup } from '../lib/backup';
 import { shareFile } from '../lib/shareCalendar';
-
-const ROSTER_NAME_KEY = 'roster_name'; // 근무표 속 내 이름 (앱 이름과 다를 때 기억)
+import { pickRosterName } from '../lib/rosterName';
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
 const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
@@ -20,6 +19,8 @@ export default function ImportTab({
   myShifts = {},
   setMyShifts,
   userName,
+  rosterName = '',
+  setRosterName,
   dayNotes = {},
   setDayNotes,
   onImported,
@@ -36,35 +37,28 @@ export default function ImportTab({
   // 인식 결과(사진/엑셀): 본인 이름을 자동으로 못 찾았을 때만 이름 선택 창 표시
   // { source: '사진' | '엑셀', yearMonth: 'YYYY-MM', byName: { 이름: { shifts, uncertain } } }
   const [pendingImport, setPendingImport] = useState(null);
+  const [rosterDraft, setRosterDraft] = useState(rosterName);
+  useEffect(() => setRosterDraft(rosterName), [rosterName]);
+  const saveRosterDraft = () => {
+    const v = rosterDraft.trim().slice(0, 30);
+    setRosterDraft(v);
+    if (v !== rosterName) setRosterName?.(v);
+  };
 
   /** 근무표에 바로 등록 → 내 근무 달력으로 이동 (App 이 되돌리기 배너 표시) */
-  const registerImport = (imp, name) => {
+  /** @param remember 이름 선택 창에서 직접 고른 경우 → '근무표 속 내 이름'으로 저장(서버 동기화) */
+  const registerImport = (imp, name, remember = false) => {
     const data = imp.byName[name];
     if (!data) return;
-    try {
-      localStorage.setItem(ROSTER_NAME_KEY, name);
-    } catch (e) {
-      /* 저장 실패는 무시 */
-    }
+    if (remember && name !== rosterName) setRosterName?.(name);
     setPendingImport(null);
     onImported?.({ name, source: imp.source, yearMonth: imp.yearMonth, shifts: data.shifts, uncertain: data.uncertain });
   };
 
-  /** 본인 이름 자동 선택: 앱 이름 → 지난번 선택한 이름 → 한 명뿐이면 그 사람 */
+  /** 내 줄 자동 선택: 근무표 속 내 이름(설정) → 앱 이름, 사진 오타(한 글자 차이)까지. 못 찾으면 이름 선택 창 */
   const autoRegister = (imp) => {
-    const names = Object.keys(imp.byName);
-    let saved = '';
-    try {
-      saved = localStorage.getItem(ROSTER_NAME_KEY) || '';
-    } catch (e) {
-      /* 무시 */
-    }
-    const pick =
-      names.find((n) => n === userName) ||
-      names.find((n) => n === saved) ||
-      names.find((n) => userName && (n.includes(userName) || userName.includes(n))) ||
-      (names.length === 1 ? names[0] : '');
-    if (pick) registerImport(imp, pick);
+    const { name } = pickRosterName(Object.keys(imp.byName), { rosterName, userName });
+    if (name) registerImport(imp, name);
     else setPendingImport(imp);
   };
 
@@ -457,6 +451,33 @@ export default function ImportTab({
           </div>
         </div>
 
+        {/* 근무표 속 내 이름 (앱 이름이 닉네임일 때) */}
+        <div className="p-4 rounded-3xl border border-slate-100 bg-white space-y-2">
+          <label htmlFor="roster-name" className="block text-xs font-black text-slate-800">
+            근무표 속 내 이름
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="roster-name"
+              value={rosterDraft}
+              onChange={(e) => setRosterDraft(e.target.value)}
+              onBlur={saveRosterDraft}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              maxLength={30}
+              placeholder={userName ? `${userName} (앱 이름과 같으면 비워 두세요)` : '예: 최간호'}
+              className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-indigo-400"
+            />
+            {rosterDraft !== rosterName && (
+              <button type="button" onClick={saveRosterDraft} className="px-3 rounded-2xl bg-indigo-600 text-white text-xs font-black cursor-pointer">
+                저장
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] font-bold text-slate-400">
+            앱 이름(닉네임)과 근무표에 적힌 이름이 다르면 입력하세요. 사진·엑셀에서 이 이름의 줄을 자동으로 등록해요. 새 폰에서 로그인해도 유지돼요.
+          </p>
+        </div>
+
         {/* 1. 엑셀 근무표 선택 */}
         <div className="p-5 border-2 border-dashed border-emerald-200 bg-emerald-50 rounded-3xl text-center space-y-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto font-black bg-emerald-100 text-emerald-600">
@@ -660,11 +681,14 @@ export default function ImportTab({
             <p className="text-xs text-slate-500">
               {pendingImport.source} 근무표에서 {Object.keys(pendingImport.byName).length}명을 찾았어요. 본인 이름을 누르면 바로 내 근무표에 등록돼요.
             </p>
+            <p className="text-[11px] font-bold text-indigo-600 bg-indigo-50 rounded-xl px-2.5 py-1.5">
+              고른 이름은 '근무표 속 내 이름'으로 저장돼서 다음부터는 자동으로 등록돼요.
+            </p>
             <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
               {Object.keys(pendingImport.byName).map((name) => (
                 <button
                   key={name}
-                  onClick={() => registerImport(pendingImport, name)}
+                  onClick={() => registerImport(pendingImport, name, true)}
                   className="py-2.5 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 font-extrabold text-xs rounded-2xl transition cursor-pointer"
                 >
                   {name}

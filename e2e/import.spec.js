@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { openApp, readLocal, tab } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved } from './helpers.js';
+import { createFakeState, seedAccount } from './fakeSupabase.js';
 
 const fixture = (name) => path.join(import.meta.dirname, 'fixtures', name);
 
@@ -34,6 +35,44 @@ test('근무표 사진: 내 이름이 없으면 이름만 고르면 등록', asy
   await expect(page.getByText('본인 이름 선택')).toBeVisible({ timeout: 200000 });
   await page.getByRole('button', { name: '오세훈', exact: true }).click();
   await expect(page.getByText(/근무표 이름: 오세훈/)).toBeVisible();
+
+  // 고른 이름은 '근무표 속 내 이름'으로 저장 → 다음 사진은 묻지 않고 바로 등록
+  await tab(page, '등록').click();
+  await expect(page.getByLabel('근무표 속 내 이름')).toHaveValue('오세훈');
+  await page.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
+  await expect(page.getByText(/근무표 이름: 오세훈/)).toBeVisible({ timeout: 200000 });
+  await expect(page.getByText('본인 이름 선택')).toHaveCount(0);
+});
+
+test('닉네임 사용자: 근무표 속 내 이름 입력 → 사진 자동 등록, 새 폰 로그인 시에도 유지', async ({ page, browser }) => {
+  test.setTimeout(240000);
+  const state = createFakeState();
+  const { profile } = seedAccount(state, { email: 'me@example.com', password: 'secret12', name: '뽀송이' });
+  const login = async (p) => {
+    await openApp(p, { state, name: null });
+    await p.getByRole('button', { name: /이미 계정이 있어요/ }).click();
+    await p.getByPlaceholder('이메일 주소').fill('me@example.com');
+    await p.getByPlaceholder('비밀번호').fill('secret12');
+    p.on('dialog', (d) => d.accept());
+    await p.getByRole('button', { name: '로그인', exact: true }).click();
+    await waitSaved(p);
+  };
+
+  await login(page);
+  await tab(page, '등록').click();
+  await page.getByLabel('근무표 속 내 이름').fill('서지수');
+  await page.getByLabel('근무표 속 내 이름').press('Enter');
+  await expect.poll(() => state.settings[profile.id]?.settings?.roster_name).toBe('서지수');
+
+  // 새 폰: 로그인하면 근무표 속 이름이 돌아오고, 사진은 바로 내 줄로 등록
+  const other = await browser.newPage();
+  await login(other);
+  await tab(other, '등록').click();
+  await expect(other.getByLabel('근무표 속 내 이름')).toHaveValue('서지수');
+  await other.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
+  await expect(other.getByText(/근무표 이름: 서지수/)).toBeVisible({ timeout: 200000 });
+  expect((await readLocal(other, 'my_shift_data'))['2026-09-01']).toBe('OFF');
+  await other.close();
 });
 
 test('엑셀 근무표 → 내 이름 자동 선택 후 바로 등록 (인터넷 CDN 없이)', async ({ page, context }) => {
