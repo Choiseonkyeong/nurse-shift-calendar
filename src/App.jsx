@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw, Pencil, Cloud, CloudOff, Loader2, Sun, Moon, SunMoon } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
+import { lazyImport, consumeResume, setResumeTab } from './lib/appUpdate';
 // 첫 화면(내 근무) 외 탭은 누를 때 불러옴 → 첫 실행 속도 개선
-const AllowanceTab = lazy(() => import('./components/AllowanceTab'));
-const GroupShareTab = lazy(() => import('./components/GroupShareTab'));
-const ImportTab = lazy(() => import('./components/ImportTab'));
+// (새 배포 후 오래 열린 탭에서 파일을 못 찾으면 새 버전으로 새로고침 — lib/appUpdate)
+const AllowanceTab = lazy(lazyImport(() => import('./components/AllowanceTab')));
+const GroupShareTab = lazy(lazyImport(() => import('./components/GroupShareTab')));
+const ImportTab = lazy(lazyImport(() => import('./components/ImportTab')));
 import NameSetup from './components/NameSetup';
 import AccountModal from './components/AccountModal';
 import AuthLanding from './components/AuthLanding';
@@ -35,7 +37,10 @@ const readJson = (key) => {
 };
 export default function App() {
   const today = getTodayDateObj();
-  const [activeTab, setActiveTab] = useState('myShift');
+  // 새 버전으로 새로고침된 직후면 보던 탭으로 돌아가고 안내 표시
+  const [resume] = useState(consumeResume);
+  const [activeTab, setActiveTab] = useState(() => resume?.tab || 'myShift');
+  useEffect(() => setResumeTab(activeTab), [activeTab]);
   
   const [selectedDate, _setSelectedDate] = useState(today.dateStr);
   const setSelectedDate = (raw) => _setSelectedDate(toDateKey(raw));
@@ -706,6 +711,7 @@ export default function App() {
               dayNotes={dayNotes || {}}
               setDayNotes={setDayNotes}
               onImported={handleImported}
+              initialNotice={resume?.notice || ''}
               accountStatus={accountStatus}
               onOpenAccount={() => setAccountModal('link')}
             />

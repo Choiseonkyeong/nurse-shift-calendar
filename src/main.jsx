@@ -4,6 +4,7 @@ import App from './App.jsx' // 👈 main.jsx와 App.jsx가 둘 다 src 폴더 �
 import './index.css'
 import { applyTheme, watchSystemTheme } from './lib/theme'
 import { handleWebOAuthReturn, listenNativeOAuth } from './lib/socialAuth'
+import { installUpdateGuard } from './lib/appUpdate'
 
 // 첫 화면 전에 테마 적용 (깜빡임 방지)
 applyTheme()
@@ -15,6 +16,9 @@ const render = () =>
       <App />
     </React.StrictMode>,
   )
+
+// 새 버전 배포 후 오래 열린 탭: 돌아올 때 새 버전 확인, 파일 로드 실패 시 새로고침
+installUpdateGuard()
 
 // 카카오·구글 로그인에서 돌아온 경우: 세션·데이터 정리를 먼저 끝내고 화면 그리기
 listenNativeOAuth().catch((err) => console.warn('소셜 로그인 복귀 대기 실패', err))
