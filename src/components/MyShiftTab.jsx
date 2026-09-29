@@ -5,7 +5,7 @@ import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser,
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
-import { getHoliday, dayNumberClass } from '../utils/holidays';
+import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { isNativePush, usesServerPush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 import { shareMonthImage } from '../lib/shareCalendar';
@@ -481,7 +481,7 @@ export default function MyShiftTab({
                   {dayNotes[item.dateKey] && <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400" title="메모 있음" />}
                 </div>
                 {getHoliday(item.dateKey) && (
-                  <span className="text-[8px] font-bold text-rose-400 leading-none truncate px-0.5">{getHoliday(item.dateKey)}</span>
+                  <span className="text-[8px] font-bold text-rose-400 leading-none whitespace-nowrap overflow-hidden tracking-tighter">{getHolidayShort(item.dateKey)}</span>
                 )}
 
                 {shift ? (
@@ -516,6 +516,7 @@ export default function MyShiftTab({
               <button
                 onClick={() => setIsEditModalOpen(false)}
                 className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+                aria-label="닫기"
               >
                 <X size={18} />
               </button>
@@ -612,6 +613,7 @@ export default function MyShiftTab({
               <button
                 onClick={() => setIsAlarmModalOpen(false)}
                 className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+                aria-label="닫기"
               >
                 <X size={18} />
               </button>
