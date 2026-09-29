@@ -46,7 +46,10 @@ export default function Modal({ onClose, label, children, align = 'center', zInd
       (list.find((el) => /INPUT|TEXTAREA|SELECT/.test(el.tagName)) || list[0] || overlay).focus({ preventScroll: true });
     }
 
+    // 문서 전체에서 받음: 창 안 내용이 바뀌어 포커스가 창 밖(body)으로 빠져도 Esc·Tab 이 동작하도록
+    // (여러 창이 겹치면 맨 위 창만 처리)
     const onKey = (e) => {
+      if (openModals[openModals.length - 1] !== onCloseRef) return;
       if (e.key === 'Escape' && onCloseRef.current) {
         e.stopPropagation();
         onCloseRef.current();
@@ -55,6 +58,11 @@ export default function Modal({ onClose, label, children, align = 'center', zInd
       if (e.key !== 'Tab') return;
       const list = focusables();
       if (!list.length) return;
+      if (!overlay.contains(document.activeElement)) {
+        e.preventDefault();
+        list[0].focus();
+        return;
+      }
       const first = list[0];
       const last = list[list.length - 1];
       if (e.shiftKey && document.activeElement === first) {
@@ -65,9 +73,9 @@ export default function Modal({ onClose, label, children, align = 'center', zInd
         first.focus();
       }
     };
-    overlay.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey);
     return () => {
-      overlay.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey);
       if (previous && typeof previous.focus === 'function' && document.contains(previous)) previous.focus({ preventScroll: true });
     };
   }, []);

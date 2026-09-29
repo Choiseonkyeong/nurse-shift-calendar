@@ -74,7 +74,8 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, isCodeInUs
 
   // 하단 탭바보다 위에 뜨도록 body 에 렌더링
   return (
-    <Modal onClose={onClose} label="근무 종류 관리">
+    // 추가·수정 화면에서 Esc·뒤로가기 → 목록으로, 목록에서 → 닫기
+    <Modal onClose={editing ? () => setEditing(null) : onClose} label="근무 종류 관리">
       <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100 max-h-[85dvh] overflow-y-auto">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <div className="flex items-center gap-1.5">

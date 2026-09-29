@@ -121,3 +121,14 @@ test('웹 푸시 설정이 없으면 알림 창에 웹 알림 한계 안내', as
   await page.getByRole('button', { name: /^알림$/ }).click();
   await expect(page.getByText(/웹에서는 이 화면이 열려 있을 때만/)).toBeVisible();
 });
+
+test('근무 종류: 새 근무 추가 화면에서 Esc → 목록으로, 한 번 더 → 닫힘 (내용이 바뀐 창도 Esc 동작)', async ({ page }) => {
+  await openApp(page);
+  await page.getByRole('button', { name: /종류/ }).first().click();
+  await page.getByRole('button', { name: /새 근무 추가/ }).click();
+  await expect(page.getByRole('heading', { name: '새 근무 추가' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { name: '근무 종류 관리' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: '근무 종류 관리' })).toHaveCount(0);
+});

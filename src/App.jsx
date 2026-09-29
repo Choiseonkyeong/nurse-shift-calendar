@@ -30,6 +30,9 @@ const SYNCED_SHIFTS_KEY = 'synced_shift_data';
 const LEGACY_DEFAULT_NAME = '최수민';
 const NAME_CONFIRMED_KEY = 'name_confirmed';
 const TAB_KEYS = ['myShift', 'allowance', 'groupShare', 'import'];
+// 첫 실행에 이름을 비워 두고 시작한 경우: 기본 이름으로 두고, 그룹을 쓸 때 이름을 물음
+const DEFAULT_NAME = '나';
+const NAME_SKIPPED_KEY = 'name_skipped';
 const SYNCED_NOTES_KEY = 'synced_day_notes';
 const readJson = (key) => {
   try {
@@ -91,6 +94,24 @@ export default function App() {
   const [hadStoredName] = useState(() => localStorage.getItem('shift_user_name') !== null);
   // 첫 실행이면 빈 이름 → 이름 입력 화면 표시 후 서버 연결
   const [userName, setUserName] = useState(() => localStorage.getItem('shift_user_name') || '');
+  const [nameSkipped, setNameSkipped] = useState(() => localStorage.getItem(NAME_SKIPPED_KEY) === '1');
+  const nameSkippedRef = useRef(nameSkipped);
+  nameSkippedRef.current = nameSkipped;
+  // 이름을 정하면(직접 수정·로그인 등) '이름 없이 시작' 상태 해제
+  useEffect(() => {
+    if (nameSkipped && userName && userName !== DEFAULT_NAME) setNameSkipped(false);
+  }, [userName, nameSkipped]);
+  useEffect(() => {
+    if (nameSkipped) localStorage.setItem(NAME_SKIPPED_KEY, '1');
+    else localStorage.removeItem(NAME_SKIPPED_KEY);
+  }, [nameSkipped]);
+  // 그룹 만들기·참여 전에 이름이 없으면 묻기: { then }
+  const [groupNamePrompt, setGroupNamePrompt] = useState(null);
+  const requireName = (then) => {
+    if (!nameSkippedRef.current) return false;
+    setGroupNamePrompt({ then });
+    return true;
+  };
   // 예전 버전 기본 이름('최수민')이 그대로 저장된 사용자: 한 번 이름 확인
   const [needsNameConfirm, setNeedsNameConfirm] = useState(
     () => localStorage.getItem('shift_user_name') === LEGACY_DEFAULT_NAME && !localStorage.getItem(NAME_CONFIRMED_KEY)
@@ -420,23 +441,34 @@ export default function App() {
   }, [userName, syncRetry, hadStoredName, authLanding]);
 
   // 앱으로 돌아오거나(다른 기기 변경 반영) 네트워크가 다시 연결되면 재동기화
+  //  - 화면 복귀: 30초에 한 번까지 (자주 오가도 서버 부담 없게)
+  //  - 네트워크 재연결: 바로 (지하철·엘리베이터에서 잠깐 끊겼다 돌아온 경우 변경이 바로 올라가도록)
+  //  - 오프라인 상태면 30초마다 재시도
+  const syncStatusRef = useRef(syncStatus);
+  syncStatusRef.current = syncStatus;
   useEffect(() => {
     let last = Date.now();
-    const resync = () => {
+    const resync = (force = false) => {
       if (document.visibilityState !== 'visible') return;
       if (!profile) {
         setSyncRetry((n) => n + 1);
         return;
       }
-      if (Date.now() - last < 30000) return;
+      if (!force && Date.now() - last < 30000) return;
       last = Date.now();
       pullAndMergeRef.current(profile).catch(() => setSyncStatus('offline'));
     };
-    document.addEventListener('visibilitychange', resync);
-    window.addEventListener('online', resync);
+    const onVisible = () => resync(false);
+    const onOnline = () => resync(true);
+    const timer = setInterval(() => {
+      if (syncStatusRef.current === 'offline' && navigator.onLine !== false) resync(true);
+    }, 30000);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
     return () => {
-      document.removeEventListener('visibilitychange', resync);
-      window.removeEventListener('online', resync);
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
     };
   }, [profile]);
 
@@ -573,7 +605,13 @@ export default function App() {
     <ShiftTypesContext.Provider value={shiftTypes}>
     {!userName && !accountModal && (
       <NameSetup
-        onSubmit={(name) => { setUserName(name); setTempUserName(name); }}
+        onSubmit={(name) => {
+          const finalName = name || DEFAULT_NAME;
+          setNameSkipped(!name);
+          nameSkippedRef.current = !name;
+          setUserName(finalName);
+          setTempUserName(finalName);
+        }}
         onLogin={() => setAccountModal('login')}
       />
     )}
@@ -588,6 +626,26 @@ export default function App() {
           setOauthNotice(null);
         }}
         onStatusChange={setAccountStatus}
+      />
+    )}
+    {groupNamePrompt && (
+      <NameSetup
+        groupMode
+        onCancel={() => setGroupNamePrompt(null)}
+        onSubmit={async (name) => {
+          const { then } = groupNamePrompt;
+          setGroupNamePrompt(null);
+          nameSkippedRef.current = false;
+          setNameSkipped(false);
+          setUserName(name);
+          setTempUserName(name);
+          // 그룹 멤버 목록에 바로 새 이름이 보이도록 서버 프로필 먼저 반영
+          if (profile) {
+            await updateDisplayName(profile.id, name).catch(() => {});
+            setProfile((p) => (p ? { ...p, display_name: name } : p));
+          }
+          then();
+        }}
       />
     )}
     {userName && needsNameConfirm && (
@@ -610,7 +668,7 @@ export default function App() {
           className="bg-white px-5 py-4 border-b border-slate-100 flex justify-between items-center z-10 shrink-0"
           style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
         >
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <button
               type="button"
               onClick={() => setAccountModal('link')}
@@ -624,15 +682,21 @@ export default function App() {
             </button>
             <div className="min-w-0">
               {isEditingName ? (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 min-w-0">
                   <input
                     type="text"
                     value={tempUserName}
+                    autoFocus
+                    maxLength={30}
+                    aria-label="이름"
                     onChange={(e) => setTempUserName(e.target.value)}
-                    className="px-2 py-0.5 text-xs text-slate-800 font-bold rounded border border-slate-300 outline-none w-24"
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                    className="min-w-0 flex-1 max-w-[8rem] px-2 py-1 text-xs text-slate-800 font-bold rounded-lg border border-slate-300 outline-none focus:border-indigo-400"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveName();
+                      if (e.key === 'Escape') setIsEditingName(false);
+                    }}
                   />
-                  <button onClick={handleSaveName} className="text-[10px] bg-indigo-600 text-white px-2 py-1 rounded font-bold cursor-pointer">저장</button>
+                  <button onClick={handleSaveName} className="shrink-0 whitespace-nowrap text-[11px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-bold cursor-pointer">저장</button>
                 </div>
               ) : (
                 <button
@@ -644,7 +708,16 @@ export default function App() {
                   }}
                   aria-label="이름 수정"
                 >
-                  <h1 className="font-black text-base text-slate-900 leading-tight truncate">{userName} 님의 근무표</h1>
+                  <h1 className="font-black text-[15px] sm:text-base text-slate-900 leading-tight truncate">
+                    {nameSkipped ? (
+                      '내 근무표'
+                    ) : (
+                      <>
+                        {userName}
+                        <span className="sr-only min-[380px]:not-sr-only"> 님의</span> 근무표
+                      </>
+                    )}
+                  </h1>
                   <Pencil size={12} className="shrink-0 text-slate-300 group-hover:text-indigo-500" />
                 </button>
               )}
@@ -652,10 +725,10 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          <div className="flex items-center gap-1 shrink-0 ml-1.5">
             <button
               onClick={handleGoToday}
-              className="flex items-center gap-1 px-2.5 py-1.5 whitespace-nowrap bg-amber-50 text-amber-600 border border-amber-200 rounded-2xl text-xs font-black hover:bg-amber-100 transition cursor-pointer"
+              className="flex items-center gap-1 px-2 py-1.5 whitespace-nowrap bg-amber-50 text-amber-600 border border-amber-200 rounded-2xl text-xs font-black hover:bg-amber-100 transition cursor-pointer"
             >
               <RotateCcw size={13} />
               <span>오늘</span>
@@ -751,6 +824,7 @@ export default function App() {
               myShifts={myShifts || {}}
               privacyBlur={privacyBlur}
               onServerShiftsChanged={resyncFromServer}
+              requireName={requireName}
             />
           )}
 

@@ -392,7 +392,14 @@ export async function installFakeSupabase(context, state) {
       }
     }
     if (table === 'shift_swaps' && method === 'GET') return json(state.swaps.filter(match));
-    if (table === 'groups') {
+    if (table === 'profiles' && method === 'PATCH') {
+      // 본인 프로필만 수정 가능 (RLS 와 같게)
+      Object.values(state.profiles).forEach((pr) => {
+        if (pr.auth_user_id === userId && match({ id: pr.id })) Object.assign(pr, body);
+      });
+      return route.fulfill({ status: 204, body: '' });
+    }
+        if (table === 'groups') {
       const hits = state.groups.filter((g) => match({ id: g.id }));
       if (method === 'PATCH') {
         hits.forEach((g) => Object.assign(g, body));

@@ -170,7 +170,14 @@ export default function AllowanceTab({
                   aria-label={`${code} 시작 시각`}
                   value={splitTime(shiftTimes[code]?.time)[0]}
                   onChange={(e) => updateTimePart(code, 0, e.target.value)}
-                  className="flex-1 min-w-0 bg-transparent text-[11px] font-bold text-center outline-none"
+                  onClick={(e) => {
+                    try {
+                      e.currentTarget.showPicker?.();
+                    } catch (err) {
+                      /* 선택창을 열 수 없는 브라우저는 직접 입력 */
+                    }
+                  }}
+                  className="time-compact flex-1 min-w-0 bg-transparent text-[11px] font-bold text-center outline-none"
                 />
                 <span className="text-slate-300 text-xs">~</span>
                 <input
@@ -178,7 +185,14 @@ export default function AllowanceTab({
                   aria-label={`${code} 종료 시각`}
                   value={splitTime(shiftTimes[code]?.time)[1]}
                   onChange={(e) => updateTimePart(code, 1, e.target.value)}
-                  className="flex-1 min-w-0 bg-transparent text-[11px] font-bold text-center outline-none"
+                  onClick={(e) => {
+                    try {
+                      e.currentTarget.showPicker?.();
+                    } catch (err) {
+                      /* 선택창을 열 수 없는 브라우저는 직접 입력 */
+                    }
+                  }}
+                  className="time-compact flex-1 min-w-0 bg-transparent text-[11px] font-bold text-center outline-none"
                 />
               </div>
               {hasNightHours ? (
@@ -301,7 +315,7 @@ export default function AllowanceTab({
           </div>
         </div>
         <p className="text-[10px] font-bold text-slate-400 px-1">
-          집계 기간: {leaveRange.start} ~ {leaveRange.end}
+          집계 기간: {leaveRange.start.replaceAll('-', '.')} ~ {leaveRange.end.replaceAll('-', '.')}
         </p>
       </div>
 
@@ -405,9 +419,9 @@ export default function AllowanceTab({
               <span>휴일 가산수당</span>
               <span className={blurCls}>{totalHolidayPay.toLocaleString()} 원</span>
             </div>
-            <div className="flex justify-between items-center pt-1">
-              <span className="font-black text-slate-900 text-sm">{month}월 가산수당 합계:</span>
-              <span className={`text-2xl font-black text-indigo-600 ${blurCls}`}>
+            <div className="flex justify-between items-center gap-2 pt-1">
+              <span className="font-black text-slate-900 text-sm shrink-0">{month}월 가산수당 합계</span>
+              <span className={`text-xl sm:text-2xl font-black text-indigo-600 whitespace-nowrap ${blurCls}`}>
                 {(totalNightPay + totalHolidayPay).toLocaleString()} <span className="text-base">원</span>
               </span>
             </div>
