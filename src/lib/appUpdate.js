@@ -70,13 +70,13 @@ export const lazyImport = (load) => () =>
     throw err;
   });
 
-const mainScript = (html) => (html.match(/\/assets\/index-[\w-]+\.js/) || [])[0] || null;
+// 화면의 시작 파일: <script type="module" src="/assets/index-해시.js"> (미리 불러오는 다른 index-*.js 와 구분)
+const mainScript = (html) => (html.match(/<script[^>]*type="module"[^>]*src="(\/assets\/[^"]+\.js)"/) || [])[1] || null;
 
 /** 서버의 최신 화면이 지금 화면과 다른지 (다르면 새 배포가 있음) */
 export async function hasNewVersion(fetchImpl = fetch, doc = document) {
-  const current = mainScript(
-    [...doc.querySelectorAll('script[type="module"][src]')].map((s) => s.getAttribute('src')).join(' ')
-  );
+  const src = doc.querySelector('script[type="module"][src^="/assets/"]')?.getAttribute('src');
+  const current = src ? mainScript(`<script type="module" src="${src}">`) : null;
   if (!current) return false; // 개발 서버 등
   const res = await fetchImpl(`/?v=${Date.now()}`, { cache: 'no-store' });
   if (!res.ok) return false;

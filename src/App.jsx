@@ -8,6 +8,9 @@ const AllowanceTab = lazy(lazyImport(() => import('./components/AllowanceTab')))
 const GroupShareTab = lazy(lazyImport(() => import('./components/GroupShareTab')));
 const ImportTab = lazy(lazyImport(() => import('./components/ImportTab')));
 import NameSetup from './components/NameSetup';
+import Toaster from './components/Toaster';
+import { closeTopModal } from './components/Modal';
+import { toast } from './lib/toast';
 import AccountModal from './components/AccountModal';
 import AuthLanding from './components/AuthLanding';
 import { authRedirectType, getAccountInfo } from './lib/account';
@@ -26,6 +29,7 @@ import { ROSTER_NAME_KEY } from './lib/rosterName';
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
 const LEGACY_DEFAULT_NAME = '최수민';
 const NAME_CONFIRMED_KEY = 'name_confirmed';
+const TAB_KEYS = ['myShift', 'allowance', 'groupShare', 'import'];
 const SYNCED_NOTES_KEY = 'synced_day_notes';
 const readJson = (key) => {
   try {
@@ -39,8 +43,46 @@ export default function App() {
   const today = getTodayDateObj();
   // 새 버전으로 새로고침된 직후면 보던 탭으로 돌아가고 안내 표시
   const [resume] = useState(consumeResume);
-  const [activeTab, setActiveTab] = useState(() => resume?.tab || 'myShift');
+  // 초대 링크(?join=코드)로 열면 그룹 탭 + 코드 자동 입력
+  const [inviteCode] = useState(() => {
+    const code = new URLSearchParams(window.location.search).get('join');
+    return code ? code.trim().toUpperCase().slice(0, 12) : '';
+  });
+  const [activeTab, setActiveTab] = useState(() =>
+    inviteCode ? 'groupShare' : TAB_KEYS.includes(resume?.tab) ? resume.tab : 'myShift'
+  );
   useEffect(() => setResumeTab(activeTab), [activeTab]);
+  // 안드로이드 뒤로가기: 팝업 닫기 → 내 근무 탭으로 → 앱 종료 (기본 동작은 바로 앱 종료)
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  useEffect(() => {
+    if (!window.Capacitor?.isNativePlatform?.()) return undefined;
+    let handle = null;
+    let cancelled = false;
+    import('@capacitor/app').then(({ App: CapApp }) =>
+      CapApp.addListener('backButton', () => {
+        if (closeTopModal()) return;
+        if (activeTabRef.current !== 'myShift') {
+          setActiveTab('myShift');
+          return;
+        }
+        CapApp.exitApp();
+      }).then((h) => {
+        if (cancelled) h.remove();
+        else handle = h;
+      })
+    );
+    return () => {
+      cancelled = true;
+      handle?.remove();
+    };
+  }, []);
+
+  // 탭을 바꾸면 맨 위부터 보이게
+  const scrollAreaRef = useRef(null);
+  useEffect(() => {
+    if (scrollAreaRef.current) scrollAreaRef.current.scrollTop = 0;
+  }, [activeTab]);
   
   const [selectedDate, _setSelectedDate] = useState(today.dateStr);
   const setSelectedDate = (raw) => _setSelectedDate(toDateKey(raw));
@@ -139,7 +181,15 @@ export default function App() {
 
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [newGroupName, setNewGroupName] = useState('');
-  const [joinCodeInput, setJoinCodeInput] = useState('');
+  const [joinCodeInput, setJoinCodeInput] = useState(inviteCode);
+  useEffect(() => {
+    if (!inviteCode) return;
+    // 주소에서 초대 코드 제거 (새로고침해도 다시 입력되지 않게)
+    const url = new URL(window.location.href);
+    url.searchParams.delete('join');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    toast(`초대 코드 ${inviteCode} 가 입력됐어요. [그룹 참여하기]를 눌러 주세요.`, 'info');
+  }, [inviteCode]);
   const [privacyBlur, setPrivacyBlur] = useState(false);
 
   // 인증 메일 링크로 열린 웹 페이지 (이메일 인증 완료 / 비밀번호 재설정)
@@ -620,18 +670,22 @@ export default function App() {
             </button>
             <button
               onClick={() => setPrivacyBlur(!privacyBlur)}
-              className={`text-xs px-2.5 py-1.5 whitespace-nowrap rounded-2xl font-black flex items-center gap-1 border transition cursor-pointer ${
+              aria-label={privacyBlur ? '보안 모드 끄기 (근무 보이기)' : '보안 모드 (남에게 근무 가리기)'}
+              aria-pressed={privacyBlur}
+              title="보안 모드: 화면의 근무를 가려요"
+              className={`text-xs px-1.5 py-1.5 whitespace-nowrap rounded-2xl font-black flex items-center gap-1 border transition cursor-pointer ${
                 privacyBlur ? 'bg-amber-400 text-slate-900 border-amber-300' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
               }`}
             >
-              <Shield size={13} />
-              <span>{privacyBlur ? '보안 ON' : '보안'}</span>
+              <Shield size={14} />
+              {privacyBlur && <span>ON</span>}
             </button>
           </div>
         </div>
 
         {/* 2. 탭 메인 컨텐츠 영역 (하단 패딩 확보) */}
         <div
+          ref={scrollAreaRef}
           className="p-4 flex-1 overflow-y-auto bg-slate-50/50"
           style={{ paddingBottom: 'calc(5rem + var(--safe-bottom))' }}
         >
@@ -660,6 +714,7 @@ export default function App() {
               importBanner={importBanner}
               onUndoImport={handleUndoImport}
               onCloseImportBanner={() => setImportBanner(null)}
+              onOpenImport={() => setActiveTab('import')}
               onResolveUncertain={(dateKey) =>
                 setImportBanner((b) => (b && b.uncertain.includes(dateKey) ? { ...b, uncertain: b.uncertain.filter((k) => k !== dateKey) } : b))
               }
@@ -771,6 +826,7 @@ export default function App() {
 
       </div>
     </div>
+    <Toaster />
     </ShiftTypesContext.Provider>
   );
 }

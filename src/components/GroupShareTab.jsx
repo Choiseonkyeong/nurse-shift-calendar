@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Copy, RotateCcw, Palette } from 'lucide-react';
+import { toast, formatDateKo } from '../lib/toast';
+import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Share2, RotateCcw, Palette } from 'lucide-react';
+import { shareText, webOrigin } from '../lib/shareCalendar';
 import { addMonthsKey, getTodayDateObj } from '../utils/dateUtils';
 import { hasUnread } from '../lib/groupActivity';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
@@ -69,7 +71,7 @@ export default function GroupShareTab({
       return await fn();
     } catch (err) {
       console.error(err);
-      if (failLabel) alert(`${failLabel}: ${err.message}`);
+      if (failLabel) toast(`${failLabel}: ${err.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -155,14 +157,14 @@ export default function GroupShareTab({
 
   const ensureOnline = () => {
     if (profile) return true;
-    alert('서버에 연결되지 않았습니다. 네트워크 확인 후 다시 시도해 주세요.');
+    toast('서버에 연결되지 않았습니다. 네트워크 확인 후 다시 시도해 주세요.', 'error');
     return false;
   };
 
   // 1. 새 그룹 생성
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
-      alert('그룹 이름을 입력해 주세요.');
+      toast('그룹 이름을 입력해 주세요.', 'info');
       return;
     }
     if (!ensureOnline()) return;
@@ -172,14 +174,14 @@ export default function GroupShareTab({
       await fetchMyGroupsFromDB();
       setActiveGroupId(group.id);
       setNewGroupName('');
-      alert(`🎉 '${group.name}' 그룹이 생성되었습니다!`);
+      toast(`🎉 '${group.name}' 그룹이 생성되었습니다!`, 'success');
     }, '그룹 생성 실패');
   };
 
   // 2. 코드로 그룹 입장
   const handleJoinGroup = async () => {
     if (!joinCodeInput.trim()) {
-      alert('6자리 초대 코드를 입력해 주세요.');
+      toast('6자리 초대 코드를 입력해 주세요.', 'info');
       return;
     }
     if (!ensureOnline()) return;
@@ -189,13 +191,13 @@ export default function GroupShareTab({
       try {
         group = await joinGroup(joinCodeInput.trim().toUpperCase());
       } catch (err) {
-        alert('해당 초대 코드와 일치하는 그룹이 없습니다.');
+        toast('해당 초대 코드와 일치하는 그룹이 없습니다.', 'error');
         return;
       }
       await fetchMyGroupsFromDB();
       setActiveGroupId(group.id);
       setJoinCodeInput('');
-      alert(`🎉 '${group.name}' 그룹에 참여했습니다!`);
+      toast(`🎉 '${group.name}' 그룹에 참여했습니다!`, 'success');
     }, '그룹 참여 실패');
   };
 
@@ -206,10 +208,13 @@ export default function GroupShareTab({
       await fetchMyGroupsFromDB();
     }, '색상 변경 실패');
 
-  // 4. 코드 복사
-  const handleCopyCode = (code) => {
-    navigator.clipboard.writeText(code);
-    alert(`초대 코드 [ ${code} ] 가 클립보드에 복사되었습니다!`);
+  // 4. 초대하기: 공유 시트(카톡 등)로 초대 링크 보내기, 안 되면 복사
+  const handleInvite = async (group) => {
+    const url = `${webOrigin()}/?join=${encodeURIComponent(group.code)}`;
+    const text = `근무표 앱에서 '${group.name}' 그룹에 들어와요! 초대 코드: ${group.code}`;
+    const result = await shareText({ title: `${group.name} 그룹 초대`, text, url });
+    if (result === 'copied') toast('초대 링크를 복사했어요. 카톡 등에 붙여넣어 보내 주세요.', 'success');
+    else if (result === 'failed') toast(`초대 코드: ${group.code}\n(자동 복사가 안 돼요. 코드를 직접 알려 주세요)`, 'info');
   };
 
   // 5. 그룹 나가기
@@ -438,11 +443,11 @@ export default function GroupShareTab({
             </div>
 
             <button
-              onClick={() => handleCopyCode(currentGroup.code)}
+              onClick={() => handleInvite(currentGroup)}
               style={{ backgroundColor: `${currentThemeBg}15`, color: currentThemeBg, borderColor: `${currentThemeBg}30` }}
               className="w-full py-2.5 border rounded-2xl flex items-center justify-center gap-1.5 text-xs font-extrabold cursor-pointer"
             >
-              <Copy size={13} /> 코드: {currentGroup.code} 복사하기
+              <Share2 size={13} /> 동료 초대하기 · 코드 {currentGroup.code}
             </button>
           </div>
 
@@ -541,7 +546,7 @@ export default function GroupShareTab({
 
           <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
             <h4 className="font-black text-xs text-slate-800 flex items-center gap-1">
-              📌 <span style={{ color: currentThemeBg }}>{selectedDayKey}</span> 선택 일자 상세 근무
+              📌 <span style={{ color: currentThemeBg }}>{formatDateKo(selectedDayKey)}</span> 근무
             </h4>
 
             <div className="grid grid-cols-2 gap-2">

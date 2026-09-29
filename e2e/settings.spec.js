@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { createFakeState, seedAccount } from './fakeSupabase.js';
 import { openApp, readLocal, tab, waitSaved } from './helpers.js';
 
-const day = (page, label) => page.getByRole('button', { name: new RegExp(`^${label} `) });
+const day = (page, label) => page.getByRole('button', { name: new RegExp(`^${label} (?!\\()`) }); // 메모 버튼 "9월 5일 (토) 메모" 제외
 
 test('오프라인에서 만든 근무 종류와 그 근무가 연결 후 서버에 저장되고 사라지지 않음', async ({ page }) => {
   const state = createFakeState();

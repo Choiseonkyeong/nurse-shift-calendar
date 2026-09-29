@@ -152,6 +152,7 @@ export default function AllowanceTab({
       
       {/* 1. 상단 근무시간 입력 세션 */}
       <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-2">
+        <h3 className="font-black text-sm text-slate-800 px-1">근무 시간 설정</h3>
         <div className="flex items-center gap-2 px-1 text-[10px] font-bold text-slate-400">
           <span className="w-8" />
           <span className="flex-1 text-center">근무 시간</span>

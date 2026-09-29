@@ -274,11 +274,29 @@ export async function installFakeSupabase(context, state) {
                 code: g.code,
                 name: g.name,
                 color: g.color,
-                is_owner: false,
-                can_delete: false,
+                is_owner: g.owner_id === myProfile.id,
+                can_delete: g.owner_id === myProfile.id || !g.owner_id,
                 members: g.members.map((id) => ({ id, name: state.profiles[id].display_name }))
               }))
           );
+        case 'create_group': {
+          const g = {
+            id: newId(state, 'group'),
+            code: `G${String(state.seq).padStart(5, '0')}`,
+            name: String(body.p_name).trim(),
+            color: body.p_color || '#6366F1',
+            owner_id: myProfile.id,
+            members: [myProfile.id]
+          };
+          state.groups.push(g);
+          return json({ id: g.id, invite_code: g.code, name: g.name, color: g.color, owner_id: g.owner_id });
+        }
+        case 'join_group': {
+          const g = state.groups.find((x) => x.code === String(body.p_invite_code).trim().toUpperCase());
+          if (!g) return json({ message: 'invalid invite code', code: 'P0002' }, 400);
+          if (!g.members.includes(myProfile.id)) g.members.push(myProfile.id);
+          return json({ id: g.id, invite_code: g.code, name: g.name, color: g.color, owner_id: g.owner_id });
+        }
         case 'get_group_schedule': {
           const g = state.groups.find((x) => x.id === body.p_group_id);
           const rows = [];
@@ -374,6 +392,24 @@ export async function installFakeSupabase(context, state) {
       }
     }
     if (table === 'shift_swaps' && method === 'GET') return json(state.swaps.filter(match));
+    if (table === 'groups') {
+      const hits = state.groups.filter((g) => match({ id: g.id }));
+      if (method === 'PATCH') {
+        hits.forEach((g) => Object.assign(g, body));
+        return route.fulfill({ status: 204, body: '' });
+      }
+      if (method === 'DELETE') {
+        const mine = hits.filter((g) => g.owner_id === myProfile.id || !g.owner_id);
+        state.groups = state.groups.filter((g) => !mine.includes(g));
+        return json(mine.map((g) => ({ id: g.id })));
+      }
+    }
+    if (table === 'group_members' && method === 'DELETE') {
+      state.groups.forEach((g) => {
+        g.members = g.members.filter((pid) => !match({ group_id: g.id, profile_id: pid }));
+      });
+      return route.fulfill({ status: 204, body: '' });
+    }
     return json([]);
   });
 }
