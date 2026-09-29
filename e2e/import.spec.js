@@ -11,9 +11,12 @@ test('근무표 사진 → 확인 화면 없이 내 근무표에 바로 등록 +
   await tab(page, '등록').click();
   await page.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
 
-  await expect(page.getByText('사진에서 9월 근무 30일을 등록했어요')).toBeVisible({ timeout: 200000 });
+  // 표 앞쪽에 지난달 29~31일 칸이 있는 근무표 → 그 날짜도 함께 등록
+  await expect(page.getByText('사진에서 8월 29일~9월 30일 근무 33일을 등록했어요')).toBeVisible({ timeout: 200000 });
   const saved = await readLocal(page, 'my_shift_data');
-  // 합성 근무표 정답(서지수): 9/1 OFF, 9/2 D, 9/3 E ... 9/30 E
+  // 합성 근무표 정답(서지수): 8/29 N, 8/30 N, 8/31 OFF, 9/1 OFF, 9/2 D ... 9/30 E
+  expect(saved['2026-08-29']).toBe('N');
+  expect(saved['2026-08-31']).toBe('OFF');
   expect(saved['2026-09-01']).toBe('OFF');
   expect(saved['2026-09-02']).toBe('D');
   expect(saved['2026-09-30']).toBe('E');

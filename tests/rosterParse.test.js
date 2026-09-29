@@ -65,4 +65,38 @@ describe('rosterParse', () => {
   it('헤더가 없으면 오류 메시지', () => {
     expect(parseRosterWords([w('안녕', 0, 0, 10, 10)], { year: 2026, month: 10 }).error).toMatch(/날짜/);
   });
+
+  it('한 달에 걸친 근무표(7/26~8/25): 앞쪽은 지난달, 합계 열은 날짜로 읽지 않음', () => {
+    // 헤더: 26 27 … 31 | 1 … 25 | OFF D E 합계. 색칠된 칸의 날짜(1~7, 15, 17, 20)는 못 읽은 상황
+    const days = [26, 27, 28, 29, 30, 31, ...Array.from({ length: 25 }, (_, i) => i + 1)];
+    const colX = (i) => 120 + i * 40;
+    const missed = new Set([1, 2, 3, 4, 5, 6, 7, 15, 17, 20]);
+    const words = [w('2026년', 300, 10, 380, 40), w('8월', 390, 10, 430, 40), w('근무표', 440, 10, 510, 40)];
+    days.forEach((d, i) => {
+      if (!missed.has(d)) words.push(w(String(d), colX(i) - 8, 80, colX(i) + 8, 100));
+    });
+    ['OFF', 'D', 'E'].forEach((t, k) => words.push(w(t, colX(31 + k) - 10, 80, colX(31 + k) + 10, 100)));
+    const codes = ['D', 'E', 'N', 'OFF'];
+    const expected = {};
+    days.forEach((d, i) => {
+      const code = codes[i % 4];
+      words.push(w(code, colX(i) - 7, 130, colX(i) + 7, 150));
+      expected[i < 6 ? `2026-07-${d}` : `2026-08-${String(d).padStart(2, '0')}`] = code;
+    });
+    // 합계 열 숫자·글자 (날짜로 읽으면 안 됨)
+    ['8', 'D', '9'].forEach((t, k) => words.push(w(t, colX(31 + k) - 7, 130, colX(31 + k) + 7, 150)));
+    words.push(w('최간호', 20, 130, 80, 150));
+
+    const r = parseRosterWords(words, { year: 2026, month: 9 });
+    expect(r.error).toBeUndefined();
+    expect(r.month).toBe(8);
+    const got = Object.fromEntries(Object.entries(r.people['최간호']).map(([k, v]) => [k, v.code]));
+    expect(got).toEqual(expected);
+  });
+
+  it("'연차'가 영문으로 읽힌 경우", () => {
+    expect(cellToCode('HX')).toBe('연차');
+    expect(cellToCode('AX')).toBe('연차');
+  });
 });
+

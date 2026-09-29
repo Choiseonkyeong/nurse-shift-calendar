@@ -236,9 +236,36 @@ export function cropCell(src, x0, y0, x1, y1, { filter = true } = {}) {
 
   ctx.putImageData(img, 0, 0);
   let ink = 0;
-  for (let i = 0; i < W * H; i++) if (black(i)) ink++;
-  return { canvas: c, ink: ink / (c.width * c.height) };
+  let bx0 = W, by0 = H, bx1 = -1, by1 = -1;
+  for (let i = 0; i < W * H; i++) {
+    if (!black(i)) continue;
+    ink++;
+    const x = i % W;
+    const y = (i - x) / W;
+    if (x < bx0) bx0 = x;
+    if (x > bx1) bx1 = x;
+    if (y < by0) by0 = y;
+    if (y > by1) by1 = y;
+  }
+  const ratio = ink / (c.width * c.height);
+  if (bx1 < 0) return { canvas: c, ink: ratio };
+  // 글자 높이를 일정하게(약 40px) 맞춰 다시 그림: 작은 글씨(해상도 낮은 캡처)도 잘 읽힘
+  const gw = bx1 - bx0 + 1;
+  const gh = by1 - by0 + 1;
+  const k = Math.min(6, Math.max(0.5, GLYPH_H / gh));
+  const out = document.createElement('canvas');
+  out.width = Math.round(gw * k) + GLYPH_PAD * 2;
+  out.height = Math.round(gh * k) + GLYPH_PAD * 2;
+  const octx = out.getContext('2d');
+  octx.fillStyle = '#fff';
+  octx.fillRect(0, 0, out.width, out.height);
+  octx.imageSmoothingQuality = 'high';
+  octx.drawImage(c, bx0, by0, gw, gh, GLYPH_PAD, GLYPH_PAD, gw * k, gh * k);
+  return { canvas: out, ink: ratio };
 }
+
+const GLYPH_H = 40;
+const GLYPH_PAD = 20;
 
 /** 글자 영역 왼쪽 위/아래 모서리의 잉크 비율로 D(직각) vs O(둥근) 구분 */
 function looksLikeD(canvas) {
@@ -275,7 +302,7 @@ function looksLikeD(canvas) {
  *  - 1회차: 단어 모드(PSM 8) — 영문 한두 글자(D/E/N/O/OFF) 정확도가 가장 높음
  *  - 2회차: 1회차에서 확신이 없는 칸만 한 줄 모드(PSM 7) — 한글(연차 등) 인식이 좋음
  */
-async function refineCells(result, canvas, worker, shiftTypes, onProgress) {
+async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCanvas = null) {
   const { grid } = result;
 
   // 이름 칸만 잘라 한 줄 모드로 다시 읽기 (1차에서 '윤다은'→'다은', 누락 등 보정)
@@ -302,7 +329,8 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress) {
       const cy = row.y0 + grid.slope * col.x;
       const half = grid.pitch * 0.45;
       const { canvas: cell, ink } = cropCell(canvas, col.x - col.w * 0.58, cy - half, col.x + col.w * 0.58, cy + half);
-      if (ink >= 0.004) cells.push({ name: renamed.get(row), key: col.key, cell, prev: result.people[row.name]?.[col.key] });
+      const box = [col.x - col.w * 0.58, cy - half, col.x + col.w * 0.58, cy + half];
+      if (ink >= 0.004) cells.push({ name: renamed.get(row), key: col.key, cell, box, prev: result.people[row.name]?.[col.key] });
     })
   );
 
@@ -315,7 +343,7 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress) {
     return { code, raw, confidence: data.confidence };
   };
 
-  const total = cells.length * 1.3 || 1;
+  const total = cells.length * 1.4 || 1;
   let done = 0;
   const tick = () => {
     done += 1;
@@ -334,13 +362,34 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress) {
     tick();
   }
 
+  // 3회차: 그래도 못 읽은 칸은 흑백 보정 전 원본에서 다시 (색 배경 위 굵은 글씨는 보정하면 뭉개짐)
+  if (rawCanvas && rawCanvas !== canvas) {
+    const ok = (o) => o && o.code && o.confidence >= 60;
+    for (const c of cells) {
+      if (ok(c.word) || ok(c.line)) continue;
+      const { canvas: cell, ink } = cropCell(rawCanvas, ...c.box);
+      if (ink < 0.002) continue;
+      await worker.setParameters({ tessedit_pageseg_mode: '8' });
+      c.raw = await read({ cell });
+      if (!ok(c.raw)) {
+        await worker.setParameters({ tessedit_pageseg_mode: '7' });
+        const line = await read({ cell });
+        if (line.code && (!c.raw.code || line.confidence > c.raw.confidence)) c.raw = line;
+      }
+      tick();
+    }
+  }
+
   const people = {};
   const unread = {};
   grid.rows.forEach((r) => {
     people[renamed.get(r)] = {};
   });
   cells.forEach((c) => {
-    const options = [c.word, c.line, c.prev].filter((o) => o && o.code);
+    // 칸만 잘라 읽은 결과가 우선. 1차(표 전체) 결과는 칸 인식이 모두 실패했을 때만 사용
+    // (1차는 옆 줄 글자가 섞여 들어오는 경우가 있음)
+    const options = [c.word, c.line, c.raw].filter((o) => o && o.code);
+    if (!options.length && c.prev?.code) options.push({ ...c.prev, confidence: Math.min(c.prev.confidence, 55) });
     // 한글이 섞인 결과(연차 등)는 한 줄 모드 우선, 그 외에는 신뢰도 높은 쪽
     const korean = options.find((o) => /[가-힣]/.test(o.raw) && o.confidence >= 50);
     const best = korean || options.sort((x, y) => y.confidence - x.confidence)[0];
@@ -382,8 +431,13 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
     }
     stage = () => {};
     onProgress(0.4, '칸별 정밀 인식 중...');
-    result = await refineCells(result, source, worker, shiftTypes, (p) =>
-      onProgress(0.4 + p * 0.58, `칸별 정밀 인식 중... ${Math.round(p * 100)}%`)
+    result = await refineCells(
+      result,
+      source,
+      worker,
+      shiftTypes,
+      (p) => onProgress(0.4 + p * 0.58, `칸별 정밀 인식 중... ${Math.round(p * 100)}%`),
+      source === canvas ? scaledCanvas(img) : null
     );
     onProgress(1, '완료');
     return result;

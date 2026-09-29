@@ -37,6 +37,8 @@ export function cellToCode(text, shiftTypes = []) {
   }
   if (CELL_ALIASES[key]) return CELL_ALIASES[key];
   if (/^[o0]ff?$/i.test(key)) return 'OFF';
+  // '연차' 두 글자가 영문으로 읽히는 경우가 잦음 (연→H·A·E, 차→X·K)
+  if (/^[haeo][xk]$/i.test(key)) return '연차';
   return null;
 }
 
@@ -81,14 +83,10 @@ function findHeader(words) {
  * 헤더 숫자 → 열 모델 { idxToX(i), xToIdx(x), minIdx, maxIdx, colW }
  * index 는 이번 달 날짜(1~말일). 앞쪽에 붙은 지난달 날짜(예: 29 30 31 1 2 ...)는 0 이하 index.
  */
-function fitColumns(header, year, month) {
+function fitColumns(header, year, month, headerWords = [], allWords = []) {
   const pts = [...header.row].sort((a, b) => a.x - b.x);
   const prevDays = new Date(year, month - 1, 0).getDate();
-  const firstOne = pts.findIndex((p) => p.day === 1);
-  let samples = pts.map((p, i) => ({
-    idx: firstOne > 0 && i < firstOne && p.day > 20 ? p.day - prevDays : p.day,
-    x: p.x
-  }));
+  const lastDay = new Date(year, month, 0).getDate();
 
   const fit = (s) => {
     const n = s.length;
@@ -100,27 +98,47 @@ function fitColumns(header, year, month) {
     return { a: mx - b * mi, b };
   };
 
-  // 오인식 숫자(예: 18→10, 중복) 제거: 왼쪽→오른쪽으로 날짜가 증가하는 가장 긴 수열만 사용
-  // (칸 너비가 제각각인 표에서도 정상 헤더를 버리지 않음)
-  const n = samples.length;
-  const len = new Array(n).fill(1);
-  const prev = new Array(n).fill(-1);
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < i; j++) {
-      const di = samples[i].idx - samples[j].idx;
-      if (di > 0 && samples[i].x - samples[j].x > 0 && len[j] + 1 > len[i]) {
-        len[i] = len[j] + 1;
-        prev[i] = j;
+  // 날짜 → 이번 달 기준 index. 한 달에 걸친 근무표(예: 26 27 … 31 1 2 … 25)는
+  // 앞쪽이 지난달(0 이하), 뒤쪽이 다음 달(말일 초과)일 수 있음 → 후보 중 한 직선에 가장 많이 맞는 조합 선택
+  // (중간 날짜 숫자를 못 읽어도, 오인식 숫자가 섞여도 동작)
+  const candidates = (day) => [day, day - prevDays, day + lastDay];
+  let best = null;
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      if (pts[j].x - pts[i].x < 1) continue;
+      for (const ci of candidates(pts[i].day)) {
+        for (const cj of candidates(pts[j].day)) {
+          if (cj <= ci || cj - ci > 40) continue;
+          const b = (pts[j].x - pts[i].x) / (cj - ci);
+          const a = pts[i].x - b * ci;
+          const tol = b * 0.3;
+          const inl = [];
+          pts.forEach((p) => {
+            const c = candidates(p.day).find((k) => Math.abs(a + b * k - p.x) <= tol);
+            if (c !== undefined) inl.push({ idx: c, x: p.x });
+          });
+          // 같은 index 가 두 번 나오면 하나만
+          const uniq = [...new Map(inl.map((q) => [q.idx, q])).values()];
+          // 동점이면 이번 달 날짜가 많은 쪽 (제목 월 기준)
+          const inMonth = uniq.filter((q) => q.idx >= 1 && q.idx <= lastDay).length;
+          if (!best || uniq.length > best.n || (uniq.length === best.n && inMonth > best.inMonth)) {
+            best = { n: uniq.length, inMonth, samples: uniq };
+          }
+        }
       }
     }
   }
-  let end = len.indexOf(Math.max(...len));
-  const chain = [];
-  while (end !== -1) {
-    chain.unshift(samples[end]);
-    end = prev[end];
-  }
-  if (chain.length >= 5) samples = chain;
+  let samples = best && best.n >= 5 ? best.samples.sort((p, q) => p.x - q.x) : pts.map((p) => ({ idx: p.day, x: p.x }));
+  // 지난달/다음 달 날짜가 하나뿐이면 우연히 맞은 잡음(이름 열 머리글 숫자 등)으로 보고 제외
+  if (samples.filter((q) => q.idx < 1).length < 2) samples = samples.filter((q) => q.idx >= 1);
+  if (samples.filter((q) => q.idx > lastDay).length < 2) samples = samples.filter((q) => q.idx <= lastDay);
+  // 제목 월보다 다른 달 날짜가 더 많으면(제목을 못 읽고 선택한 달이 다를 때) 그 달 기준으로 옮김
+  const before = samples.filter((q) => q.idx < 1).length;
+  const after = samples.filter((q) => q.idx > lastDay).length;
+  const inside = samples.length - before - after;
+  let shiftMonth = 0;
+  if (before > inside) shiftMonth = -1;
+  else if (after > inside) shiftMonth = 1;
   let model = fit(samples);
   // 간격이 평균의 절반도 안 되거나 두 배를 넘는 점은 추가로 제외
   const step = Math.abs(model.b);
@@ -134,13 +152,27 @@ function fitColumns(header, year, month) {
     samples = consistent;
     model = fit(samples);
   }
-  const lastDay = new Date(year, month, 0).getDate();
-  const minIdx = Math.min(Math.max(Math.min(...samples.map((p) => p.idx)), -6), 1);
+  // 칸 범위: 읽힌 날짜 범위 + 끝쪽에서 못 읽은 날짜(최대 3일, 제목 월 안에서만).
+  // 단, 그 자리 헤더에 글자(합계 열의 OFF·D·E 등)가 있으면 표 밖이므로 넓히지 않음
+  const step0 = Math.abs(model.b);
+  const near = (w, x) => Math.abs((w.x0 + w.x1) / 2 - x) < step0 * 0.45;
+  // 헤더에 글자가 있거나(합계 OFF·D 등, 성명) 그 열에 한글 이름이 있으면 날짜 칸이 아님
+  const headerHasLabel = (x) =>
+    headerWords.some((w) => near(w, x) && /[A-Za-z가-힣]/.test(w.text) && !/^\d+$/.test(w.text)) ||
+    allWords.some((w) => w.x1 > x - step0 * 0.5 && w.x0 < x + step0 * 0.5 && /[가-힣]{2,}/.test(w.text) && !cellToCode(w.text));
+  let minIdx = Math.min(...samples.map((p) => p.idx));
+  let maxIdx = Math.max(...samples.map((p) => p.idx));
+  // 한 달에 걸친 근무표(26일~다음 달 25일 등)는 기간이 딱 한 달
+  // 왼쪽: 다음 달까지 이어진 표면 한 달 전부터, 지난달 날짜가 붙은 표면 못 읽은 앞 칸 몇 개까지(머리글 글자에서 멈춤)
+  const monthMin = maxIdx > lastDay ? maxIdx - lastDay + 1 : minIdx < 1 ? minIdx - 3 : 1;
+  const monthMax = maxIdx > lastDay ? maxIdx : minIdx < 1 ? minIdx + prevDays - 1 : lastDay;
+  while (maxIdx < monthMax && maxIdx - Math.max(...samples.map((p) => p.idx)) < 3 && !headerHasLabel(model.a + model.b * (maxIdx + 1))) maxIdx++;
+  while (minIdx > monthMin && Math.min(...samples.map((p) => p.idx)) - minIdx < 3 && !headerHasLabel(model.a + model.b * (minIdx - 1))) minIdx--;
 
   // 칸 너비가 제각각인 표도 맞추도록: 인식된 헤더 위치는 그대로, 빠진 날짜만 직선 보간
   const known = new Map(samples.map((p) => [p.idx, p.x]));
   const centers = [];
-  for (let i = minIdx; i <= lastDay; i++) {
+  for (let i = minIdx; i <= maxIdx; i++) {
     if (known.has(i)) {
       centers.push({ idx: i, x: known.get(i) });
       continue;
@@ -148,11 +180,11 @@ function fitColumns(header, year, month) {
     let lo = i - 1;
     while (lo >= minIdx && !known.has(lo)) lo--;
     let hi = i + 1;
-    while (hi <= lastDay && !known.has(hi)) hi++;
+    while (hi <= maxIdx && !known.has(hi)) hi++;
     // 양쪽 끝 바깥은 가까운 칸 간격으로 연장 (전체 평균 직선은 칸 너비가 제각각일 때 어긋남)
     const nearStep = (from, dir) => {
       let k = from - dir;
-      while (k >= minIdx && k <= lastDay && !known.has(k)) k -= dir;
+      while (k >= minIdx && k <= maxIdx && !known.has(k)) k -= dir;
       return known.has(k) ? (known.get(from) - known.get(k)) / (from - k) : model.b;
     };
     let x;
@@ -165,7 +197,7 @@ function fitColumns(header, year, month) {
   const at = (i) => centers[Math.min(Math.max(i - minIdx, 0), centers.length - 1)].x;
   const widthAt = (i) => {
     const l = i > minIdx ? Math.abs(at(i) - at(i - 1)) : 0;
-    const r = i < lastDay ? Math.abs(at(i + 1) - at(i)) : 0;
+    const r = i < maxIdx ? Math.abs(at(i + 1) - at(i)) : 0;
     // 헤더 숫자 위치가 조금 틀려도 칸이 너무 좁아지지 않게 평균 너비의 70% 이상
     return Math.max((l && r ? (l + r) / 2 : l || r) || 0, Math.abs(model.b) * 0.7);
   };
@@ -173,7 +205,8 @@ function fitColumns(header, year, month) {
   return {
     colW: Math.abs(model.b),
     minIdx,
-    maxIdx: lastDay,
+    maxIdx,
+    shiftMonth,
     idxToX: at,
     widthAt,
     // 가장 가까운 칸. 양 끝 칸 밖으로 한 칸 이상 벗어나면 표 밖(합계 열 등)으로 봄
@@ -206,7 +239,15 @@ export function parseRosterWords(words, { year, month, shiftTypes = [] } = {}) {
   if (!header) {
     return { ...ym, people: {}, names: [], error: '날짜(1~31) 줄을 찾지 못했습니다. 표 전체가 보이도록 반듯하게 다시 찍어 주세요.' };
   }
-  const cols = fitColumns(header, ym.year, ym.month);
+  const headerWords = clean.filter((w) => Math.abs(center(w).y - header.y) <= header.h * 0.8);
+  let cols = fitColumns(header, ym.year, ym.month, headerWords, clean);
+  if (cols.shiftMonth && !ym.found) {
+    // 제목에서 월을 못 읽었고 날짜 대부분이 다른 달 → 그 달 근무표로
+    const d = new Date(ym.year, ym.month - 1 + cols.shiftMonth, 1);
+    ym.year = d.getFullYear();
+    ym.month = d.getMonth() + 1;
+    cols = fitColumns(header, ym.year, ym.month, headerWords, clean);
+  }
   // 기울어진 사진 보정: 헤더 숫자들의 x-y 기울기
   const hp = header.row.map((w) => ({ x: (w.x0 + w.x1) / 2, y: (w.y0 + w.y1) / 2 }));
   const mx = hp.reduce((a, q) => a + q.x, 0) / hp.length;
@@ -256,8 +297,17 @@ export function parseRosterWords(words, { year, month, shiftTypes = [] } = {}) {
     // 이름 칸 오른쪽 끝: 1차에서 읽힌 이름 끝 + 여유, 단 첫 날짜 글자는 넘지 않게
     const col1 = cols.idxToX(cols.minIdx) - cols.widthAt(cols.minIdx) * 0.25;
     const nameX1 = Math.min(col1, Math.max(col1 - cols.widthAt(cols.minIdx) * 0.3, ...parts.map((q) => q.x1 + cols.colW * 0.15)));
-    return { name, y0, nameX0, nameX1 };
+    const korean = parts.filter((q) => /[가-힣]{2,}/.test(q.text));
+    return { name, y0, nameX0, nameX1, nameStart: korean.length ? Math.min(...korean.map((q) => q.x0)) : null };
   });
+  // 이름 칸 왼쪽 끝: 이름 앞의 직급 열(HN·CN·RN 등)이 섞여 들어가지 않게 읽힌 이름들의 왼쪽 끝 기준
+  const starts = rows.map((r) => r.nameStart).filter((x) => x !== null);
+  if (starts.length >= Math.max(2, rows.length / 3)) {
+    const left = Math.max(0, Math.min(...starts) - cols.colW * 0.2);
+    rows.forEach((r) => {
+      if (left < r.nameX1 - cols.colW * 0.8) r.nameX0 = left;
+    });
+  }
 
   const dateKeyOf = (idx) => {
     const d = new Date(ym.year, ym.month - 1, idx);
