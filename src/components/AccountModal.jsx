@@ -146,7 +146,7 @@ export default function AccountModal({ online, userName, initialMode = 'link', i
                 setMode(key);
                 setMessage(null);
               }}
-              className={`py-2 rounded-xl cursor-pointer ${mode === key ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}
+              className={`py-2 px-1 leading-tight break-keep rounded-xl cursor-pointer ${mode === key ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}
             >
               {label}
             </button>
