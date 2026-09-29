@@ -28,6 +28,8 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+  // 새 버전 확인 요청(cache: 'no-store')은 캐시를 거치지 않고 서버로 (lib/appUpdate)
+  if (req.cache === 'no-store') return;
 
   // 페이지: 네트워크 우선(최신 배포), 오프라인이면 캐시
   if (req.mode === 'navigate') {

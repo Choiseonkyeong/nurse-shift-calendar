@@ -142,3 +142,20 @@ test('근무표 이미지 공유(웹: 파일 저장)', async ({ page }) => {
   expect(img.suggestedFilename()).toBe('shift-2026-09.png');
   expect(fs.statSync(await img.path()).size).toBeGreaterThan(20000);
 });
+
+test('새 배포 후 오래 열린 탭: 사진 인식 파일을 못 찾으면 새로고침 → 등록 탭으로 돌아와 다시 시도 안내', async ({ page }) => {
+  let failed = false;
+  // 배포 전 화면이 이미 지워진 빌드 파일을 부르는 상황 재현 (첫 요청만 404)
+  await page.route(/\/assets\/rosterOcr-.*\.js$/, (route) => {
+    if (failed) return route.continue();
+    failed = true;
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+  await openApp(page);
+  await tab(page, '등록').click();
+  await page.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
+  await expect(page.getByText(/앱이 최신 버전으로 업데이트됐어요/)).toBeVisible({ timeout: 30000 });
+  expect(failed).toBe(true);
+  // 새로고침 후에도 등록 탭 (사진 올리는 버튼이 보임)
+  await expect(page.getByLabel('근무표 속 내 이름')).toBeVisible();
+});

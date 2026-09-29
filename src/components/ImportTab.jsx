@@ -9,6 +9,10 @@ import { toCsv, toIcs } from '../lib/exportData';
 import { createBackup, parseBackup, restoreBackup } from '../lib/backup';
 import { shareFile } from '../lib/shareCalendar';
 import { pickRosterName } from '../lib/rosterName';
+import { isChunkLoadError, reloadForUpdate, UPDATE_NOTICE } from '../lib/appUpdate';
+
+/** 배포 전 화면에서 새 파일을 못 불러온 경우 → 새 버전으로 새로고침하고 다시 시도 안내 */
+const recoverIfStale = (err) => isChunkLoadError(err) && reloadForUpdate(UPDATE_NOTICE);
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
 const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
@@ -24,6 +28,7 @@ export default function ImportTab({
   dayNotes = {},
   setDayNotes,
   onImported,
+  initialNotice = '',
   accountStatus,
   onOpenAccount
 }) {
@@ -32,7 +37,7 @@ export default function ImportTab({
   const [icsPreview, setIcsPreview] = useState(null); // { shifts, notes, eventCount, fileName }
   const [icsOverwrite, setIcsOverwrite] = useState(true);
   const [icsWithNotes, setIcsWithNotes] = useState(true);
-  const [statusMessage, setStatusMessage] = useState('');
+  const [statusMessage, setStatusMessage] = useState(initialNotice);
   const [isProcessing, setIsProcessing] = useState(false);
   // 인식 결과(사진/엑셀): 본인 이름을 자동으로 못 찾았을 때만 이름 선택 창 표시
   // { source: '사진' | '엑셀', yearMonth: 'YYYY-MM', byName: { 이름: { shifts, uncertain } } }
@@ -241,14 +246,14 @@ export default function ImportTab({
 
         } catch (err) {
           console.error(err);
-          setStatusMessage('❌ 엑셀 분석 오류가 발생했습니다.');
+          if (!recoverIfStale(err)) setStatusMessage('❌ 엑셀 분석 오류가 발생했습니다.');
         } finally {
           setIsProcessing(false);
         }
       }
     } catch (err) {
       console.error(err);
-      setStatusMessage('❌ 엑셀 파일을 열 수 없습니다.');
+      if (!recoverIfStale(err)) setStatusMessage('❌ 엑셀 파일을 열 수 없습니다.');
       setIsProcessing(false);
     }
   };
@@ -290,7 +295,8 @@ export default function ImportTab({
       }
     } catch (err) {
       console.error(err);
-      setStatusMessage(`❌ 사진 인식 실패: ${err.message}`);
+      if (recoverIfStale(err)) setStatusMessage('앱이 새 버전으로 업데이트되어 새로고침하는 중이에요...');
+      else setStatusMessage(`❌ 사진 인식 실패: ${err.message}`);
     } finally {
       setOcrProgress(null);
       setIsProcessing(false);
