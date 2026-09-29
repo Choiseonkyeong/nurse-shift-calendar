@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { toast } from '../lib/toast';
 import Modal from './Modal';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive } from 'lucide-react';
 import { unregisterDevice } from '../lib/pushNotifications';
@@ -163,7 +164,7 @@ export default function ImportTab({
           }
 
           if (dateRowIdx === -1) {
-            alert('엑셀 파일에서 날짜 행을 찾지 못했습니다.');
+            toast('엑셀 파일에서 날짜 행을 찾지 못했습니다.', 'error');
             setIsProcessing(false);
             return;
           }
@@ -231,7 +232,7 @@ export default function ImportTab({
           const foundNames = Object.keys(nameMap);
 
           if (foundNames.length === 0) {
-            alert('엑셀 파일에서 근무자 이름 목록을 읽지 못했습니다.');
+            toast('엑셀 파일에서 근무자 이름 목록을 읽지 못했습니다.', 'error');
             setStatusMessage('❌ 파싱 실패');
             setIsProcessing(false);
             return;
@@ -412,6 +413,123 @@ export default function ImportTab({
           <Upload size={18} className="text-indigo-600" /> 스마트 근무표 & 캘린더 가져오기
         </h2>
 
+        {/* 상태 메시지 */}
+        {statusMessage && (
+          <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
+            <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
+            <span>{statusMessage}</span>
+          </div>
+        )}
+
+        {/* 2. 근무표 사진 인식 */}
+        <div className="p-4 rounded-3xl space-y-3 bg-violet-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-violet-100 text-violet-600">
+              <Camera size={20} />
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="font-black text-sm text-slate-800">근무표 사진 / 카메라 촬영 인식</h3>
+              <p className="text-xs text-slate-500 mt-0.5">표 전체가 반듯하게 나오도록 밝은 곳에서 찍어 주세요. 사진은 기기 밖으로 전송되지 않아요.</p>
+            </div>
+          </div>
+          {ocrProgress ? (
+            <div className="space-y-1.5">
+              <div className="h-2 bg-white rounded-full overflow-hidden">
+                <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-violet-600" />
+              </div>
+              <p className="text-[11px] font-bold text-violet-700 flex items-center gap-1.5">
+                <Loader2 size={12} className="animate-spin" /> {ocrProgress.msg}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex items-center justify-center gap-1.5 py-2.5 bg-violet-600 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
+                <Camera size={14} /> 촬영하기
+                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
+              </label>
+              <label className="flex items-center justify-center gap-1.5 py-2.5 bg-white text-violet-700 border border-violet-200 font-extrabold text-xs rounded-2xl cursor-pointer hover:bg-violet-50">
+                <ImageIcon size={14} /> 앨범에서 선택
+                <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
+              </label>
+            </div>
+          )}
+        </div>
+
+        {/* 1. 엑셀 근무표 선택 */}
+        <div className="p-5 border-2 border-dashed border-emerald-200 bg-emerald-50 rounded-3xl text-center space-y-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto font-black bg-emerald-100 text-emerald-600">
+            <FileSpreadsheet size={20} />
+          </div>
+          <div>
+            <h3 className="font-black text-sm text-slate-800">
+              엑셀 근무표 파일(.xlsx, .csv) 가져오기
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              공유받은 엑셀 근무표 파일을 올려주세요.
+            </p>
+          </div>
+
+          <label
+            className="inline-flex items-center gap-1.5 px-6 py-2.5 bg-emerald-600 text-white font-extrabold text-xs rounded-2xl shadow-2xs transition cursor-pointer hover:opacity-90"
+          >
+            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : null}
+            <span>엑셀 파일 선택</span>
+            <input 
+              type="file" 
+              accept=".xlsx, .xls, .csv" 
+              onChange={handleExcelUpload} 
+              disabled={isProcessing}
+              className="hidden" 
+            />
+          </label>
+        </div>
+
+        {/* 근무표 속 내 이름 (앱 이름이 닉네임일 때) */}
+        <div className="p-4 rounded-3xl border border-slate-100 bg-white space-y-2">
+          <label htmlFor="roster-name" className="block text-xs font-black text-slate-800">
+            근무표 속 내 이름
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="roster-name"
+              value={rosterDraft}
+              onChange={(e) => setRosterDraft(e.target.value)}
+              onBlur={saveRosterDraft}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              maxLength={30}
+              placeholder={userName ? `${userName} (앱 이름과 같으면 비워 두세요)` : '예: 최간호'}
+              className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-indigo-400"
+            />
+            {rosterDraft !== rosterName && (
+              <button type="button" onClick={saveRosterDraft} className="px-3 rounded-2xl bg-indigo-600 text-white text-xs font-black cursor-pointer">
+                저장
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] font-bold text-slate-400">
+            앱 이름(닉네임)과 근무표에 적힌 이름이 다르면 입력하세요. 사진·엑셀에서 이 이름의 줄을 자동으로 등록해요. 새 폰에서 로그인해도 유지돼요.
+          </p>
+        </div>
+
+        {/* 3. 휴대폰 캘린더(.ics) */}
+        <div className="p-4 rounded-3xl space-y-3 bg-sky-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-sky-100 text-sky-600">
+              <Smartphone size={20} />
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="font-black text-sm text-slate-800">휴대폰 캘린더(.ics) 가져오기</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                구글 캘린더: 설정 → 가져오기/내보내기 → 내보내기. 일정 제목이 D·데이·나이트·오프·연차 등이면 근무로, 나머지는 메모로 저장돼요.
+              </p>
+            </div>
+          </div>
+          <label className="flex items-center justify-center gap-1.5 py-2.5 bg-sky-600 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
+            <Upload size={14} /> .ics 파일 선택
+            <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
+          </label>
+        </div>
+
         {/* 0. 계정 · 전체 백업 */}
         <div
           className={`p-4 rounded-3xl border space-y-3 ${
@@ -457,115 +575,6 @@ export default function ImportTab({
           </div>
         </div>
 
-        {/* 근무표 속 내 이름 (앱 이름이 닉네임일 때) */}
-        <div className="p-4 rounded-3xl border border-slate-100 bg-white space-y-2">
-          <label htmlFor="roster-name" className="block text-xs font-black text-slate-800">
-            근무표 속 내 이름
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="roster-name"
-              value={rosterDraft}
-              onChange={(e) => setRosterDraft(e.target.value)}
-              onBlur={saveRosterDraft}
-              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-              maxLength={30}
-              placeholder={userName ? `${userName} (앱 이름과 같으면 비워 두세요)` : '예: 최간호'}
-              className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-indigo-400"
-            />
-            {rosterDraft !== rosterName && (
-              <button type="button" onClick={saveRosterDraft} className="px-3 rounded-2xl bg-indigo-600 text-white text-xs font-black cursor-pointer">
-                저장
-              </button>
-            )}
-          </div>
-          <p className="text-[11px] font-bold text-slate-400">
-            앱 이름(닉네임)과 근무표에 적힌 이름이 다르면 입력하세요. 사진·엑셀에서 이 이름의 줄을 자동으로 등록해요. 새 폰에서 로그인해도 유지돼요.
-          </p>
-        </div>
-
-        {/* 1. 엑셀 근무표 선택 */}
-        <div className="p-5 border-2 border-dashed border-emerald-200 bg-emerald-50 rounded-3xl text-center space-y-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto font-black bg-emerald-100 text-emerald-600">
-            <FileSpreadsheet size={20} />
-          </div>
-          <div>
-            <h3 className="font-black text-sm text-slate-800">
-              엑셀 근무표 파일(.xlsx, .csv) 가져오기
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              공유받은 엑셀 근무표 파일을 올려주세요.
-            </p>
-          </div>
-
-          <label
-            className="inline-flex items-center gap-1.5 px-6 py-2.5 bg-emerald-600 text-white font-extrabold text-xs rounded-2xl shadow-2xs transition cursor-pointer hover:opacity-90"
-          >
-            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : null}
-            <span>엑셀 파일 선택</span>
-            <input 
-              type="file" 
-              accept=".xlsx, .xls, .csv" 
-              onChange={handleExcelUpload} 
-              disabled={isProcessing}
-              className="hidden" 
-            />
-          </label>
-        </div>
-
-        {/* 2. 근무표 사진 인식 */}
-        <div className="p-4 rounded-3xl space-y-3 bg-violet-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-violet-100 text-violet-600">
-              <Camera size={20} />
-            </div>
-            <div className="flex-1 text-left">
-              <h3 className="font-black text-sm text-slate-800">근무표 사진 / 카메라 촬영 인식</h3>
-              <p className="text-xs text-slate-500 mt-0.5">표 전체가 반듯하게 나오도록 밝은 곳에서 찍어 주세요. 사진은 기기 밖으로 전송되지 않아요.</p>
-            </div>
-          </div>
-          {ocrProgress ? (
-            <div className="space-y-1.5">
-              <div className="h-2 bg-white rounded-full overflow-hidden">
-                <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-violet-600" />
-              </div>
-              <p className="text-[11px] font-bold text-violet-700 flex items-center gap-1.5">
-                <Loader2 size={12} className="animate-spin" /> {ocrProgress.msg}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex items-center justify-center gap-1.5 py-2.5 bg-violet-600 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
-                <Camera size={14} /> 촬영하기
-                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
-              </label>
-              <label className="flex items-center justify-center gap-1.5 py-2.5 bg-white text-violet-700 border border-violet-200 font-extrabold text-xs rounded-2xl cursor-pointer hover:bg-violet-50">
-                <ImageIcon size={14} /> 앨범에서 선택
-                <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
-              </label>
-            </div>
-          )}
-        </div>
-
-        {/* 3. 휴대폰 캘린더(.ics) */}
-        <div className="p-4 rounded-3xl space-y-3 bg-sky-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-sky-100 text-sky-600">
-              <Smartphone size={20} />
-            </div>
-            <div className="flex-1 text-left">
-              <h3 className="font-black text-sm text-slate-800">휴대폰 캘린더(.ics) 가져오기</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                구글 캘린더: 설정 → 가져오기/내보내기 → 내보내기. 일정 제목이 D·데이·나이트·오프·연차 등이면 근무로, 나머지는 메모로 저장돼요.
-              </p>
-            </div>
-          </div>
-          <label className="flex items-center justify-center gap-1.5 py-2.5 bg-sky-600 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
-            <Upload size={14} /> .ics 파일 선택
-            <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
-          </label>
-        </div>
-
         {/* 4. 내보내기 */}
         <div className="p-4 rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
           <div className="flex items-center gap-3">
@@ -595,21 +604,15 @@ export default function ImportTab({
           </div>
         </div>
 
-        {/* 상태 메시지 */}
-        {statusMessage && (
-          <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
-            <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
-            <span>{statusMessage}</span>
-          </div>
-        )}
-
         <div className="pt-3 border-t border-slate-100 text-center">
           <button
             onClick={async () => {
               if (
                 window.confirm(
                   '⚠️ 이 기기의 근무표·메모·설정을 모두 지우고 처음 상태로 돌아갑니다.\n\n' +
-                    '아직 로그인 기능이 없어 초기화하면 서버에 저장된 근무와 참여 중인 그룹에도 다시 접근할 수 없습니다. (복구 불가)\n\n' +
+                    (accountStatus === 'linked'
+                      ? '연결된 계정의 서버 데이터는 남아 있어서, 다시 로그인하면 불러올 수 있어요.\n\n'
+                      : '계정을 연결하지 않아서 서버에 저장된 근무와 참여 중인 그룹에도 다시 들어갈 수 없어요. (복구 불가)\n\n') +
                     '정말 초기화할까요?'
                 )
               ) {

@@ -161,6 +161,41 @@ export async function shareFile({ fileName, mimeType, data, isBase64 = false, ti
   return 'downloaded';
 }
 
+/** 웹 주소 (앱에서 보낸 초대 링크도 웹으로 열림) */
+export const WEB_ORIGIN = 'https://nurse-shift-calendar.vercel.app';
+export const webOrigin = () =>
+  Capacitor.isNativePlatform() || !/^https?:$/.test(window.location.protocol) ? WEB_ORIGIN : window.location.origin;
+
+/**
+ * 글 공유: 앱·모바일 → 공유 시트(카톡 등), 지원 안 하면 클립보드 복사
+ * @returns 'shared' | 'cancelled' | 'copied' | 'failed'
+ */
+export async function shareText({ title, text, url }) {
+  if (Capacitor.isNativePlatform()) {
+    const { Share } = await import('@capacitor/share');
+    try {
+      await Share.share({ title, text, url, dialogTitle: title });
+      return 'shared';
+    } catch (err) {
+      return /cancel/i.test(err?.message || '') ? 'cancelled' : 'failed';
+    }
+  }
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+      return 'shared';
+    } catch (err) {
+      if (err.name === 'AbortError') return 'cancelled';
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url ? `${text}\n${url}` : text);
+    return 'copied';
+  } catch (err) {
+    return 'failed';
+  }
+}
+
 /** 이번 달 근무표 이미지 공유/저장 */
 export async function shareMonthImage(opts) {
   const canvas = renderMonthCanvas(opts);

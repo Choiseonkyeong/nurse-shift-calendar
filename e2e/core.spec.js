@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { createFakeState } from './fakeSupabase.js';
 import { openApp, readLocal, tab, waitSaved } from './helpers.js';
 
-const day = (page, label) => page.getByRole('button', { name: new RegExp(`^${label} `) });
+const day = (page, label) => page.getByRole('button', { name: new RegExp(`^${label} (?!\\()`) }); // 메모 버튼 "9월 5일 (토) 메모" 제외
 
 test('첫 실행: 이름 입력 → 서버 연결 → 근무 입력이 서버에 저장', async ({ page }) => {
   const state = await openApp(page, { name: null });
@@ -69,7 +69,7 @@ test('모든 팝업이 하단 탭바 위에 표시', async ({ page }) => {
     });
   for (const open of [
     () => page.getByRole('button', { name: /종류/ }).click(),
-    () => page.getByRole('button', { name: /패턴/ }).click(),
+    () => page.getByRole('button', { name: '패턴', exact: true }).click(),
     () => day(page, '9월 5일').click(),
     () => page.getByRole('button', { name: /^알림$/ }).click()
   ]) {

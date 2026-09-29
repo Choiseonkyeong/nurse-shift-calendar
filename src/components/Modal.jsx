@@ -1,6 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+// 열린 팝업 순서 (안드로이드 뒤로가기: 맨 위 팝업부터 닫기)
+const openModals = [];
+
+/** 맨 위 팝업 닫기. 팝업이 열려 있었으면 true (닫을 수 없는 필수 창이어도 true → 뒤로가기로 앱이 꺼지지 않게) */
+export function closeTopModal() {
+  const top = openModals[openModals.length - 1];
+  if (!top) return false;
+  top.current?.();
+  return true;
+}
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -15,6 +26,14 @@ export default function Modal({ onClose, label, children, align = 'center', zInd
   const overlayRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  useEffect(() => {
+    openModals.push(onCloseRef);
+    return () => {
+      const i = openModals.lastIndexOf(onCloseRef);
+      if (i !== -1) openModals.splice(i, 1);
+    };
+  }, []);
 
   useEffect(() => {
     const overlay = overlayRef.current;

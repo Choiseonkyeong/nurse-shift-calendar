@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { isChunkLoadError, hasNewVersion } from '../src/lib/appUpdate';
 
-const docWith = (src) => ({ querySelectorAll: () => (src ? [{ getAttribute: () => src }] : []) });
+const docWith = (src) => ({ querySelector: () => (src && src.startsWith('/assets/') ? { getAttribute: () => src } : null) });
 const fetchHtml = (html) => async () => ({ ok: true, text: async () => html });
 
 describe('새 배포 감지', () => {
@@ -15,6 +15,10 @@ describe('새 배포 감지', () => {
     const doc = docWith('/assets/index-aaa111.js');
     expect(await hasNewVersion(fetchHtml('<script type="module" src="/assets/index-bbb222.js"></script>'), doc)).toBe(true);
     expect(await hasNewVersion(fetchHtml('<script type="module" src="/assets/index-aaa111.js"></script>'), doc)).toBe(false);
+    // 미리 불러오기 링크(modulepreload)의 다른 index-*.js 는 무시
+    expect(
+      await hasNewVersion(fetchHtml('<link rel="modulepreload" href="/assets/index-zzz.js"><script type="module" crossorigin src="/assets/index-aaa111.js"></script>'), doc)
+    ).toBe(false);
   });
 
   it('개발 서버(빌드 파일 없음)에서는 확인 안 함', async () => {

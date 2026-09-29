@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
 import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
@@ -36,7 +37,8 @@ export default function MyShiftTab({
   importBanner,
   onUndoImport,
   onCloseImportBanner,
-  onResolveUncertain
+  onResolveUncertain,
+  onOpenImport
 }) {
   // 방금 가져온 근무 중 인식이 불확실한 날짜 (달력에 노란 테두리)
   const uncertainSet = new Set(importBanner?.uncertain || []);
@@ -67,7 +69,7 @@ export default function MyShiftTab({
   // 알림 권한 요청 및 타이머 등록
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) {
-      alert('이 브라우저는 알림 기능을 지원하지 않습니다.');
+      toast('이 브라우저는 알림 기능을 지원하지 않습니다.', 'error');
       return false;
     }
 
@@ -77,7 +79,7 @@ export default function MyShiftTab({
     }
 
     if (permission !== 'granted') {
-      alert('알림 권한이 거부되었습니다. 브라우저 설정에서 알림 권한을 허용해 주세요.');
+      toast('알림 권한이 거부되었습니다. 브라우저 설정에서 알림 권한을 허용해 주세요.', 'error');
       return false;
     }
     return true;
@@ -88,7 +90,7 @@ export default function MyShiftTab({
   // 네이티브 앱: 서버 푸시(FCM) — 앱이 종료돼 있어도 알림 도착
   const handleToggleNativeAlarm = async (minutes) => {
     if (!profile) {
-      alert('서버에 연결되지 않았습니다. 네트워크 확인 후 다시 시도해 주세요.');
+      toast('서버에 연결되지 않았습니다. 네트워크 확인 후 다시 시도해 주세요.', 'error');
       return;
     }
     const turningOn = !alarmSettings.enabled || minutes !== undefined;
@@ -97,22 +99,23 @@ export default function MyShiftTab({
       if (turningOn) {
         const granted = await enablePushReminders({ minutesBefore, shiftTimes: shiftConfigs.shiftTimes });
         if (!granted) {
-          alert(
+          toast(
             isNativePush()
               ? '알림 권한이 거부되었습니다. 휴대폰 설정 > 앱 > 알림에서 허용해 주세요.'
-              : '알림 권한이 거부되었습니다. 브라우저 주소창의 자물쇠 아이콘 > 알림에서 허용해 주세요.'
+              : '알림 권한이 거부되었습니다. 브라우저 주소창의 자물쇠 아이콘 > 알림에서 허용해 주세요.',
+            'error'
           );
           return;
         }
         setAlarmSettings({ enabled: true, minutesBefore });
-        alert(`🔔 근무 시작 ${formatLead(minutesBefore)} 전 알림이 설정되었습니다.\n${isNativePush() ? '앱을 종료해도' : '브라우저를 닫아도'} 알림이 도착합니다.`);
+        toast(`🔔 근무 시작 ${formatLead(minutesBefore)} 전 알림이 설정되었습니다.\n${isNativePush() ? '앱을 종료해도' : '브라우저를 닫아도'} 알림이 도착합니다.`, 'success');
       } else {
         await disablePushReminders({ minutesBefore });
         setAlarmSettings({ ...alarmSettings, enabled: false });
-        alert('🔕 알림이 해제되었습니다.');
+        toast('🔕 알림이 해제되었습니다.', 'info');
       }
     } catch (err) {
-      alert(`알림 설정 실패: ${err.message}`);
+      toast(`알림 설정 실패: ${err.message}`, 'error');
     } finally {
       setIsAlarmModalOpen(false);
     }
@@ -128,10 +131,10 @@ export default function MyShiftTab({
 
       const newSettings = { enabled: true, minutesBefore: minutes || alarmSettings.minutesBefore };
       setAlarmSettings(newSettings); // 실제 예약은 아래 useEffect 가 담당
-      alert(`🔔 근무 시작 ${newSettings.minutesBefore >= 60 ? `${newSettings.minutesBefore / 60}시간` : `${newSettings.minutesBefore}분`} 전 알림이 설정되었습니다.`);
+      toast(`🔔 근무 시작 ${newSettings.minutesBefore >= 60 ? `${newSettings.minutesBefore / 60}시간` : `${newSettings.minutesBefore}분`} 전 알림이 설정되었습니다.`, 'success');
     } else {
       setAlarmSettings({ ...alarmSettings, enabled: false });
-      alert('🔕 알림이 해제되었습니다.');
+      toast('🔕 알림이 해제되었습니다.', 'info');
     }
     setIsAlarmModalOpen(false);
   };
@@ -186,7 +189,7 @@ export default function MyShiftTab({
       setIsSharing(true);
       await shareMonthImage({ year, month, myShifts, shiftTypes, userName });
     } catch (err) {
-      alert(`이미지 공유 실패: ${err.message}`);
+      toast(`이미지 공유 실패: ${err.message}`, 'error');
     } finally {
       setIsSharing(false);
     }
@@ -273,6 +276,37 @@ export default function MyShiftTab({
           >
             <Undo2 size={12} /> 되돌리기
           </button>
+        </div>
+      )}
+
+      {/* 처음 쓰는 사용자: 근무 등록 방법 안내 (근무가 하나라도 생기면 사라짐) */}
+      {!importBanner && Object.keys(myShifts || {}).length === 0 && (
+        <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-3xl space-y-3">
+          <div>
+            <p className="text-sm font-black text-indigo-900">근무를 등록해 볼까요?</p>
+            <p className="text-[11px] font-bold text-indigo-700/70 mt-0.5">한 번 등록하면 수당·연차 계산, 그룹 공유, 근무 알림이 모두 자동이에요.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onOpenImport}
+              className="p-3 rounded-2xl bg-white border border-indigo-100 text-left cursor-pointer hover:border-indigo-300"
+            >
+              <span className="block text-lg">📷</span>
+              <span className="block text-xs font-black text-slate-800 mt-1">근무표 사진·엑셀로</span>
+              <span className="block text-[10px] font-bold text-slate-400">한 달을 한 번에</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsPatternOpen(true)}
+              className="p-3 rounded-2xl bg-white border border-indigo-100 text-left cursor-pointer hover:border-indigo-300"
+            >
+              <span className="block text-lg">🔁</span>
+              <span className="block text-xs font-black text-slate-800 mt-1">반복 패턴으로</span>
+              <span className="block text-[10px] font-bold text-slate-400">3교대·주5일 등</span>
+            </button>
+          </div>
+          <p className="text-[11px] font-bold text-indigo-700/70">또는 아래 달력에서 날짜를 눌러 하나씩 입력할 수 있어요.</p>
         </div>
       )}
 
@@ -458,7 +492,7 @@ export default function MyShiftTab({
                     {shift}
                   </div>
                 ) : (
-                  <div className="text-[10px] text-slate-300 font-bold text-center pb-1 whitespace-nowrap">{quickMode ? '' : '+ 수정'}</div>
+                  <div className="h-5" aria-hidden="true" />
                 )}
               </button>
             );
@@ -534,7 +568,7 @@ export default function MyShiftTab({
           <StickyNote size={15} className="text-amber-500 mt-0.5 shrink-0" />
           <div className="min-w-0">
             <p className="text-[11px] font-black text-slate-400">
-              {selectedDate} 메모
+              {formatDateKo(selectedDate)} 메모
               {getHoliday(selectedDate) && <span className="ml-1.5 text-rose-400">· {getHoliday(selectedDate)}</span>}
             </p>
             <p className={`text-xs font-bold whitespace-pre-wrap break-words ${dayNotes[selectedDate] ? 'text-slate-700' : 'text-slate-300'}`}>
