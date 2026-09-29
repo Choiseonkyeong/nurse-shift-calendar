@@ -19,6 +19,7 @@ import { syncWidget } from './lib/widgetSync';
 import { applyChanges, mergeWithRemote } from './lib/syncMerge';
 import { queueTypeOp, flushTypeQueue, applyTypeQueue } from './lib/typeSync';
 import { SETTINGS_TS_KEY, decideSettingsSync, fetchMySettings, saveMySettings } from './lib/settingsSync';
+import { ROSTER_NAME_KEY } from './lib/rosterName';
 
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
 const LEGACY_DEFAULT_NAME = '최수민';
@@ -174,6 +175,13 @@ export default function App() {
     localStorage.setItem('shift_alarm_settings', JSON.stringify(alarmSettings));
   }, [alarmSettings]);
 
+  // 근무표(사진·엑셀) 속 내 이름: 앱 이름이 닉네임이어도 자동으로 내 줄을 찾도록 (서버 설정과 함께 동기화)
+  const [rosterName, setRosterName] = useState(() => localStorage.getItem(ROSTER_NAME_KEY) || '');
+  useEffect(() => {
+    if (rosterName) localStorage.setItem(ROSTER_NAME_KEY, rosterName);
+    else localStorage.removeItem(ROSTER_NAME_KEY);
+  }, [rosterName]);
+
   useEffect(() => {
     localStorage.setItem('custom_shift_types', JSON.stringify(customShiftTypes || []));
   }, [customShiftTypes]);
@@ -191,7 +199,11 @@ export default function App() {
   const [settingsVersion, setSettingsVersion] = useState(0);
   const settingsReadyRef = useRef(false); // 서버와 첫 비교가 끝나기 전에는 올리지 않음
   const applyingServerSettingsRef = useRef(false); // 서버 값 반영 중에는 다시 올리지 않음
-  const settingsPayload = () => ({ shift_configs: shiftConfigsRef.current || {}, shift_alarm_settings: alarmSettingsRef.current });
+  const settingsPayload = () => ({
+    shift_configs: shiftConfigsRef.current || {},
+    shift_alarm_settings: alarmSettingsRef.current,
+    roster_name: rosterNameRef.current || ''
+  });
 
   const syncSettings = async () => {
     const server = await fetchMySettings().catch(() => null);
@@ -199,11 +211,13 @@ export default function App() {
     const localTs = localStorage.getItem(SETTINGS_TS_KEY);
     const action = decideSettingsSync(localTs, server);
     if (action === 'pull') {
-      const { shift_configs: configs, shift_alarm_settings: alarm } = server.settings || {};
+      const { shift_configs: configs, shift_alarm_settings: alarm, roster_name: serverRoster } = server.settings || {};
+      const rosterChanged = typeof serverRoster === 'string' && serverRoster !== rosterNameRef.current;
       // 실제로 값을 바꿀 때만 "서버에서 온 변경" 표시 (안 그러면 다음 기기 변경이 저장되지 않음)
-      if (configs || alarm) applyingServerSettingsRef.current = true;
+      if (configs || alarm || rosterChanged) applyingServerSettingsRef.current = true;
       if (configs) setShiftConfigs(configs);
       if (alarm) setAlarmSettings(alarm);
+      if (rosterChanged) setRosterName(serverRoster);
       if (configs) setSettingsVersion((v) => v + 1); // 수당 탭 입력칸을 서버 값으로 다시 그림
       localStorage.setItem(SETTINGS_TS_KEY, server.updated_at);
     } else if (action === 'push') {
@@ -219,6 +233,8 @@ export default function App() {
   shiftConfigsRef.current = shiftConfigs;
   const alarmSettingsRef = useRef(alarmSettings);
   alarmSettingsRef.current = alarmSettings;
+  const rosterNameRef = useRef(rosterName);
+  rosterNameRef.current = rosterName;
 
   // 이 기기에서 설정을 바꾸면 변경 시각 기록 후 서버에 저장 (디바운스)
   useEffect(() => {
@@ -230,12 +246,12 @@ export default function App() {
     const ts = new Date().toISOString();
     localStorage.setItem(SETTINGS_TS_KEY, ts);
     const timer = setTimeout(() => {
-      saveMySettings({ shift_configs: shiftConfigs || {}, shift_alarm_settings: alarmSettings }, ts).catch((err) =>
+      saveMySettings({ shift_configs: shiftConfigs || {}, shift_alarm_settings: alarmSettings, roster_name: rosterName || '' }, ts).catch((err) =>
         console.error('설정 저장 실패 (다음 연결 때 다시 저장):', err.message)
       );
     }, 1500);
     return () => clearTimeout(timer);
-  }, [shiftConfigs, alarmSettings, profile]);
+  }, [shiftConfigs, alarmSettings, rosterName, profile]);
 
   // 앱 실행 시 FCM 토큰 재등록 (토큰 갱신/재설치 대비, 권한 팝업 없이)
   useEffect(() => {
@@ -685,6 +701,8 @@ export default function App() {
               myShifts={myShifts || {}}
               setMyShifts={setMyShifts}
               userName={userName}
+              rosterName={rosterName}
+              setRosterName={setRosterName}
               dayNotes={dayNotes || {}}
               setDayNotes={setDayNotes}
               onImported={handleImported}

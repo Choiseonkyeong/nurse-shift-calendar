@@ -10,8 +10,10 @@ export const BACKUP_KEYS = [
   'day_notes',
   'custom_shift_types',
   'shift_configs',
-  'shift_alarm_settings'
+  'shift_alarm_settings',
+  'roster_name' // 근무표(사진·엑셀) 속 내 이름
 ];
+const TEXT_KEYS = new Set(['shift_user_name', 'roster_name']); // JSON 이 아닌 문자열로 저장하는 값
 const APP_ID = 'nurse-shift-calendar';
 
 export function createBackup(storage = localStorage, now = new Date()) {
@@ -20,7 +22,7 @@ export function createBackup(storage = localStorage, now = new Date()) {
     const raw = storage.getItem(k);
     if (raw == null) return;
     try {
-      data[k] = k === 'shift_user_name' ? raw : JSON.parse(raw);
+      data[k] = TEXT_KEYS.has(k) ? raw : JSON.parse(raw);
     } catch (e) {
       /* 손상된 값은 제외 */
     }
@@ -62,7 +64,7 @@ export function parseBackup(text) {
 export function restoreBackup(data, storage = localStorage) {
   BACKUP_KEYS.forEach((k) => {
     if (data[k] === undefined) return;
-    storage.setItem(k, k === 'shift_user_name' ? String(data[k]) : JSON.stringify(data[k]));
+    storage.setItem(k, TEXT_KEYS.has(k) ? String(data[k]) : JSON.stringify(data[k]));
   });
   storage.removeItem('synced_shift_data');
   storage.removeItem('synced_day_notes');

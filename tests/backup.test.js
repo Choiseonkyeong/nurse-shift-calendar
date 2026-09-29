@@ -28,6 +28,7 @@ describe('전체 백업/복원', () => {
       day_notes: JSON.stringify({ '2026-10-01': '교육' }),
       custom_shift_types: JSON.stringify([{ code: '교', label: '교육', kind: 'work' }]),
       shift_configs: JSON.stringify({ hourlyWage: 12000 }),
+      roster_name: '김간호사',
       unrelated: 'x'
     });
     const backup = createBackup(src, new Date('2026-09-28T00:00:00Z'));
@@ -40,6 +41,7 @@ describe('전체 백업/복원', () => {
     restoreBackup(data, dst);
     expect(JSON.parse(dst.getItem('my_shift_data'))).toEqual({ '2026-10-01': 'D', '2026-10-02': '' });
     expect(dst.getItem('shift_user_name')).toBe('김간호');
+    expect(dst.getItem('roster_name')).toBe('김간호사');
     expect(JSON.parse(dst.getItem('shift_configs'))).toEqual({ hourlyWage: 12000 });
     expect(dst.getItem('synced_shift_data')).toBeNull();
     expect(dst.getItem('synced_day_notes')).toBeNull();
