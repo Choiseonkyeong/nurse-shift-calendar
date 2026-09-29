@@ -459,7 +459,13 @@ export default function App() {
     setMyShifts((prev) => ({ ...(prev || {}), ...shifts }));
     setSelectedDate(`${yearMonth}-01`);
     setActiveTab('myShift');
-    setImportBanner({ name, source, yearMonth, count: Object.keys(shifts).length, uncertain, previous, keys: Object.keys(shifts) });
+    // 종류별 개수 (근무표 오른쪽 합계와 비교용)
+    const tally = {};
+    Object.values(shifts).forEach((c) => {
+      tally[c] = (tally[c] || 0) + 1;
+    });
+    const counts = Object.entries(tally).sort((x, y) => y[1] - x[1]);
+    setImportBanner({ name, source, yearMonth, count: Object.keys(shifts).length, counts, uncertain, previous, keys: Object.keys(shifts) });
   };
   const handleUndoImport = () => {
     if (!importBanner) return;

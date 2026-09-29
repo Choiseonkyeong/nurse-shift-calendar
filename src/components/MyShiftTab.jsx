@@ -9,6 +9,16 @@ import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { isNativePush, usesServerPush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 import { shareMonthImage } from '../lib/shareCalendar';
 
+/** 등록한 날짜 범위 → "8월" 또는 "7월 26일~8월 25일" */
+const importPeriod = ({ keys = [], yearMonth }) => {
+  const sorted = [...keys].sort();
+  if (!sorted.length) return `${Number(yearMonth.slice(5))}월`;
+  const [first, last] = [sorted[0], sorted[sorted.length - 1]];
+  if (first.slice(0, 7) === last.slice(0, 7)) return `${Number(first.slice(5, 7))}월`;
+  const md = (k) => `${Number(k.slice(5, 7))}월 ${Number(k.slice(8))}일`;
+  return `${md(first)}~${md(last)}`;
+};
+
 export default function MyShiftTab({
   selectedDate,
   setSelectedDate,
@@ -240,8 +250,13 @@ export default function MyShiftTab({
         <div className="bg-indigo-600 text-white p-4 rounded-3xl shadow-xs space-y-2">
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-black leading-snug">
-              {importBanner.source}에서 {Number(importBanner.yearMonth.slice(5))}월 근무 {importBanner.count}일을 등록했어요
+              {importBanner.source}에서 {importPeriod(importBanner)} 근무 {importBanner.count}일을 등록했어요
               <span className="block text-[11px] font-bold text-indigo-200 mt-0.5">근무표 이름: {importBanner.name}</span>
+              {importBanner.counts && (
+                <span className="block text-[11px] font-bold text-indigo-100 mt-0.5">
+                  {importBanner.counts.map(([code, n]) => `${code} ${n}`).join(' · ')} — 근무표 합계와 같은지 확인해 보세요
+                </span>
+              )}
             </p>
             <button onClick={onCloseImportBanner} className="text-indigo-200 hover:text-white cursor-pointer shrink-0" aria-label="닫기">
               <X size={16} />
