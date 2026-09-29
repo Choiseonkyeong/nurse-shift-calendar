@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from '../lib/toast';
 import Modal from './Modal';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive, ChevronRight } from 'lucide-react';
 import { unregisterDevice } from '../lib/pushNotifications';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
@@ -14,6 +14,18 @@ import { isChunkLoadError, reloadForUpdate, UPDATE_NOTICE } from '../lib/appUpda
 
 /** 배포 전 화면에서 새 파일을 못 불러온 경우 → 새 버전으로 새로고침하고 다시 시도 안내 */
 const recoverIfStale = (err) => isChunkLoadError(err) && reloadForUpdate(UPDATE_NOTICE);
+
+// 목록 한 줄 (설정 화면처럼): 아이콘 · 제목/설명 · (화살표)
+const rowCls = 'w-full px-3 py-3 flex items-center gap-3 text-left bg-white hover:bg-slate-50 cursor-pointer';
+const RowIcon = ({ className, children }) => (
+  <span className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${className}`}>{children}</span>
+);
+const RowText = ({ title, sub }) => (
+  <span className="flex-1 min-w-0">
+    <span className="block text-sm font-black text-slate-800">{title}</span>
+    <span className="block text-[11px] font-bold text-slate-400 mt-0.5">{sub}</span>
+  </span>
+);
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
 const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
@@ -412,7 +424,7 @@ export default function ImportTab({
     <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
       <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
         <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-          <Upload size={18} className="text-indigo-600" /> 스마트 근무표 & 캘린더 가져오기
+          <Upload size={18} className="text-indigo-600" /> 근무표 가져오기
         </h2>
 
         {/* 상태 메시지 */}
@@ -430,8 +442,8 @@ export default function ImportTab({
               <Camera size={20} />
             </div>
             <div className="flex-1 text-left">
-              <h3 className="font-black text-sm text-slate-800">근무표 사진 / 카메라 촬영 인식</h3>
-              <p className="text-xs text-slate-500 mt-0.5">표 전체가 반듯하게 나오도록 밝은 곳에서 찍어 주세요. 사진은 기기 밖으로 전송되지 않아요.</p>
+              <h3 className="font-black text-sm text-slate-800">근무표 사진으로 등록</h3>
+              <p className="text-xs text-slate-500 mt-0.5">표 전체가 반듯하게 나오게 찍어 주세요. 사진은 폰 밖으로 보내지 않아요.</p>
             </div>
           </div>
           {ocrProgress ? (
@@ -457,38 +469,29 @@ export default function ImportTab({
           )}
         </div>
 
-        {/* 1. 엑셀 근무표 선택 */}
-        <div className="p-5 border-2 border-dashed border-emerald-200 bg-emerald-50 rounded-3xl text-center space-y-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto font-black bg-emerald-100 text-emerald-600">
-            <FileSpreadsheet size={20} />
-          </div>
-          <div>
-            <h3 className="font-black text-sm text-slate-800">
-              엑셀 근무표 가져오기
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              공유받은 엑셀 파일(.xlsx, .csv)을 올려 주세요.
-            </p>
-          </div>
-
-          <label
-            className="inline-flex items-center gap-1.5 px-6 py-2.5 bg-emerald-600 text-white font-extrabold text-xs rounded-2xl shadow-2xs transition cursor-pointer hover:opacity-90"
-          >
-            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : null}
-            <span>엑셀 파일 선택</span>
-            <input 
-              type="file" 
-              accept=".xlsx, .xls, .csv" 
-              onChange={handleExcelUpload} 
-              disabled={isProcessing}
-              className="hidden" 
-            />
+        {/* 다른 방법: 한 줄 목록 */}
+        <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+          <label className={rowCls}>
+            <RowIcon className="bg-emerald-50 text-emerald-600">
+              {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+            </RowIcon>
+            <RowText title="엑셀 근무표" sub="공유받은 .xlsx · .csv 파일" />
+            <ChevronRight size={16} className="text-slate-300 shrink-0" />
+            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelUpload} disabled={isProcessing} className="hidden" />
+          </label>
+          <label className={rowCls}>
+            <RowIcon className="bg-sky-50 text-sky-600">
+              <Smartphone size={16} />
+            </RowIcon>
+            <RowText title="휴대폰 캘린더 (.ics)" sub="구글·아이폰 캘린더에서 내보낸 파일" />
+            <ChevronRight size={16} className="text-slate-300 shrink-0" />
+            <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
           </label>
         </div>
 
         {/* 근무표 속 내 이름: 따로 입력할 필요 없음. 사진·엑셀에서 이름을 한 번 고르면 기억 → 그때부터만 한 줄로 표시 */}
         {(rosterName || editingRoster) && (
-          <div className="px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-2 text-xs font-bold text-slate-500">
+          <div className="px-1 flex items-center gap-2 text-xs font-bold text-slate-500">
             {editingRoster ? (
               <>
                 <input
@@ -521,101 +524,64 @@ export default function ImportTab({
             )}
           </div>
         )}
+      </div>
 
-        {/* 3. 휴대폰 캘린더(.ics) */}
-        <div className="p-4 rounded-3xl space-y-3 bg-sky-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-sky-100 text-sky-600">
-              <Smartphone size={20} />
-            </div>
-            <div className="flex-1 text-left">
-              <h3 className="font-black text-sm text-slate-800">휴대폰 캘린더(.ics) 가져오기</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                구글 캘린더: 설정 → 가져오기/내보내기 → 내보내기. 일정 제목이 D·데이·나이트·오프·연차 등이면 근무로, 나머지는 메모로 저장돼요.
-              </p>
-            </div>
-          </div>
-          <label className="flex items-center justify-center gap-1.5 py-2.5 bg-sky-600 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
-            <Upload size={14} /> .ics 파일 선택
-            <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
-          </label>
-        </div>
+      {/* 내 데이터: 계정 · 백업 · 내보내기 */}
+      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+        <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+          <Archive size={18} className="text-indigo-600" /> 내 데이터
+        </h2>
 
-        {/* 0. 계정 · 전체 백업 */}
-        <div
-          className={`p-4 rounded-3xl border space-y-3 ${
+        <button
+          type="button"
+          onClick={onOpenAccount}
+          className={`w-full p-3 rounded-2xl border flex items-center gap-3 text-left cursor-pointer ${
             accountStatus === 'linked' ? 'bg-emerald-50/60 border-emerald-100' : 'bg-amber-50/70 border-amber-100'
           }`}
         >
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                accountStatus === 'linked' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
-              }`}
-            >
-              {accountStatus === 'linked' ? <ShieldCheck size={20} /> : <ShieldAlert size={20} />}
-            </div>
-            <div className="flex-1 text-left">
-              <h3 className="font-black text-sm text-slate-800">계정 · 백업</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {accountStatus === 'linked'
-                  ? '이메일 계정에 연결되어 있어요. 폰을 바꿔도 로그인하면 그대로예요.'
-                  : '계정이 연결되지 않았어요. 폰을 바꾸거나 앱을 지우면 데이터를 잃을 수 있어요.'}
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={onOpenAccount}
-              className="py-2.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-extrabold text-indigo-700 hover:bg-indigo-50 cursor-pointer"
-            >
-              {accountStatus === 'linked' ? '계정 관리' : '계정 연결'}
-            </button>
-            <button
-              type="button"
-              onClick={handleBackupSave}
-              className="py-2.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-extrabold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center justify-center gap-1"
-            >
-              <Archive size={12} /> 백업 저장
-            </button>
-            <label className="py-2.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-extrabold text-slate-700 hover:bg-slate-50 cursor-pointer text-center">
-              백업 복원
-              <input type="file" accept=".json,application/json" onChange={handleBackupRestore} className="hidden" />
-            </label>
-          </div>
+          <RowIcon className={accountStatus === 'linked' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}>
+            {accountStatus === 'linked' ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
+          </RowIcon>
+          <RowText
+            title={accountStatus === 'linked' ? '계정 연결됨' : '계정 연결하기'}
+            sub={
+              accountStatus === 'linked'
+                ? '폰을 바꿔도 로그인하면 그대로예요.'
+                : '연결하지 않으면 폰을 바꾸거나 앱을 지울 때 데이터를 잃을 수 있어요.'
+            }
+          />
+          <ChevronRight size={16} className="text-slate-300 shrink-0" />
+        </button>
+
+        <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+          <button type="button" onClick={handleBackupSave} className={rowCls}>
+            <RowIcon className="bg-indigo-50 text-indigo-600">
+              <Archive size={16} />
+            </RowIcon>
+            <RowText title="백업 저장" sub="근무·메모·설정 전체를 파일로" />
+          </button>
+          <label className={rowCls}>
+            <RowIcon className="bg-indigo-50 text-indigo-600">
+              <Upload size={16} />
+            </RowIcon>
+            <RowText title="백업 복원" sub="저장해 둔 백업 파일 불러오기" />
+            <input type="file" accept=".json,application/json" onChange={handleBackupRestore} className="hidden" />
+          </label>
+          <button type="button" onClick={() => handleExport('csv')} className={rowCls}>
+            <RowIcon className="bg-emerald-50 text-emerald-600">
+              <Download size={16} />
+            </RowIcon>
+            <RowText title="엑셀(CSV)로 내보내기" sub="근무·메모를 표로 보관" />
+          </button>
+          <button type="button" onClick={() => handleExport('ics')} className={rowCls}>
+            <RowIcon className="bg-sky-50 text-sky-600">
+              <Download size={16} />
+            </RowIcon>
+            <RowText title="캘린더(.ics)로 내보내기" sub="구글·아이폰 캘린더로 옮기기" />
+          </button>
         </div>
 
-        {/* 4. 내보내기 */}
-        <div className="p-4 rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
-              <Download size={20} />
-            </div>
-            <div className="flex-1 text-left">
-              <h3 className="font-black text-sm text-slate-800">내 근무표 내보내기 (백업)</h3>
-              <p className="text-xs text-slate-500 mt-0.5">엑셀로 보관하거나, 구글·아이폰 캘린더로 옮길 수 있어요. .ics 는 이 앱으로 다시 가져올 수 있어요.</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleExport('csv')}
-              className="py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-extrabold text-emerald-700 hover:bg-emerald-50 cursor-pointer"
-            >
-              엑셀(CSV)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleExport('ics')}
-              className="py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-extrabold text-sky-700 hover:bg-sky-50 cursor-pointer"
-            >
-              캘린더(.ics)
-            </button>
-          </div>
-        </div>
-
-        <div className="pt-3 border-t border-slate-100 text-center">
+        <div className="pt-1 text-center">
           <button
             onClick={async () => {
               if (
