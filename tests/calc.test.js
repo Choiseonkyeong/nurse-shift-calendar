@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { leaveYearRange } from '../src/lib/allowance';
 import { computeYearStats } from '../src/lib/stats';
 import { expandPattern } from '../src/components/PatternFill';
-import { HOLIDAYS, getHoliday } from '../src/utils/holidays';
+import { HOLIDAYS, getHoliday, getHolidayShort } from '../src/utils/holidays';
 import { buildWidgetData } from '../src/lib/widgetSync';
 import { DEFAULT_SHIFT_TYPES } from '../src/lib/shiftTypes';
 
@@ -66,6 +66,10 @@ describe('공휴일', () => {
       expect(Object.entries(HOLIDAYS).filter(([k, n]) => k.startsWith(`${y}-`) && n.includes('설날')).length).toBe(3);
       expect(Object.entries(HOLIDAYS).filter(([k, n]) => k.startsWith(`${y}-`) && n.includes('추석')).length).toBe(3);
     }
+  });
+  it('달력 칸용 짧은 이름은 모두 3글자 이하', () => {
+    Object.keys(HOLIDAYS).forEach((k) => expect([...getHolidayShort(k)].length, `${k} ${HOLIDAYS[k]}`).toBeLessThanOrEqual(3));
+    expect(getHolidayShort('2026-09-01')).toBeUndefined();
   });
 });
 

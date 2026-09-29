@@ -144,6 +144,24 @@ export const HOLIDAYS = {
 /** 'YYYY-MM-DD' → 공휴일 이름 (없으면 undefined) */
 export const getHoliday = (dateKey) => HOLIDAYS[dateKey];
 
+// 달력 칸에 들어가는 짧은 이름 (칸이 좁아 3글자 이하로. 전체 이름은 스크린리더·상세에서)
+const SHORT = {
+  대체휴일: '대체',
+  어린이날: '어린이',
+  부처님오신날: '석탄일',
+  '어린이날·부처님오신날': '어린이',
+  '추석·개천절': '추석',
+  임시공휴일: '임시',
+  대통령선거: '대선',
+  국회의원선거: '총선',
+  지방선거: '지선'
+};
+/** 'YYYY-MM-DD' → 달력 칸용 짧은 공휴일 이름 */
+export const getHolidayShort = (dateKey) => {
+  const name = HOLIDAYS[dateKey];
+  return name ? SHORT[name] || name : undefined;
+};
+
 /** 날짜 숫자 색상: 공휴일·일요일 빨강, 토요일 파랑 */
 export function dayNumberClass(dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number);
