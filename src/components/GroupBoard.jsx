@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { confirmDialog } from '../lib/confirm';
 import { MessageSquare, Send, Trash2, RotateCcw, Repeat, Check, X } from 'lucide-react';
 import {
   fetchGroupPosts,
@@ -100,7 +101,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('이 글을 삭제할까요?')) return;
+    if (!(await confirmDialog({ title: '이 글을 삭제할까요?', confirmText: '삭제', danger: true }))) return;
     try {
       await deleteGroupPost(id);
       setPosts((prev) => prev.filter((p) => p.id !== id));
@@ -110,8 +111,12 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
   };
 
   const handleRespond = async (swap, action) => {
-    const ask = { accept: '교환을 수락할까요? 두 사람의 근무가 바로 바뀝니다.', decline: '교환 요청을 거절할까요?', cancel: '교환 요청을 취소할까요?' };
-    if (!window.confirm(ask[action])) return;
+    const ask = {
+      accept: { title: '교환을 수락할까요?', message: '두 사람의 근무가 바로 바뀌어요.', confirmText: '수락' },
+      decline: { title: '교환 요청을 거절할까요?', confirmText: '거절', danger: true },
+      cancel: { title: '교환 요청을 취소할까요?', confirmText: '요청 취소', cancelText: '그대로 두기', danger: true }
+    };
+    if (!(await confirmDialog(ask[action]))) return;
     try {
       setLoading(true);
       await respondShiftSwap(swap.id, action);

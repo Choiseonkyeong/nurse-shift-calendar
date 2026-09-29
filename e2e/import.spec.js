@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { openApp, readLocal, tab, waitSaved } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved, confirmOk } from './helpers.js';
 import { createFakeState, seedAccount } from './fakeSupabase.js';
 
 const fixture = (name) => path.join(import.meta.dirname, 'fixtures', name);
@@ -53,7 +53,6 @@ test('닉네임 사용자: 이름을 따로 입력하지 않아도 한 번 고�
     await p.getByRole('button', { name: /이미 계정이 있어요/ }).click();
     await p.getByPlaceholder('이메일 주소').fill('me@example.com');
     await p.getByPlaceholder('비밀번호').fill('secret12');
-    p.on('dialog', (d) => d.accept());
     await p.getByRole('button', { name: '로그인', exact: true }).click();
     await waitSaved(p);
   };
@@ -136,8 +135,9 @@ test('내보내기(CSV·.ics) + 전체 백업 저장 → 다른 기기에서 복
   const other = await browser.newPage();
   await openApp(other, { name: '새폰' });
   await tab(other, '등록').click();
-  other.on('dialog', (d) => d.accept());
   await other.locator('input[accept=".json,application/json"]').setInputFiles(backupPath);
+  await expect(other.getByRole('dialog', { name: '백업을 복원할까요?' })).toContainText('근무 2일 · 메모 1건');
+  await confirmOk(other);
   await other.waitForLoadState('load');
   await expect(other.getByRole('heading', { name: '김간호 님의 근무표' })).toBeVisible();
   expect(await readLocal(other, 'my_shift_data')).toMatchObject({ '2026-10-01': 'D', '2026-10-02': 'N' });

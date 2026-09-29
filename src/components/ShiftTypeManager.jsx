@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { confirmDialog } from '../lib/confirm';
 import Modal from './Modal';
 import { X, Plus, ChevronLeft, Trash2, Check } from 'lucide-react';
 import { useShiftTypes, DEFAULT_CODES } from '../lib/shiftTypes';
@@ -63,7 +64,7 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, isCodeInUs
     if (isCodeInUse(editing.code)) {
       return setError('달력에 입력된 근무는 삭제할 수 없습니다. 해당 날짜의 근무를 먼저 지워 주세요.');
     }
-    if (!window.confirm(`'${editing.code}' 근무를 삭제할까요?`)) return;
+    if (!(await confirmDialog({ title: `'${editing.code}' 근무를 삭제할까요?`, confirmText: '삭제', danger: true }))) return;
     try {
       await onDelete(editing.code);
       setEditing(null);

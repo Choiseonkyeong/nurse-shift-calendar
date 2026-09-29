@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createFakeState, seedSocialAccount } from './fakeSupabase.js';
-import { openApp, readLocal, waitSaved } from './helpers.js';
+import { openApp, readLocal, waitSaved, confirmOk } from './helpers.js';
 
 test('서버에서 켜지 않은 소셜 로그인은 버튼이 안 보임', async ({ page }) => {
   await openApp(page, { state: createFakeState({ providers: { google: true } }), name: null });
@@ -73,8 +73,9 @@ test('쓰던 기기에서 기존 카카오 계정으로 로그인: 확인 후 �
 
   await page.getByRole('button', { name: '계정 (연결 필요)' }).click();
   await page.getByRole('button', { name: '기존 계정으로 로그인' }).click();
-  page.on('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '카카오로 로그인' }).click();
+  await expect(page.getByRole('dialog', { name: '기존 계정으로 로그인할까요?' })).toBeVisible();
+  await confirmOk(page);
 
   await expect(page.getByRole('heading', { name: '최간호 님의 근무표' })).toBeVisible();
   await waitSaved(page);

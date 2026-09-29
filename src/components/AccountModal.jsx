@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Modal from './Modal';
+import { confirmDialog } from '../lib/confirm';
 import SocialButtons from './SocialButtons';
 import { PROVIDERS } from '../lib/socialAuth';
 import { X, ShieldCheck, Mail, KeyRound, LogIn, Loader2, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
@@ -90,17 +91,19 @@ export default function AccountModal({ online, userName, initialMode = 'link', i
       setMessage({ type: 'ok', text: '계정 연결이 끝났어요. 새 폰에서는 이 이메일과 비밀번호로 로그인하면 돼요.' });
     });
 
-  const confirmReplace = () =>
+  const confirmReplace = async () =>
     !userName || // 첫 실행이면 지울 데이터가 없음
-    window.confirm(
-      '이 기기에 있는 근무·메모는 지워지고 로그인한 계정의 데이터로 바뀝니다.\n(필요하면 먼저 [백업 파일 저장]을 해 두세요)\n\n로그인할까요?'
-    );
+    confirmDialog({
+      title: '기존 계정으로 로그인할까요?',
+      message: '이 기기에 있는 근무·메모는 지워지고 로그인한 계정의 데이터로 바뀌어요.\n필요하면 먼저 [등록 → 백업 저장]을 해 두세요.',
+      confirmText: '로그인'
+    });
   const socialError = (err) => setMessage({ type: 'error', text: friendlyAuthError(err) });
   const socialLabel = (ids) => ids.map((id) => PROVIDERS.find((p) => p.id === id)?.label || id).join('·');
 
   const handleLogin = () =>
     run(async () => {
-      if (!confirmReplace()) return;
+      if (!(await confirmReplace())) return;
       await signInWithEmail(email, password, userName);
       window.location.reload();
     });

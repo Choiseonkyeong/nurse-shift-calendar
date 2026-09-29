@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createFakeState, seedAccount } from './fakeSupabase.js';
-import { openApp, readLocal, tab, waitSaved } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved, confirmOk } from './helpers.js';
 
 const day = (page, label) => page.getByRole('button', { name: new RegExp(`^${label} (?!\\()`) }); // 메모 버튼 "9월 5일 (토) 메모" 제외
 
@@ -49,8 +49,8 @@ test('오프라인에서 지운 근무 종류는 연결 후에도 되살아나�
   await page.reload();
   await page.getByRole('button', { name: /종류/ }).click();
   await page.getByRole('button', { name: /야간당직/ }).click();
-  page.on('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '삭제' }).click();
+  await confirmOk(page);
 
   state.offline = false;
   await page.reload();
@@ -69,7 +69,6 @@ test('설정(시급·연차)이 서버에 저장되고 새 폰 로그인 시 복
   await page.getByRole('button', { name: /이미 계정이 있어요/ }).click();
   await page.getByPlaceholder('이메일 주소').fill('me@example.com');
   await page.getByPlaceholder('비밀번호').fill('secret12');
-  page.on('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '로그인', exact: true }).click();
   await waitSaved(page);
   await tab(page, '연차/수당').click();
@@ -82,7 +81,6 @@ test('설정(시급·연차)이 서버에 저장되고 새 폰 로그인 시 복
   await other.getByRole('button', { name: /이미 계정이 있어요/ }).click();
   await other.getByPlaceholder('이메일 주소').fill('me@example.com');
   await other.getByPlaceholder('비밀번호').fill('secret12');
-  other.on('dialog', (d) => d.accept());
   await other.getByRole('button', { name: '로그인', exact: true }).click();
   await waitSaved(other);
   await tab(other, '연차/수당').click();
@@ -131,4 +129,32 @@ test('근무 종류: 새 근무 추가 화면에서 Esc → 목록으로, 한 �
   await expect(page.getByRole('heading', { name: '근무 종류 관리' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: '근무 종류 관리' })).toHaveCount(0);
+});
+
+test('앱 확인 창: 다른 팝업 위에 뜨고, 취소·Esc 는 아무것도 바꾸지 않음', async ({ page }) => {
+  const state = createFakeState();
+  await openApp(page, { state });
+  await waitSaved(page);
+  const pid = Object.keys(state.profiles)[0];
+  state.types[pid] = {
+    야: { code: '야', label: '야간당직', kind: 'work', bg_color: '#E0E7FF', text_color: '#3730A3', night_hours: 0 }
+  };
+  await page.reload();
+  await waitSaved(page);
+  await page.getByRole('button', { name: /종류/ }).click();
+  await page.getByRole('button', { name: /야간당직/ }).click();
+
+  const ask = page.getByRole('dialog', { name: "'야' 근무를 삭제할까요?" });
+  await page.getByRole('button', { name: '삭제' }).click();
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: '취소' }).click();
+  await expect(ask).toHaveCount(0);
+
+  // Esc 는 확인 창만 닫고 아래 근무 종류 창은 그대로
+  await page.getByRole('button', { name: '삭제' }).click();
+  await expect(ask).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(ask).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: '근무 종류 관리' })).toBeVisible();
+  expect(Object.keys(state.types[pid])).toEqual(['야']);
 });
