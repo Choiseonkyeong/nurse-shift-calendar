@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { errorText } from '../lib/errorText';
 import Modal from './Modal';
 import SocialButtons from './SocialButtons';
 import { CalendarHeart } from 'lucide-react';
@@ -38,7 +39,8 @@ export default function NameSetup({ onSubmit, onLogin, onCancel, initialName = '
           </p>
         </div>
         <input
-          autoFocus
+          // 첫 실행(이름 선택)에는 폰 키보드가 바로 올라와 버튼을 가리지 않게, 이름이 꼭 필요할 때만 바로 입력
+          autoFocus={required || !window.matchMedia?.('(pointer: coarse)').matches}
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={30}
@@ -54,7 +56,7 @@ export default function NameSetup({ onSubmit, onLogin, onCancel, initialName = '
         </button>
         {!required && (
           <>
-            <SocialButtons mode="login" verb="시작" onError={(err) => setError(err?.message || String(err))} />
+            <SocialButtons mode="login" verb="시작" onError={(err) => setError(errorText(err))} />
             {error && <p className="text-xs font-bold text-rose-600">{error}</p>}
           </>
         )}

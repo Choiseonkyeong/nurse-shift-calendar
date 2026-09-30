@@ -4,6 +4,7 @@
 //  2) setPassword: 인증 후 비밀번호 설정
 //  3) 새 기기: signInWithEmail → 이 기기 데이터를 비우고 계정 데이터로 다시 불러옴
 import { Capacitor } from '@capacitor/core';
+import { errorText } from './errorText';
 import { getSupabase } from '../supabaseClient';
 import { ensureProfile } from './shiftApi';
 
@@ -41,7 +42,8 @@ export function friendlyAuthError(err) {
   if (/invalid.*email|unable to validate email/i.test(msg)) return '이메일 주소 형식을 확인해 주세요.';
   if (/email not confirmed/i.test(msg)) return '이메일 인증이 아직 완료되지 않았어요. 메일함의 인증 링크를 먼저 눌러 주세요.';
   if (/failed to fetch|network/i.test(msg)) return '네트워크에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.';
-  return msg || '알 수 없는 오류가 발생했습니다.';
+  // 그 밖의 영어 원문은 한국어 안내로 (서버가 보낸 한국어 문장은 그대로)
+  return errorText(err, '알 수 없는 오류가 발생했어요. 잠시 후 다시 시도해 주세요.');
 }
 
 /**

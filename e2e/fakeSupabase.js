@@ -254,6 +254,10 @@ export async function installFakeSupabase(context, state) {
           return json(null);
         }
         case 'delete_my_shift_type':
+          // 실제 서버처럼: 달력에 쓰인 근무 종류는 삭제 거부
+          if (Object.values(state.shifts[myProfile.id] || {}).includes(body.p_code)) {
+            return json({ message: '달력에 입력된 근무는 삭제할 수 없습니다. 해당 날짜의 근무를 먼저 지워 주세요.', code: '23503' }, 400);
+          }
           delete state.types[myProfile.id]?.[body.p_code];
           return json(null);
         case 'get_my_settings':

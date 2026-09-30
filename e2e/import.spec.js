@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { openApp, readLocal, tab, waitSaved, confirmOk } from './helpers.js';
 import { createFakeState, seedAccount } from './fakeSupabase.js';
 
@@ -167,4 +168,51 @@ test('새 배포 후 오래 열린 탭: 사진 인식 파일을 못 찾으면 �
   expect(failed).toBe(true);
   // 새로고침 후에도 등록 탭 (사진 올리는 버튼이 보임)
   await expect(page.getByText('앨범에서 선택')).toBeVisible();
+});
+
+test('한국어 엑셀에서 저장한 CSV(EUC-KR) → 한글 이름이 깨지지 않고 등록', async ({ page }) => {
+  await openApp(page, { name: '김간호' });
+  await tab(page, '등록').click();
+  await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(fixture('roster-euckr.csv'));
+  await expect(page.getByText('엑셀에서 11월 근무 30일을 등록했어요')).toBeVisible();
+  const saved = await readLocal(page, 'my_shift_data');
+  expect([1, 2, 3, 4, 6].map((d) => saved[`2026-11-0${d}`])).toEqual(['D', 'E', 'N', 'OFF', '연차']);
+});
+
+test('엑셀 날짜 행이 날짜 서식(2026-12-01)이어도 인식, 제목에 연월이 없어도 12월로', async ({ page }) => {
+  await openApp(page, { name: '김간호' });
+  await tab(page, '등록').click();
+  await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(fixture('roster-dates.xlsx'));
+  await expect(page.getByText('엑셀에서 12월 근무 31일을 등록했어요')).toBeVisible();
+  const saved = await readLocal(page, 'my_shift_data');
+  expect([1, 2, 3, 4, 5].map((d) => saved[`2026-12-0${d}`])).toEqual(['N', 'N', 'OFF', 'D', 'E']);
+  expect(saved['2026-12-31']).toBe('N');
+});
+
+test('계정에 예전 설정이 있어도 백업 복원한 시급·연차가 유지되고 서버에도 반영', async ({ page, browser }) => {
+  // 백업 파일 만들기 (시급 12345)
+  const src = await browser.newPage();
+  await openApp(src, { local: { shift_configs: { hourlyWage: 12345, vacation: { total: 20, used: 1 } } } });
+  await tab(src, '등록').click();
+  const [backup] = await Promise.all([src.waitForEvent('download'), src.getByRole('button', { name: /백업 저장/ }).click()]);
+  const backupPath = path.join(os.tmpdir(), `backup-${Date.now()}.json`);
+  await backup.saveAs(backupPath);
+  await src.close();
+
+  // 이 기기 계정의 서버에는 예전 설정(시급 9000)이 있음
+  const state = createFakeState();
+  await openApp(page, { state, name: '최간호' });
+  await waitSaved(page);
+  const pid = Object.keys(state.profiles)[0];
+  // 이 기기가 설정을 저장한 뒤(09:00) 다른 폰에서 바꾼 서버 설정(10:00) → 11:00 에 이 기기에서 백업 복원
+  state.settings[pid] = { settings: { shift_configs: { hourlyWage: 9000 } }, updated_at: '2026-09-28T01:00:00.000Z' };
+  await page.clock.setFixedTime(new Date('2026-09-28T11:00:00+09:00'));
+
+  await tab(page, '등록').click();
+  await page.locator('input[accept=".json,application/json"]').setInputFiles(backupPath);
+  await confirmOk(page);
+  await page.waitForLoadState('load');
+  await waitSaved(page);
+  await expect.poll(() => state.settings[pid]?.settings?.shift_configs?.hourlyWage).toBe(12345);
+  expect((await readLocal(page, 'shift_configs')).hourlyWage).toBe(12345);
 });

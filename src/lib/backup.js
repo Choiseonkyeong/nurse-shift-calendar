@@ -69,6 +69,10 @@ export function restoreBackup(data, storage = localStorage) {
   storage.removeItem('synced_shift_data');
   storage.removeItem('synced_day_notes');
   storage.setItem('name_confirmed', '1');
+  // 복원한 설정이 가장 최근 변경 → 서버에 예전 설정이 있어도 덮어쓰이지 않고 서버로 올라가게 (lib/settingsSync)
+  if (data.shift_configs || data.shift_alarm_settings || data.roster_name !== undefined) {
+    storage.setItem('settings_updated_at', new Date().toISOString());
+  }
   // 백업의 근무 종류를 다음 서버 연결 때 먼저 올리도록 전송 대기열에 넣음 (lib/typeSync)
   (Array.isArray(data.custom_shift_types) ? data.custom_shift_types : []).forEach((t) => {
     if (t?.code) queueTypeOp({ type: 'upsert', value: t }, storage);

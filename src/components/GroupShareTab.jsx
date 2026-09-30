@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import { toast, formatDateKo } from '../lib/toast';
 import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Share2, RotateCcw, Palette } from 'lucide-react';
@@ -73,7 +74,7 @@ export default function GroupShareTab({
       return await fn();
     } catch (err) {
       console.error(err);
-      if (failLabel) toast(`${failLabel}: ${err.message}`, 'error');
+      if (failLabel) toast(`${failLabel}\n${errorText(err)}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -196,7 +197,7 @@ export default function GroupShareTab({
       try {
         group = await joinGroup(joinCodeInput.trim().toUpperCase());
       } catch (err) {
-        toast('해당 초대 코드와 일치하는 그룹이 없습니다.', 'error');
+        toast(errorText(err), 'error');
         return;
       }
       await fetchMyGroupsFromDB();
@@ -206,12 +207,19 @@ export default function GroupShareTab({
     }, '그룹 참여 실패');
   };
 
-  // 3. 기존 그룹 색상 커스텀 변경
-  const handleChangeGroupColor = (groupId, hexColor) =>
-    withLoading(async () => {
-      await updateGroupColor(groupId, hexColor);
-      await fetchMyGroupsFromDB();
-    }, '색상 변경 실패');
+  // 3. 기존 그룹 색상 커스텀 변경: 색상 선택기를 끄는 동안 화면은 바로 바꾸고, 서버 저장은 멈춘 뒤 한 번만
+  const colorTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(colorTimerRef.current), []);
+  const handleChangeGroupColor = (groupId, hexColor) => {
+    setGroups((prev) => (prev || []).map((g) => (g.id === groupId ? { ...g, color: hexColor } : g)));
+    clearTimeout(colorTimerRef.current);
+    colorTimerRef.current = setTimeout(() => {
+      updateGroupColor(groupId, hexColor).catch((err) => {
+        toast(`색상 변경 실패\n${errorText(err)}`, 'error');
+        fetchMyGroupsFromDB();
+      });
+    }, 600);
+  };
 
   // 4. 초대하기: 공유 시트(카톡 등)로 초대 링크 보내기, 안 되면 복사
   const handleInvite = async (group) => {

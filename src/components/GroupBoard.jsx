@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import { MessageSquare, Send, Trash2, RotateCcw, Repeat, Check, X } from 'lucide-react';
 import {
@@ -70,7 +71,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
       if (knownAcceptedRef.current && accepted.some((id) => !knownAcceptedRef.current.has(id))) onSwapApplied?.();
       knownAcceptedRef.current = new Set(accepted);
     } catch (err) {
-      setError(`게시판을 불러오지 못했습니다: ${err.message}`);
+      setError(`게시판을 불러오지 못했어요. ${errorText(err)}`);
     }
   }, [group.id, profile, onSwapApplied]);
 
@@ -94,7 +95,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
       setDraft('');
       await load();
     } catch (err) {
-      setError(`등록하지 못했습니다: ${err.message}`);
+      setError(`등록하지 못했어요. ${errorText(err)}`);
     } finally {
       setLoading(false);
     }
@@ -106,7 +107,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
       await deleteGroupPost(id);
       setPosts((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
-      setError(`삭제하지 못했습니다: ${err.message}`);
+      setError(`삭제하지 못했어요. ${errorText(err)}`);
     }
   };
 
@@ -123,7 +124,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
       if (action === 'accept') onSwapApplied?.();
       await load();
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err));
     } finally {
       setLoading(false);
     }
@@ -310,7 +311,7 @@ function SwapForm({ group, profile, defaultDate, getCode, chip, blurCls, onDone,
       await createShiftSwap(group.id, targetId, dates, message);
       await onDone();
     } catch (err) {
-      onError(err.message);
+      onError(errorText(err));
     } finally {
       setBusy(false);
     }
