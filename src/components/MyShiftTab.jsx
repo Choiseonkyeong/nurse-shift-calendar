@@ -8,7 +8,8 @@ import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
 import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
-import { isNativePush, usesServerPush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
+import { usesServerPush, enablePushReminders, disablePushReminders, toStartTimes } from '../lib/pushNotifications';
+import { isNativeApp, enableLocalReminders, syncLocalReminders, REMINDER_DAYS } from '../lib/localReminders';
 import { shareMonthImage } from '../lib/shareCalendar';
 
 /** 근무 하나 바꾸기 (빈 코드 = 그 날짜 삭제, 빈 값을 남기지 않음) */
@@ -97,8 +98,41 @@ export default function MyShiftTab({
 
   const formatLead = (m) => (m >= 60 ? `${m / 60}시간` : `${m}분`);
 
-  // 네이티브 앱: 서버 푸시(FCM) — 앱이 종료돼 있어도 알림 도착
-  const handleToggleNativeAlarm = async (minutes) => {
+  // 앱(Android/iOS): 폰 안에서 알림 예약 — 서버·Firebase 없이, 앱을 꺼 둬도 도착
+  const handleToggleLocalAlarm = async (minutes) => {
+    const turningOn = !alarmSettings.enabled || minutes !== undefined;
+    const minutesBefore = minutes || alarmSettings.minutesBefore;
+    try {
+      if (turningOn) {
+        if (!(await enableLocalReminders())) {
+          toast('알림 권한이 꺼져 있어요. 휴대폰 설정 > 앱 > 근무표 > 알림에서 허용해 주세요.', 'error');
+          return;
+        }
+        setAlarmSettings({ enabled: true, minutesBefore });
+        // 켤 때 바로 예약 (안드로이드는 이때만 '정확한 알람' 허용 화면을 보여 줌)
+        await syncLocalReminders({
+          enabled: true,
+          askExact: true,
+          myShifts,
+          startTimes: toStartTimes(shiftConfigs.shiftTimes),
+          shiftTypes,
+          minutesBefore,
+          userName
+        });
+        toast(`🔔 근무 시작 ${formatLead(minutesBefore)} 전 알림이 설정되었습니다.\n앱을 꺼 둬도 알림이 도착합니다.`, 'success');
+      } else {
+        setAlarmSettings({ ...alarmSettings, enabled: false });
+        toast('🔕 알림이 해제되었습니다.', 'info');
+      }
+    } catch (err) {
+      toast(`알림 설정 실패\n${errorText(err)}`, 'error');
+    } finally {
+      setIsAlarmModalOpen(false);
+    }
+  };
+
+  // 웹 푸시(설정된 경우): 서버가 발송 — 브라우저를 닫아도 알림 도착
+  const handleToggleServerAlarm = async (minutes) => {
     if (!profile) {
       toast('서버에 연결되지 않았습니다. 네트워크 확인 후 다시 시도해 주세요.', 'error');
       return;
@@ -109,16 +143,11 @@ export default function MyShiftTab({
       if (turningOn) {
         const granted = await enablePushReminders({ minutesBefore, shiftTimes: shiftConfigs.shiftTimes });
         if (!granted) {
-          toast(
-            isNativePush()
-              ? '알림 권한이 거부되었습니다. 휴대폰 설정 > 앱 > 알림에서 허용해 주세요.'
-              : '알림 권한이 거부되었습니다. 브라우저 주소창의 자물쇠 아이콘 > 알림에서 허용해 주세요.',
-            'error'
-          );
+          toast('알림 권한이 거부되었습니다. 브라우저 주소창의 자물쇠 아이콘 > 알림에서 허용해 주세요.', 'error');
           return;
         }
         setAlarmSettings({ enabled: true, minutesBefore });
-        toast(`🔔 근무 시작 ${formatLead(minutesBefore)} 전 알림이 설정되었습니다.\n${isNativePush() ? '앱을 종료해도' : '브라우저를 닫아도'} 알림이 도착합니다.`, 'success');
+        toast(`🔔 근무 시작 ${formatLead(minutesBefore)} 전 알림이 설정되었습니다.\n브라우저를 닫아도 알림이 도착합니다.`, 'success');
       } else {
         await disablePushReminders({ minutesBefore });
         setAlarmSettings({ ...alarmSettings, enabled: false });
@@ -133,7 +162,8 @@ export default function MyShiftTab({
 
   // 알림 설정 토글/변경
   const handleToggleAlarm = async (minutes) => {
-    if (usesServerPush()) return handleToggleNativeAlarm(minutes);
+    if (isNativeApp()) return handleToggleLocalAlarm(minutes);
+    if (usesServerPush()) return handleToggleServerAlarm(minutes);
 
     if (!alarmSettings.enabled || minutes !== undefined) {
       const granted = await requestNotificationPermission();
@@ -160,7 +190,7 @@ export default function MyShiftTab({
   }, [dayTick]);
 
   useEffect(() => {
-    if (usesServerPush() || !alarmSettings?.enabled) return;
+    if (isNativeApp() || usesServerPush() || !alarmSettings?.enabled) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
     const shiftTimes = shiftConfigs.shiftTimes || {};
@@ -653,7 +683,11 @@ export default function MyShiftTab({
               ))}
             </div>
 
-            {!usesServerPush() && (
+            {isNativeApp() ? (
+              <p className="text-[11px] font-bold text-slate-500 bg-slate-50 rounded-2xl p-3">
+                앱을 꺼 둬도 알림이 와요. 앞으로 {REMINDER_DAYS}일 동안의 근무를 미리 예약하고, 앱을 열 때마다 이어서 예약해요.
+              </p>
+            ) : !usesServerPush() && (
               <p className="text-[11px] font-bold text-slate-500 bg-slate-50 rounded-2xl p-3">
                 웹에서는 이 화면이 열려 있을 때만 알림이 와요. 앱을 설치하면 앱을 꺼 둬도 알림을 받을 수 있어요.
               </p>

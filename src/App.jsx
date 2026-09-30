@@ -19,7 +19,8 @@ import { consumeOAuthNotice } from './lib/socialAuth';
 import { getThemePref, setThemePref } from './lib/theme';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType, fetchMyNotes, saveNoteChanges } from './lib/shiftApi';
-import { usesServerPush, registerDevice, saveReminderSettings } from './lib/pushNotifications';
+import { usesServerPush, registerDevice, saveReminderSettings, toStartTimes } from './lib/pushNotifications';
+import { isNativeApp, syncLocalReminders } from './lib/localReminders';
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 import { syncWidget } from './lib/widgetSync';
 import { applyChanges, mergeWithRemote } from './lib/syncMerge';
@@ -354,6 +355,22 @@ export default function App() {
     // 근무 시간이 바뀔 때만 서버에 반영 (알림 켜기/끄기는 알림 설정 화면에서 직접 저장)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, shiftConfigs?.shiftTimes]);
+
+  // 앱: 근무·근무 시간·알림 설정이 바뀌거나 앱을 열 때 폰 안의 근무 알림을 다시 예약 (앞으로 30일)
+  useEffect(() => {
+    if (!isNativeApp()) return undefined;
+    const timer = setTimeout(() => {
+      syncLocalReminders({
+        enabled: alarmSettings.enabled,
+        myShifts: myShifts || {},
+        startTimes: toStartTimes(shiftConfigs?.shiftTimes),
+        shiftTypes,
+        minutesBefore: alarmSettings.minutesBefore,
+        userName: nameSkipped ? '' : userName
+      }).catch((err) => console.error('근무 알림 예약 실패:', err.message));
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [alarmSettings.enabled, alarmSettings.minutesBefore, myShifts, shiftConfigs?.shiftTimes, shiftTypes, nameSkipped, userName]);
 
   // ---------------- 서버 동기화 ----------------
   // 마지막으로 서버와 일치했던 스냅샷을 기기에 저장해 두고, 그 이후 "이 기기에서 바뀐 것"만 서버에 반영한다.

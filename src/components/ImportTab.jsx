@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { errorText } from '../lib/errorText';
-import { decodeCsv } from '../lib/csvText';
+import { readSheet } from '../lib/readSheet';
 import { toast } from '../lib/toast';
 import Modal from './Modal';
 import { confirmDialog } from '../lib/confirm';
@@ -102,39 +102,10 @@ export default function ImportTab({
     setStatusMessage('⏳ 엑셀 근무표 연도/월 및 데이터 분석 중...');
 
     try {
-      // 앱에 포함된 xlsx 사용 (CDN 불필요 → 오프라인/앱에서도 동작)
-      const XLSX = await import('xlsx');
-      const buffer = await file.arrayBuffer();
+      // 앱에 포함된 xlsx 를 별도 워커에서 사용 (CDN 불필요, 조작된 파일로부터 앱 화면 격리 — lib/readSheet)
+      const { matrix, dateCells } = await readSheet(file);
       {
         try {
-          // CSV 는 인코딩을 직접 판별 (UTF-8, 안 되면 한국어 엑셀 기본 저장 형식 EUC-KR)
-          const isCsv = /\.csv$/i.test(file.name) || file.type === 'text/csv';
-          const workbook = isCsv
-            ? XLSX.read(decodeCsv(buffer), { type: 'string', cellNF: true })
-            : XLSX.read(buffer, { type: 'array', cellNF: true }); // cellNF: 날짜 서식 판별용
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-
-          const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:Z100');
-          const matrix = [];
-          // 날짜 서식 칸(예: 2026-10-01)은 실제 날짜로 기억 → 표 위쪽 날짜 행을 정확한 날짜로 매핑
-          const dateCells = {}; // 'R:C' → 'YYYY-MM-DD'
-          for (let R = range.s.r; R <= range.e.r; ++R) {
-            const row = [];
-            for (let C = range.s.c; C <= range.e.c; ++C) {
-              const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-              const cell = worksheet[cellAddress];
-              const date = cell?.t === 'n' && cell.z && XLSX.SSF.is_date(cell.z) ? XLSX.SSF.parse_date_code(cell.v) : null;
-              if (date?.y) {
-                dateCells[`${R - range.s.r}:${C - range.s.c}`] = `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
-                row.push(String(date.d));
-              } else {
-                row.push(cell ? String(cell.v).trim() : '');
-              }
-            }
-            matrix.push(row);
-          }
-
           // 엑셀 상단 타이틀에서 YYYY년 MM월 자동 감지
           let parsedYear = 2026;
           let parsedMonth = 9;
@@ -302,7 +273,8 @@ export default function ImportTab({
       }
     } catch (err) {
       console.error(err);
-      if (!recoverIfStale(err)) setStatusMessage('❌ 엑셀 파일을 열 수 없습니다.');
+      if (recoverIfStale(err)) setStatusMessage('앱이 새 버전으로 업데이트되어 새로고침하는 중이에요...');
+      else setStatusMessage(`❌ ${errorText(err, '엑셀 파일을 열 수 없습니다.')}`);
       setIsProcessing(false);
     }
   };
