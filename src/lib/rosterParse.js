@@ -56,13 +56,40 @@ export function detectYearMonth(text, fallback) {
   return { ...fallback, found: false };
 }
 
+// 흔한 성씨 (많은 순). 사진 인식이 성을 비슷한 글자로 잘못 읽은 경우(죄수민 → 최수민) 보정용
+const SURNAMES = '김이박최정강조윤장임한오서신권황안송전홍유고문양손배백허남심노하곽성차주우구민류나진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예경봉사부';
+// 모양이 비슷해서 잘 헷갈리는 자모 묶음 (초성·중성·종성 번호)
+const LOOKALIKE = [
+  [[12, 13, 14], [0, 1, 15], [7, 8, 17], [3, 4, 16], [11, 18], [9, 10]],
+  [[0, 2], [1, 3, 5, 7], [4, 6], [8, 12, 13, 17, 18], [9, 10, 11], [14, 15, 16], [19, 20]],
+  [[4, 16, 17, 21], [1, 2, 24], [7, 25], [19, 20], [8]]
+];
+const jamo = (ch) => {
+  const c = ch.charCodeAt(0) - 0xac00;
+  return [Math.floor(c / 588), Math.floor((c % 588) / 28), c % 28];
+};
+const looksAlike = (kind, a, b) => a === b || LOOKALIKE[kind].some((g) => g.includes(a) && g.includes(b));
+
+/** 세 글자 이상 이름의 첫 글자가 성씨가 아니면, 모양이 비슷한 성씨로 (죄→최, 긴→김). 확실하지 않으면 그대로 */
+export function fixSurname(name) {
+  const first = name[0];
+  if (name.length < 3 || !/[가-힣]/.test(first) || SURNAMES.includes(first)) return name;
+  const [l, v, t] = jamo(first);
+  const fix = [...SURNAMES].find((s) => {
+    const [l2, v2, t2] = jamo(s);
+    const diff = (l !== l2) + (v !== v2) + (t !== t2);
+    return diff === 1 && looksAlike(0, l, l2) && looksAlike(1, v, v2) && looksAlike(2, t, t2);
+  });
+  return fix ? fix + name.slice(1) : name;
+}
+
 /** "홍길동(N-keep)", "RN 홍길동", "홍 길 동" → 한글 이름 */
 export function extractName(text) {
   const joined = String(text || '');
   const candidates = joined.replace(/\(.*?\)/g, ' ').match(/[가-힣]{2,4}/g) || [];
   const merged = joined.replace(/\(.*?\)/g, '').replace(/[^가-힣]/g, '');
   const name = candidates.find((c) => !NAME_EXCLUDE.has(c)) || (merged.length >= 2 && merged.length <= 4 ? merged : '');
-  return name && !NAME_EXCLUDE.has(name) ? name : '';
+  return name && !NAME_EXCLUDE.has(name) ? fixSurname(name) : '';
 }
 
 const center = (w) => ({ x: (w.x0 + w.x1) / 2, y: (w.y0 + w.y1) / 2 });
@@ -273,13 +300,7 @@ function verifyYearMonth(ym, header, clean, headerWords, today) {
     return s;
   };
 
-  // 후보: 오늘 기준 6개월 전 ~ 12개월 뒤 + 제목에서 읽은 달
-  const cands = [];
-  for (let k = -6; k <= 12; k++) {
-    const d = new Date(today.getFullYear(), today.getMonth() + k, 1);
-    cands.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
-  }
-  if (!cands.some((c) => c.year === ym.year && c.month === ym.month)) cands.push({ year: ym.year, month: ym.month });
+  const cands = monthCandidates(ym, today);
   const dist = (c) => Math.abs((c.year - today.getFullYear()) * 12 + c.month - 1 - today.getMonth());
   const scored = cands.map((c) => ({ ...c, s: score(c.year, c.month) }));
   const current = scored.find((c) => c.year === ym.year && c.month === ym.month);
@@ -446,4 +467,64 @@ export function parseRosterWords(words, { year, month, shiftTypes = [], today = 
       .map((c) => ({ idx: c.idx, x: c.x, w: cols.widthAt(c.idx), key: dateKeyOf(c.idx) }))
   };
   return { ...ym, people, names, grid, colsDetected: cols.inliers };
+}
+
+/** 오늘 기준 6개월 전 ~ 12개월 뒤 (+ 제목에서 읽은 달) */
+function monthCandidates(ym, today) {
+  const cands = [];
+  for (let k = -6; k <= 12; k++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + k, 1);
+    cands.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+  }
+  if (!cands.some((c) => c.year === ym.year && c.month === ym.month)) cands.push({ year: ym.year, month: ym.month });
+  return cands;
+}
+
+/**
+ * 엑셀 날짜 줄(26 27 … 31 1 2 … 25)의 각 칸 날짜. '1' 앞쪽은 지난달
+ * @returns [{ col, key: 'YYYY-MM-DD', date }] — 그 달에 없는 날짜(30일까지인 달의 31 등)는 빠짐
+ */
+export function datesForDayRow(days, year, month) {
+  const firstIdx = days.findIndex((d) => d.day === 1);
+  return days
+    .map(({ col, day }, i) => {
+      const m = firstIdx > 0 && i < firstIdx ? month - 1 : month;
+      const date = new Date(year, m - 1, day);
+      if (date.getDate() !== day) return null;
+      return { col, date, key: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` };
+    })
+    .filter(Boolean);
+}
+
+/** 칸 글자 → 요일 번호(0=일) 또는 공휴일 [월, 일] */
+export const weekdayOf = (text) => {
+  const t = String(text || '').trim();
+  return t.length === 1 && WEEKDAY_CHARS.includes(t) ? WEEKDAY_CHARS.indexOf(t) : -1;
+};
+export const holidayOf = (text) => FIXED_HOLIDAYS.find(([re]) => re.test(String(text || '')))?.slice(1) || null;
+
+/**
+ * 엑셀: 요일 줄·공휴일 칸으로 제목의 연/월 확인 (사진의 verifyYearMonth 와 같은 기준)
+ * @param days      [{ col, day }] 날짜 줄
+ * @param weekdays  { col: 요일 번호 }
+ * @param holidays  { col: [월, 일] }
+ */
+export function checkDayRowMonth({ days, weekdays = {}, holidays = {}, ym, found, today = new Date() }) {
+  const wdCount = Object.keys(weekdays).length;
+  const holCount = Object.keys(holidays).length;
+  if (wdCount < 5 && !holCount) return ym;
+  const score = (y, m) =>
+    datesForDayRow(days, y, m).reduce((s, { col, date }) => {
+      let add = weekdays[col] === date.getDay() ? 1 : 0;
+      const h = holidays[col];
+      if (h && date.getMonth() + 1 === h[0] && date.getDate() === h[1]) add += 3;
+      return s + add;
+    }, 0);
+  const dist = (c) => Math.abs((c.year - today.getFullYear()) * 12 + c.month - 1 - today.getMonth());
+  const scored = monthCandidates(ym, today).map((c) => ({ ...c, s: score(c.year, c.month) }));
+  const current = scored.find((c) => c.year === ym.year && c.month === ym.month);
+  const best = scored.sort((a, b) => b.s - a.s || dist(a) - dist(b))[0];
+  const enough = holCount ? best.s >= 3 : best.s >= Math.max(5, wdCount * 0.6);
+  const better = found ? best.s > current.s : best.s > current.s || (best.s === current.s && dist(best) < dist(current));
+  return enough && better ? { year: best.year, month: best.month } : ym;
 }

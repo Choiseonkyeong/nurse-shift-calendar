@@ -12,6 +12,7 @@ import { toCsv, toIcs } from '../lib/exportData';
 import { createBackup, parseBackup, restoreBackup } from '../lib/backup';
 import { shareFile } from '../lib/shareCalendar';
 import { pickRosterName } from '../lib/rosterName';
+import { detectYearMonth, fixSurname, checkDayRowMonth, datesForDayRow, weekdayOf, holidayOf } from '../lib/rosterParse';
 import { isChunkLoadError, reloadForUpdate, UPDATE_NOTICE } from '../lib/appUpdate';
 
 /** 배포 전 화면에서 새 파일을 못 불러온 경우 → 새 버전으로 새로고침하고 다시 시도 안내 */
@@ -53,6 +54,7 @@ export default function ImportTab({
   initialNotice = '',
   repickImport = null,
   onRepickShown,
+  onClearedAll,
   accountStatus,
   onOpenAccount
 }) {
@@ -85,7 +87,9 @@ export default function ImportTab({
 
   /** 내 줄 자동 선택: 근무표 속 내 이름(설정) → 앱 이름, 사진 오타(한 글자 차이)까지. 못 찾으면 이름 선택 창 */
   const autoRegister = (imp) => {
-    const { name } = pickRosterName(Object.keys(imp.byName), { rosterName, userName });
+    const { name, how } = pickRosterName(Object.keys(imp.byName), { rosterName, userName });
+    // 기억한 이름이 인식 오류로 저장돼 있었으면(죄수민) 이번에 제대로 읽힌 이름(최수민)으로 바꿔 둠
+    if (name && how === 'similar' && rosterName && fixSurname(rosterName) === name) setRosterName?.(name);
     if (name) registerImport(imp, name);
     else setPendingImport(imp);
   };
@@ -104,31 +108,16 @@ export default function ImportTab({
       const { matrix, dateCells } = await readSheet(file);
       {
         try {
-          // 엑셀 상단 타이틀에서 YYYY년 MM월 자동 감지
-          let parsedYear = 2026;
-          let parsedMonth = 9;
-          let foundHeaderYearMonth = false;
-
-          for (let r = 0; r < Math.min(5, matrix.length); r++) {
-            const rowStr = matrix[r].join(' ');
-            const match = rowStr.match(/(\20\d{2}|\d{4})\s*년\s*(\d{1,2})\s*월/);
-            if (match) {
-              parsedYear = parseInt(match[1], 10);
-              parsedMonth = parseInt(match[2], 10);
-              foundHeaderYearMonth = true;
-              break;
-            }
-          }
-
-          if (!foundHeaderYearMonth && selectedDate) {
-            const [sYear, sMonth] = selectedDate.split('-').map(Number);
-            parsedYear = sYear;
-            parsedMonth = sMonth;
-          }
-
-          const prevDateObj = new Date(parsedYear, parsedMonth - 2, 1);
-          const prevYear = prevDateObj.getFullYear();
-          const prevMonth = prevDateObj.getMonth() + 1;
+          // 엑셀 상단 제목에서 연/월 (2026년 10월 · 10월 · 2026.10). 없으면 보고 있던 달 → 아래에서 요일·공휴일로 확인
+          const now = new Date();
+          const [sYear, sMonth] = (selectedDate || '').split('-').map(Number);
+          const title = detectYearMonth(matrix.slice(0, 5).map((row) => row.join(' ')).join(' '), {
+            year: sYear || now.getFullYear(),
+            month: sMonth || now.getMonth() + 1
+          });
+          let parsedYear = title.year;
+          let parsedMonth = title.month;
+          const foundHeaderYearMonth = title.found;
 
           // 날짜 행(1~31) 탐색
           let dateRowIdx = -1;
@@ -158,21 +147,30 @@ export default function ImportTab({
                 }
                 break;
               }
-              let isCurrentMonthPart = false;
-
-              numberCols.forEach(({ col, day }) => {
-                if (day === 1) isCurrentMonthPart = true;
-
-                if (!isCurrentMonthPart) {
-                  const formattedMonth = String(prevMonth).padStart(2, '0');
-                  const formattedDay = String(day).padStart(2, '0');
-                  colToDateMap[col] = `${prevYear}-${formattedMonth}-${formattedDay}`;
-                } else {
-                  const formattedMonth = String(parsedMonth).padStart(2, '0');
-                  const formattedDay = String(day).padStart(2, '0');
-                  colToDateMap[col] = `${parsedYear}-${formattedMonth}-${formattedDay}`;
-                }
+              // 날짜 줄 위아래의 요일(토 일 월 …)·공휴일(3 개천절 …)로 달 확인 → 제목을 못 읽었거나 틀려도 올바른 달로
+              const weekdays = {};
+              const holidays = {};
+              numberCols.forEach(({ col }) => {
+                [r - 1, r + 1, r + 2].forEach((rr) => {
+                  const wd = weekdayOf(matrix[rr]?.[col]);
+                  if (wd >= 0 && weekdays[col] === undefined) weekdays[col] = wd;
+                });
+                [r - 1, r, r + 1, r + 2].forEach((rr) => {
+                  const h = holidayOf(matrix[rr]?.[col]);
+                  if (h && !holidays[col]) holidays[col] = h;
+                });
               });
+              const checked = checkDayRowMonth({
+                days: numberCols,
+                weekdays,
+                holidays,
+                ym: { year: parsedYear, month: parsedMonth },
+                found: foundHeaderYearMonth
+              });
+              parsedYear = checked.year;
+              parsedMonth = checked.month;
+              // '1' 앞쪽 날짜는 지난달 (26 27 … 31 1 2 … 25)
+              datesForDayRow(numberCols, parsedYear, parsedMonth).forEach(({ col, key }) => (colToDateMap[col] = key));
               break;
             }
           }
@@ -574,6 +572,7 @@ export default function ImportTab({
               ) {
                 setMyShifts({});
                 setDayNotes({});
+                onClearedAll?.(); // 지난 가져오기 결과 알림(되돌리기)도 닫음
                 toast('근무·메모를 모두 지웠어요.', 'success');
               }
             }}

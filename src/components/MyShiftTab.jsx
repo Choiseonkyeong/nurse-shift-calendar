@@ -55,6 +55,7 @@ export default function MyShiftTab({
   importBanner,
   onUndoImport,
   onRepickImport,
+  onMoveImportMonth,
   onCloseImportBanner,
   onResolveUncertain,
   onOpenImport,
@@ -332,6 +333,24 @@ export default function MyShiftTab({
             <p className="text-[11px] font-bold bg-white/15 rounded-xl px-2.5 py-1.5 flex items-center gap-1.5">
               <AlertTriangle size={12} className="shrink-0" /> 노란 테두리 {importBanner.uncertain.length}일은 사진과 비교해 확인해 주세요 (눌러서 수정)
             </p>
+          )}
+          {/* 사진·엑셀에서 달을 잘못 인식했으면 한 달씩 옮기기 */}
+          {importBanner.imp && (
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-100">
+              <span>달이 틀렸나요?</span>
+              <button
+                onClick={() => onMoveImportMonth(-1)}
+                className="flex items-center gap-0.5 bg-white/15 text-white px-2 py-1 rounded-lg font-black cursor-pointer"
+              >
+                <ChevronLeft size={12} /> 이전 달로
+              </button>
+              <button
+                onClick={() => onMoveImportMonth(1)}
+                className="flex items-center gap-0.5 bg-white/15 text-white px-2 py-1 rounded-lg font-black cursor-pointer"
+              >
+                다음 달로 <ChevronRight size={12} />
+              </button>
+            </div>
           )}
           <div className="flex flex-wrap gap-2">
             <button
