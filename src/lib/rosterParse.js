@@ -46,9 +46,12 @@ export function cellToCode(text, shiftTypes = []) {
 export function detectYearMonth(text, fallback) {
   const full = /(20\d{2})\s*(?:년|[./-])\s*(\d{1,2})\s*월?/.exec(text);
   if (full && +full[2] >= 1 && +full[2] <= 12) return { year: +full[1], month: +full[2], found: true };
-  const onlyMonth = /(\d{1,2})\s*월/.exec(text);
-  if (onlyMonth && +onlyMonth[1] >= 1 && +onlyMonth[1] <= 12) {
-    return { year: fallback.year, month: +onlyMonth[1], found: true };
+  // 월만 있는 경우: '10월'처럼 붙어 있거나 '10 월 근무표'일 때만.
+  // (날짜 칸 '5' 바로 아래 요일 '월'이 이어 읽혀 '5 월'이 되는 경우를 제목으로 보지 않음)
+  const onlyMonth = /(\d{1,2})월|(\d{1,2})\s+월\s*(?:근무|듀티|duty)/i.exec(text);
+  const om = onlyMonth && +(onlyMonth[1] || onlyMonth[2]);
+  if (om >= 1 && om <= 12) {
+    return { year: fallback.year, month: om, found: true };
   }
   return { ...fallback, found: false };
 }
@@ -222,12 +225,79 @@ function fitColumns(header, year, month, headerWords = [], allWords = []) {
   };
 }
 
+// 날짜가 정해진 공휴일 (표에 적힌 공휴일 이름의 칸 → 몇 월 근무표인지 확인)
+const FIXED_HOLIDAYS = [
+  [/신정/, 1, 1],
+  [/삼일절|3\.?1절/, 3, 1],
+  [/어린이/, 5, 5],
+  [/현충/, 6, 6],
+  [/광복/, 8, 15],
+  [/개천/, 10, 3],
+  [/한글날/, 10, 9],
+  [/성탄|크리스마스/, 12, 25]
+];
+const WEEKDAY_CHARS = '일월화수목금토';
+
+/**
+ * 제목에서 읽은 연/월이 표와 맞는지 확인하고, 틀렸으면 바로잡음
+ *  - 요일 줄(토 일 월 …)과 날짜가 맞는 달, 공휴일 이름(개천절 등)이 그 날짜 칸에 있는 달
+ *  - 사진에서 제목 숫자를 잘못 읽거나(10월 → 1, 5월) 제목이 없어도 올바른 달로
+ */
+function verifyYearMonth(ym, header, clean, headerWords, today) {
+  const near = clean.filter((w) => Math.abs(center(w).y - header.y) <= header.h * 4);
+  const weekdays = near
+    .filter((w) => w.text.length === 1 && WEEKDAY_CHARS.includes(w.text) && Math.abs(center(w).y - header.y) > header.h * 0.5)
+    .map((w) => ({ x: center(w).x, wd: WEEKDAY_CHARS.indexOf(w.text) }));
+  const holidays = near
+    .map((w) => ({ x: center(w).x, h: FIXED_HOLIDAYS.find(([re]) => re.test(w.text)) }))
+    .filter((q) => q.h);
+  if (weekdays.length < 5 && !holidays.length) return ym;
+
+  const score = (y, m) => {
+    const cols = fitColumns(header, y, m, headerWords, clean);
+    const dateAt = (x) => {
+      const idx = cols.xToIdx(x);
+      return idx === -999 ? null : new Date(y, m - 1, idx);
+    };
+    // 같은 날짜들을 9월/10월 어느 쪽으로도 볼 수 있을 때(9/26~10/25)는 날짜가 더 많이 들어가는 달 (10월)
+    const lastDay = new Date(y, m, 0).getDate();
+    let s = cols.centers.filter((c) => c.idx >= 1 && c.idx <= lastDay).length * 0.01;
+    weekdays.forEach((q) => {
+      const d = dateAt(q.x);
+      if (d && d.getDay() === q.wd) s += 1;
+    });
+    holidays.forEach((q) => {
+      const d = dateAt(q.x);
+      if (d && d.getMonth() + 1 === q.h[1] && d.getDate() === q.h[2]) s += 3;
+    });
+    return s;
+  };
+
+  // 후보: 오늘 기준 6개월 전 ~ 12개월 뒤 + 제목에서 읽은 달
+  const cands = [];
+  for (let k = -6; k <= 12; k++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + k, 1);
+    cands.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+  }
+  if (!cands.some((c) => c.year === ym.year && c.month === ym.month)) cands.push({ year: ym.year, month: ym.month });
+  const dist = (c) => Math.abs((c.year - today.getFullYear()) * 12 + c.month - 1 - today.getMonth());
+  const scored = cands.map((c) => ({ ...c, s: score(c.year, c.month) }));
+  const current = scored.find((c) => c.year === ym.year && c.month === ym.month);
+  const best = scored.sort((a, b) => b.s - a.s || dist(a) - dist(b))[0];
+  // 요일은 여러 개가 맞아야(오인식 대비) 바꿈. 제목에서 읽은 달이 같은 점수면 그대로
+  const enough = holidays.length ? best.s >= 3 : Math.floor(best.s) >= Math.max(5, weekdays.length * 0.6);
+  // 제목에서 읽은 달은 날짜가 실제로 더 맞을 때만 바꿈 (같은 날짜를 9월/10월로 부르는 차이는 제목대로)
+  const better = ym.found ? Math.floor(best.s) > Math.floor(current.s) : best.s > current.s;
+  if (!enough || !better) return ym;
+  return { year: best.year, month: best.month, found: true, corrected: true };
+}
+
 /**
  * @param words  [{ text, x0, y0, x1, y1, confidence }]
- * @param opts   { year, month (fallback), shiftTypes }
+ * @param opts   { year, month (fallback), shiftTypes, today }
  * @returns { year, month, people: { 이름: { 'YYYY-MM-DD': { code, raw, confidence } } }, names, error? }
  */
-export function parseRosterWords(words, { year, month, shiftTypes = [] } = {}) {
+export function parseRosterWords(words, { year, month, shiftTypes = [], today = new Date() } = {}) {
   const clean = words
     .map((w) => ({ ...w, text: String(w.text || '').trim() }))
     .filter((w) => w.text && w.x1 > w.x0 && w.y1 > w.y0);
@@ -246,6 +316,12 @@ export function parseRosterWords(words, { year, month, shiftTypes = [] } = {}) {
     const d = new Date(ym.year, ym.month - 1 + cols.shiftMonth, 1);
     ym.year = d.getFullYear();
     ym.month = d.getMonth() + 1;
+    cols = fitColumns(header, ym.year, ym.month, headerWords, clean);
+  }
+  // 요일 줄·공휴일 칸으로 확인해서 제목을 잘못 읽은 경우 바로잡음
+  const checked = verifyYearMonth(ym, header, clean, headerWords, today);
+  if (checked !== ym) {
+    Object.assign(ym, checked);
     cols = fitColumns(header, ym.year, ym.month, headerWords, clean);
   }
   // 기울어진 사진 보정: 헤더 숫자들의 x-y 기울기

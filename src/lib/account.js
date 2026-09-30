@@ -144,3 +144,10 @@ export async function deleteMyAccount() {
   await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
   localStorage.clear();
 }
+
+/** 이 폰에서 로그아웃: 서버 데이터는 그대로 두고 이 기기의 로그인·데이터만 지움. 호출 후 새로고침 필요 */
+export async function signOutThisDevice() {
+  const supabase = await getSupabase();
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+  localStorage.clear();
+}

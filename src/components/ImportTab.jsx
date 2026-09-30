@@ -5,7 +5,6 @@ import { toast } from '../lib/toast';
 import Modal from './Modal';
 import { confirmDialog } from '../lib/confirm';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive, ChevronRight } from 'lucide-react';
-import { unregisterDevice } from '../lib/pushNotifications';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
@@ -52,6 +51,8 @@ export default function ImportTab({
   setDayNotes,
   onImported,
   initialNotice = '',
+  repickImport = null,
+  onRepickShown,
   accountStatus,
   onOpenAccount
 }) {
@@ -65,15 +66,12 @@ export default function ImportTab({
   // 인식 결과(사진/엑셀): 본인 이름을 자동으로 못 찾았을 때만 이름 선택 창 표시
   // { source: '사진' | '엑셀', yearMonth: 'YYYY-MM', byName: { 이름: { shifts, uncertain } } }
   const [pendingImport, setPendingImport] = useState(null);
-  const [rosterDraft, setRosterDraft] = useState(rosterName);
-  useEffect(() => setRosterDraft(rosterName), [rosterName]);
-  const [editingRoster, setEditingRoster] = useState(false);
-  const saveRosterDraft = () => {
-    setEditingRoster(false);
-    const v = rosterDraft.trim().slice(0, 30);
-    setRosterDraft(v);
-    if (v !== rosterName) setRosterName?.(v);
-  };
+  // 가져온 뒤 '내 이름이 아니에요' → 같은 근무표의 이름 선택 창을 다시 띄움 (파일을 다시 고를 필요 없이)
+  useEffect(() => {
+    if (!repickImport) return;
+    setPendingImport(repickImport);
+    onRepickShown?.();
+  }, [repickImport, onRepickShown]);
 
   /** 근무표에 바로 등록 → 내 근무 달력으로 이동 (App 이 되돌리기 배너 표시) */
   /** @param remember 이름 선택 창에서 직접 고른 경우 → '근무표 속 내 이름'으로 저장(서버 동기화) */
@@ -82,7 +80,7 @@ export default function ImportTab({
     if (!data) return;
     if (remember && name !== rosterName) setRosterName?.(name);
     setPendingImport(null);
-    onImported?.({ name, source: imp.source, yearMonth: imp.yearMonth, shifts: data.shifts, uncertain: data.uncertain });
+    onImported?.({ imp, name, source: imp.source, yearMonth: imp.yearMonth, shifts: data.shifts, uncertain: data.uncertain });
   };
 
   /** 내 줄 자동 선택: 근무표 속 내 이름(설정) → 앱 이름, 사진 오타(한 글자 차이)까지. 못 찾으면 이름 선택 창 */
@@ -497,42 +495,6 @@ export default function ImportTab({
             <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
           </label>
         </div>
-
-        {/* 근무표 속 내 이름: 따로 입력할 필요 없음. 사진·엑셀에서 이름을 한 번 고르면 기억 → 그때부터만 한 줄로 표시 */}
-        {(rosterName || editingRoster) && (
-          <div className="px-1 flex items-center gap-2 text-xs font-bold text-slate-500">
-            {editingRoster ? (
-              <>
-                <input
-                  id="roster-name"
-                  aria-label="근무표 속 내 이름"
-                  autoFocus
-                  value={rosterDraft}
-                  onChange={(e) => setRosterDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') saveRosterDraft();
-                    if (e.key === 'Escape') setEditingRoster(false);
-                  }}
-                  maxLength={30}
-                  placeholder="근무표에 적힌 내 이름"
-                  className="flex-1 min-w-0 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-400"
-                />
-                <button type="button" onClick={saveRosterDraft} className="shrink-0 px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-black cursor-pointer">
-                  저장
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="flex-1 min-w-0 truncate">
-                  근무표에서 찾을 내 이름: <b className="text-slate-800">{rosterName}</b>
-                </span>
-                <button type="button" onClick={() => setEditingRoster(true)} className="shrink-0 text-indigo-600 font-black underline cursor-pointer">
-                  변경
-                </button>
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       {/* 내 데이터: 계정 · 백업 · 내보내기 */}
@@ -591,29 +553,34 @@ export default function ImportTab({
         </div>
 
         <div className="pt-1 text-center">
+          {/* 근무·메모만 지움 (이 폰 + 서버). 이름·계정·그룹·근무 종류·설정은 그대로, 첫 화면으로 가지 않음 */}
           <button
             onClick={async () => {
+              const count = Object.keys(myShifts || {}).length + Object.keys(dayNotes || {}).length;
+              if (!count) {
+                toast('지울 근무·메모가 없어요.');
+                return;
+              }
               if (
                 await confirmDialog({
-                  title: '전체 초기화할까요?',
+                  title: '근무·메모를 모두 지울까요?',
                   message:
-                    '이 기기의 근무표·메모·설정을 모두 지우고 처음 상태로 돌아가요.\n\n' +
-                    (accountStatus === 'linked'
-                      ? '연결된 계정의 서버 데이터는 남아 있어서, 다시 로그인하면 불러올 수 있어요.'
-                      : '계정을 연결하지 않아서 서버에 저장된 근무와 참여 중인 그룹에도 다시 들어갈 수 없어요. (복구 불가)'),
-                  confirmText: '초기화',
+                    '달력의 근무와 날짜별 메모를 이 폰과 서버에서 모두 지워요. 다른 폰에서 로그인해도 돌아오지 않아요.\n\n' +
+                    '이름·계정·그룹·근무 종류·시급·연차 설정은 그대로예요.\n' +
+                    "되돌리고 싶을 수 있으면 먼저 위의 '백업 저장'을 해 두세요.",
+                  confirmText: '모두 지우기',
                   danger: true
                 })
               ) {
-                await unregisterDevice(); // 초기화 후 이전 계정 알림이 오지 않도록 토큰 해제
-                localStorage.clear();
-                window.location.reload();
+                setMyShifts({});
+                setDayNotes({});
+                toast('근무·메모를 모두 지웠어요.', 'success');
               }
             }}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-500 hover:text-rose-700 hover:underline cursor-pointer"
           >
             <Trash2 size={14} />
-            <span>전체 초기화 (복구 불가)</span>
+            <span>근무·메모 전체 삭제</span>
           </button>
           <a
             href="/privacy.html"
@@ -680,7 +647,7 @@ export default function ImportTab({
               {pendingImport.source} 근무표에서 {Object.keys(pendingImport.byName).length}명을 찾았어요. 본인 이름을 누르면 바로 내 근무표에 등록돼요.
             </p>
             <p className="text-[11px] font-bold text-indigo-600 bg-indigo-50 rounded-xl px-2.5 py-1.5">
-              고른 이름은 '근무표 속 내 이름'으로 저장돼서 다음부터는 자동으로 등록돼요.
+              고른 이름은 기억해서 다음부터는 묻지 않고 자동으로 등록돼요.
             </p>
             <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
               {Object.keys(pendingImport.byName).map((name) => (

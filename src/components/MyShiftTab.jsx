@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
-import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle } from 'lucide-react';
+import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
@@ -54,6 +54,7 @@ export default function MyShiftTab({
   setDayNotes,
   importBanner,
   onUndoImport,
+  onRepickImport,
   onCloseImportBanner,
   onResolveUncertain,
   onOpenImport,
@@ -332,12 +333,23 @@ export default function MyShiftTab({
               <AlertTriangle size={12} className="shrink-0" /> 노란 테두리 {importBanner.uncertain.length}일은 사진과 비교해 확인해 주세요 (눌러서 수정)
             </p>
           )}
-          <button
-            onClick={onUndoImport}
-            className="flex items-center gap-1 text-[11px] font-black bg-white text-indigo-700 px-3 py-1.5 rounded-xl cursor-pointer"
-          >
-            <Undo2 size={12} /> 되돌리기
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={onUndoImport}
+              className="flex items-center gap-1 text-[11px] font-black bg-white text-indigo-700 px-3 py-1.5 rounded-xl cursor-pointer"
+            >
+              <Undo2 size={12} /> 되돌리기
+            </button>
+            {/* 다른 사람 줄로 들어갔으면 바로 다시 고르기 (가져오기 화면에 따로 이름 설정을 두지 않음) */}
+            {Object.keys(importBanner.imp?.byName || {}).length > 1 && (
+              <button
+                onClick={onRepickImport}
+                className="flex items-center gap-1 text-[11px] font-black bg-white/15 text-white px-3 py-1.5 rounded-xl cursor-pointer"
+              >
+                <UserX size={12} /> 내 이름이 아니에요
+              </button>
+            )}
+          </div>
         </div>
       )}
 

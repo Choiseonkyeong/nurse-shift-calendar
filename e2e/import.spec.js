@@ -37,9 +37,9 @@ test('근무표 사진: 내 이름이 없으면 이름만 고르면 등록', asy
   await page.getByRole('button', { name: '오세훈', exact: true }).click();
   await expect(page.getByText(/근무표 이름: 오세훈/)).toBeVisible();
 
-  // 고른 이름은 '근무표 속 내 이름'으로 저장 → 다음 사진은 묻지 않고 바로 등록
+  // 고른 이름은 기억 → 다음 사진은 묻지 않고 바로 등록 (가져오기 화면엔 이름 설정 줄 없음)
   await tab(page, '등록').click();
-  await expect(page.getByText('근무표에서 찾을 내 이름:')).toContainText('오세훈');
+  await expect(page.getByText('근무표에서 찾을 내 이름')).toHaveCount(0);
   await page.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
   await expect(page.getByText(/근무표 이름: 오세훈/)).toBeVisible({ timeout: 200000 });
   await expect(page.getByText('본인 이름 선택')).toHaveCount(0);
@@ -60,24 +60,17 @@ test('닉네임 사용자: 이름을 따로 입력하지 않아도 한 번 고�
 
   await login(page);
   await tab(page, '등록').click();
-  // 입력칸 없이 시작 (처음엔 '근무표에서 찾을 내 이름' 줄도 없음)
-  await expect(page.getByText('근무표에서 찾을 내 이름:')).toHaveCount(0);
+  // 이름 입력칸·설정 줄 없이 시작
+  await expect(page.getByLabel('근무표 속 내 이름')).toHaveCount(0);
   await page.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
   await expect(page.getByText('본인 이름 선택')).toBeVisible({ timeout: 200000 });
   await page.getByRole('button', { name: '서지수', exact: true }).click();
   await expect.poll(() => state.settings[profile.id]?.settings?.roster_name).toBe('서지수');
 
-  // 기억한 이름은 한 줄로 보이고 바꿀 수 있음
-  await tab(page, '등록').click();
-  await page.getByRole('button', { name: '변경', exact: true }).click();
-  await expect(page.getByLabel('근무표 속 내 이름')).toHaveValue('서지수');
-  await page.keyboard.press('Escape');
-
   // 새 폰: 로그인하면 근무표 속 이름이 돌아오고, 사진은 바로 내 줄로 등록
   const other = await browser.newPage();
   await login(other);
   await tab(other, '등록').click();
-  await expect(other.getByText('근무표에서 찾을 내 이름:')).toContainText('서지수');
   await other.locator('input[type=file][accept="image/*"]:not([capture])').setInputFiles(fixture('photo2.png'));
   await expect(other.getByText(/근무표 이름: 서지수/)).toBeVisible({ timeout: 200000 });
   expect((await readLocal(other, 'my_shift_data'))['2026-09-01']).toBe('OFF');
@@ -93,6 +86,31 @@ test('엑셀 근무표 → 내 이름 자동 선택 후 바로 등록 (인터넷
   const saved = await readLocal(page, 'my_shift_data');
   // 김간호 행: D, 데이, E, /, N, O, 연차, OFF 반복
   expect([1, 2, 3, 4, 5, 6, 7, 8].map((d) => saved[`2026-10-0${d}`])).toEqual(['D', 'D', 'E', 'OFF', 'N', 'OFF', '연차', 'OFF']);
+});
+
+test('다른 사람 줄로 들어갔으면 "내 이름이 아니에요" → 되돌리고 같은 근무표에서 다시 고르기, 고른 이름은 기억', async ({ page }) => {
+  await openApp(page, { name: '김간호', local: { my_shift_data: { '2026-10-02': 'M', '2026-09-30': 'D' } } });
+  const upload = async () => {
+    await tab(page, '등록').click();
+    await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(fixture('roster.xlsx'));
+  };
+  await upload();
+  await expect(page.getByText(/근무표 이름: 김간호/)).toBeVisible();
+
+  await page.getByRole('button', { name: '내 이름이 아니에요' }).click();
+  const picker = page.getByRole('dialog', { name: '본인 이름 선택' });
+  await expect(picker).toBeVisible(); // 파일을 다시 고르지 않아도 이름 목록이 바로
+  expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-10-02': 'M', '2026-09-30': 'D' }); // 잘못 들어간 근무는 되돌림
+  await picker.getByRole('button', { name: /^이간호/ }).click();
+  await expect(page.getByText(/근무표 이름: 이간호/)).toBeVisible();
+  let saved = await readLocal(page, 'my_shift_data');
+  expect([1, 2, 3, 4].map((d) => saved[`2026-10-0${d}`])).toEqual(['N', 'N', 'OFF', 'E']);
+  expect(saved['2026-09-30']).toBe('D');
+
+  // 다음 가져오기부터는 앱 이름(김간호)보다 고른 이름을 먼저
+  await upload();
+  await expect(page.getByText(/근무표 이름: 이간호/)).toBeVisible();
+  await expect(picker).toHaveCount(0);
 });
 
 test('.ics 가져오기: 반복 일정·메모', async ({ page }) => {

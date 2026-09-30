@@ -3,7 +3,8 @@ import Modal from './Modal';
 import { confirmDialog } from '../lib/confirm';
 import SocialButtons from './SocialButtons';
 import { PROVIDERS } from '../lib/socialAuth';
-import { X, ShieldCheck, Mail, KeyRound, LogIn, Loader2, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
+import { X, ShieldCheck, Mail, KeyRound, LogIn, LogOut, Loader2, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
+import { unregisterDevice } from '../lib/pushNotifications';
 import {
   getAccountInfo,
   linkEmail,
@@ -11,6 +12,7 @@ import {
   signInWithEmail,
   sendPasswordReset,
   deleteMyAccount,
+  signOutThisDevice,
   friendlyAuthError
 } from '../lib/account';
 
@@ -120,6 +122,22 @@ export default function AccountModal({ online, userName, initialMode = 'link', i
   const handleDeleteAccount = () =>
     run(async () => {
       await deleteMyAccount();
+      window.location.reload();
+    });
+
+  // 이 폰에서 로그아웃 (계정이 연결된 경우만): 폰을 넘길 때 등. 다시 로그인하면 그대로
+  const handleSignOut = () =>
+    run(async () => {
+      if (
+        !(await confirmDialog({
+          title: '이 폰에서 로그아웃할까요?',
+          message: '이 폰의 근무표·설정이 지워지고 처음 화면으로 돌아가요.\n서버의 데이터는 그대로라서 다시 로그인하면 모두 돌아와요.',
+          confirmText: '로그아웃'
+        }))
+      )
+        return;
+      await unregisterDevice(); // 로그아웃 후 이 폰으로 알림이 오지 않도록
+      await signOutThisDevice();
       window.location.reload();
     });
 
@@ -280,6 +298,16 @@ export default function AccountModal({ online, userName, initialMode = 'link', i
 
         {online && mode === 'link' && (
           <div className="pt-3 border-t border-slate-100 space-y-2">
+            {status === 'linked' && !deleteOpen && (
+              <button
+                type="button"
+                onClick={handleSignOut}
+                disabled={busy}
+                className="w-full py-2 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+              >
+                <LogOut size={13} /> 이 폰에서 로그아웃
+              </button>
+            )}
             {!deleteOpen ? (
               <button
                 type="button"
