@@ -36,7 +36,7 @@ const REFRESH_MS = 60000;
  * @param getCode (profileId, dateKey) => 현재 보이는 근무 코드 (교환 미리보기용)
  * @param onSwapApplied 내 근무가 서버에서 바뀌었을 때 (교환 수락) → 내 달력 재동기화
  */
-export default function GroupBoard({ group, profile, themeColor, privacyBlur, defaultDate, getCode, onSwapApplied }) {
+export default function GroupBoard({ group, profile, themeColor, privacyBlur, defaultDate, getCode, loadDayCodes, onSwapApplied }) {
   const shiftTypes = useShiftTypes();
   const [posts, setPosts] = useState([]);
   const [swaps, setSwaps] = useState([]);
@@ -177,6 +177,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
                   profile={profile}
                   defaultDate={defaultDate}
                   getCode={getCode}
+                  loadDayCodes={loadDayCodes}
                   chip={chip}
                   blurCls={blurCls}
                   onDone={async () => {
@@ -292,13 +293,32 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
 }
 
 /** 교환 요청 입력: 상대 + 날짜 1~2개 (+ 메시지) */
-function SwapForm({ group, profile, defaultDate, getCode, chip, blurCls, onDone, onError }) {
+function SwapForm({ group, profile, defaultDate, getCode, loadDayCodes, chip, blurCls, onDone, onError }) {
   const others = (group.members || []).filter((m) => m.id !== profile.id);
   const [targetId, setTargetId] = useState(others[0]?.id || '');
   const [date1, setDate1] = useState(defaultDate || '');
   const [date2, setDate2] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // 고른 날짜의 동료 근무는 서버에서 직접 확인 (그룹 달력에 보이는 달이 아니어도 정확한 미리보기)
+  const [dayCodes, setDayCodes] = useState({}); // { 'YYYY-MM-DD': { profileId: code } }
+  useEffect(() => {
+    if (!loadDayCodes) return undefined;
+    let alive = true;
+    [date1, date2]
+      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !dayCodes[d])
+      .forEach((d) =>
+        loadDayCodes(d)
+          .then((codes) => alive && setDayCodes((prev) => ({ ...prev, [d]: codes })))
+          .catch(() => {})
+      );
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date1, date2, loadDayCodes]);
+  const codeOf = (pid, d) => (pid !== profile.id && dayCodes[d] ? dayCodes[d][pid] || '' : getCode(pid, d));
 
   if (!others.length) {
     return <p className="text-xs font-bold text-slate-400 px-1">교환할 다른 멤버가 없습니다. 초대 코드를 공유해 보세요.</p>;
@@ -349,7 +369,7 @@ function SwapForm({ group, profile, defaultDate, getCode, chip, blurCls, onDone,
           </label>
           {value ? (
             <span className="flex items-center gap-1 pl-[72px]">
-              나 {chip(getCode(profile.id, value))} ⇄ {chip(getCode(targetId, value))}
+              나 {chip(codeOf(profile.id, value))} ⇄ {chip(codeOf(targetId, value))}
             </span>
           ) : (
             label !== '날짜' && <span className="block pl-[72px] text-[10px] text-slate-400">하루 더 바꿀 때만 (선택)</span>

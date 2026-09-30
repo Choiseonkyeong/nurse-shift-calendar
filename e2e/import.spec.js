@@ -216,3 +216,41 @@ test('계정에 예전 설정이 있어도 백업 복원한 시급·연차가 �
   await expect.poll(() => state.settings[pid]?.settings?.shift_configs?.hourlyWage).toBe(12345);
   expect((await readLocal(page, 'shift_configs')).hourlyWage).toBe(12345);
 });
+
+test('백업 복원은 서버 근무·메모도 백업 내용으로 완전히 교체 (백업에 없는 날짜는 삭제)', async ({ page, browser }) => {
+  const src = await browser.newPage();
+  await openApp(src, { local: { my_shift_data: { '2026-10-01': 'D', '2026-10-02': 'N' }, day_notes: { '2026-10-02': '회식' } } });
+  await tab(src, '등록').click();
+  const [backup] = await Promise.all([src.waitForEvent('download'), src.getByRole('button', { name: /백업 저장/ }).click()]);
+  const backupPath = path.join(os.tmpdir(), `backup-replace-${Date.now()}.json`);
+  await backup.saveAs(backupPath);
+  await src.close();
+
+  // 이 기기 계정에는 백업에 없는 근무·메모가 있음
+  const state = createFakeState();
+  await openApp(page, { state, local: { my_shift_data: { '2026-09-20': 'E', '2026-10-01': 'N' }, day_notes: { '2026-09-20': '교육' } } });
+  await waitSaved(page);
+  const pid = Object.keys(state.profiles)[0];
+  await expect.poll(() => state.shifts[pid]?.['2026-09-20']).toBe('E');
+
+  await tab(page, '등록').click();
+  await page.locator('input[accept=".json,application/json"]').setInputFiles(backupPath);
+  await confirmOk(page);
+  await page.waitForLoadState('load');
+  await waitSaved(page);
+  await expect.poll(() => state.shifts[pid]).toEqual({ '2026-10-01': 'D', '2026-10-02': 'N' });
+  expect(state.notes[pid]).toEqual({ '2026-10-02': '회식' });
+  expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-10-01': 'D', '2026-10-02': 'N' });
+  // 교체는 한 번만: 이후 다른 기기 변경은 평소처럼 반영
+  expect(await page.evaluate(() => localStorage.getItem('restore_replace_pending'))).toBeNull();
+});
+
+test('엑셀 근무표의 영문 이름(Kim Minji)도 인식, 대소문자 달라도 내 줄 자동 선택', async ({ page }) => {
+  await openApp(page, { name: 'kim minji' });
+  await tab(page, '등록').click();
+  await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(fixture('roster-english.xlsx'));
+  await expect(page.getByText('엑셀에서 11월 근무 30일을 등록했어요')).toBeVisible();
+  await expect(page.getByText(/근무표 이름: Kim Minji/)).toBeVisible();
+  const saved = await readLocal(page, 'my_shift_data');
+  expect([1, 2, 3, 4].map((d) => saved[`2026-11-0${d}`])).toEqual(['D', 'E', 'N', 'OFF']);
+});

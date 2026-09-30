@@ -156,3 +156,14 @@ test('수당 탭: 휴일·야간 가산, 입사일 기준 연차, 통계', async
 
   await expect(page.getByText('최장 연속N').locator('..')).toContainText('2일');
 });
+
+test('처음 사용자 안내에서 반복 패턴을 열면 기본 3개월 → 오늘부터 3개월치가 한 번에 채워짐', async ({ page }) => {
+  await openApp(page);
+  await page.getByRole('button', { name: /반복 패턴으로/ }).click();
+  const dialog = page.getByRole('dialog', { name: '반복 패턴 입력' });
+  await expect(dialog.getByRole('combobox')).toHaveValue('3');
+  await dialog.getByRole('button', { name: /일에 적용하기/ }).click();
+  const saved = await readLocal(page, 'my_shift_data');
+  expect(Object.keys(saved).length).toBeGreaterThanOrEqual(90);
+  expect(saved['2026-12-27']).toBeTruthy();
+});

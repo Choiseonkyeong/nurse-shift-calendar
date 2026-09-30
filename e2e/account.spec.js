@@ -99,3 +99,21 @@ test('개인정보처리방침 페이지', async ({ page }) => {
   await expect(popup.getByText(/기기 안에서만/)).toBeVisible();
   await expect(popup.getByText(/계정 삭제/).first()).toBeVisible();
 });
+
+test('새 폰 로그인 직후 서버에서 근무를 불러오는 동안 "근무를 등록해 볼까요?" 안내가 뜨지 않음', async ({ page }) => {
+  const state = createFakeState();
+  seedAccount(state, { email: 'me@example.com', password: 'secret12', name: '최간호', shifts: { '2026-09-15': 'N' } });
+  await openApp(page, { state, name: null });
+  await page.getByRole('button', { name: /이미 계정이 있어요/ }).click();
+  await page.getByPlaceholder('이메일 주소').fill('me@example.com');
+  await page.getByPlaceholder('비밀번호').fill('secret12');
+  state.delay = { get_my_shifts: 2500 };
+  await page.getByRole('button', { name: '로그인', exact: true }).click();
+  await expect(page.getByText('서버 연결 중')).toBeVisible();
+  // 불러오는 동안(자동 재시도 없이 그 순간) 안내가 없어야 함
+  await page.waitForTimeout(500);
+  expect(await page.getByText('근무를 등록해 볼까요?').count()).toBe(0);
+  await waitSaved(page);
+  await expect(page.getByRole('button', { name: /^9월 15일 N 근무/ })).toBeVisible();
+  await expect(page.getByText('근무를 등록해 볼까요?')).toHaveCount(0);
+});

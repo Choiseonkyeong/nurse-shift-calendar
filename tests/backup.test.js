@@ -48,6 +48,8 @@ describe('전체 백업/복원', () => {
     expect(JSON.parse(dst.getItem('pending_type_ops')).upsert['교']).toMatchObject({ label: '교육' });
     // 복원한 설정이 서버의 예전 설정보다 최신으로 취급됨
     expect(Date.parse(dst.getItem('settings_updated_at'))).toBeGreaterThan(Date.now() - 5000);
+    // 다음 동기화 때 서버를 백업 내용으로 완전히 교체하도록 표시
+    expect(dst.getItem('restore_replace_pending')).toBe('1');
   });
 
   it('잘못된 파일 거부', () => {

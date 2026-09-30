@@ -11,10 +11,12 @@ export const BACKUP_KEYS = [
   'custom_shift_types',
   'shift_configs',
   'shift_alarm_settings',
-  'roster_name' // 근무표(사진·엑셀) 속 내 이름
+  'roster_name', // 근무표(사진·엑셀) 속 내 이름
+  'my_group_colors' // 내 폰에서 정한 그룹 색상
 ];
 const TEXT_KEYS = new Set(['shift_user_name', 'roster_name']); // JSON 이 아닌 문자열로 저장하는 값
 const APP_ID = 'nurse-shift-calendar';
+export const RESTORE_REPLACE_KEY = 'restore_replace_pending';
 
 export function createBackup(storage = localStorage, now = new Date()) {
   const data = {};
@@ -68,6 +70,8 @@ export function restoreBackup(data, storage = localStorage) {
   });
   storage.removeItem('synced_shift_data');
   storage.removeItem('synced_day_notes');
+  // 다음 서버 연결 때 서버 근무·메모를 백업 내용으로 완전히 교체 (백업에 없는 날짜는 서버에서도 삭제)
+  storage.setItem(RESTORE_REPLACE_KEY, '1');
   storage.setItem('name_confirmed', '1');
   // 복원한 설정이 가장 최근 변경 → 서버에 예전 설정이 있어도 덮어쓰이지 않고 서버로 올라가게 (lib/settingsSync)
   if (data.shift_configs || data.shift_alarm_settings || data.roster_name !== undefined) {

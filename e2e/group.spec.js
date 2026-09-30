@@ -143,3 +143,35 @@ test('이름 없이 시작 → 그룹 만들 때만 이름을 묻고 이어서 �
   expect(me.display_name).toBe('박간호');
   expect(state.groups[0].members).toEqual([me.id]);
 });
+
+test('교환 요청 미리보기: 그룹 달력에 보이는 달 밖의 날짜도 동료 근무가 정확히 보임', async ({ page }) => {
+  await setup(page, { myShifts: { '2026-10-05': 'D' }, mateShifts: { '2026-10-05': 'N' } });
+  await tab(page, '그룹').click();
+  await page.getByText('7병동 (2명)').click();
+  await expect(page.getByRole('heading', { name: '2026년 9월' })).toBeVisible();
+  await page.getByRole('button', { name: '근무 교환 요청하기' }).click();
+  await page.locator('input[type=date]').first().fill('2026-10-05');
+  const preview = page.locator('span', { hasText: /^나/ }).filter({ hasText: '⇄' });
+  await expect(preview).toContainText('D');
+  await expect(preview).toContainText('N');
+  await expect(preview).not.toContainText('없음');
+});
+
+test('그룹 색상은 내 폰에서만 바뀌고 서버·다른 멤버 색은 그대로, 새로고침해도 유지', async ({ page }) => {
+  const { state, group } = await setup(page);
+  let serverWrites = 0;
+  page.on('request', (r) => /\/rest\/v1\/groups/.test(r.url()) && r.method() === 'PATCH' && serverWrites++);
+  await tab(page, '그룹').click();
+  await page.getByText('7병동 (2명)').click();
+  await page.getByLabel('그룹 색상 (내 폰에서만 적용)').fill('#10b981');
+  const back = page.getByRole('button', { name: /전체 그룹 목록/ });
+  await expect(back).toHaveCSS('color', 'rgb(16, 185, 129)');
+  expect(group.color).toBe('#6366F1');
+  expect(serverWrites).toBe(0);
+  expect(await readLocal(page, 'my_group_colors')).toEqual({ [group.id]: '#10b981' });
+
+  await page.reload();
+  await tab(page, '그룹').click();
+  await expect(page.getByText('7병동 (2명)').locator('..')).toHaveCSS('background-color', 'rgb(16, 185, 129)');
+  expect(state.groups[0].color).toBe('#6366F1');
+});

@@ -1,0 +1,46 @@
+# 운영자가 직접 해야 하는 일 (코드로는 할 수 없는 것)
+
+앱 코드는 모두 배포되어 있습니다. 아래는 **계정·대시보드 접근 권한이 있는 운영자만** 할 수 있는 작업입니다.
+위에서부터 순서대로 하고, 끝난 항목은 `[x]` 로 표시해 두세요.
+
+## 꼭 해야 하는 것
+
+- [ ] **1. Supabase SQL 3개 실행** (3분)
+  - Supabase 대시보드 → SQL Editor → New query → 아래 파일 내용을 **하나씩 전체** 붙여넣고 Run
+    1. `supabase/migrations/20260928000800_shift_swaps.sql` — 그룹 근무 교환 요청
+    2. `supabase/migrations/20260928000900_profile_settings.sql` — 시급·연차·알림 설정을 서버에 저장 (새 폰 로그인 시 복원)
+    3. `supabase/migrations/20260928001000_delete_account.sql` — 앱 안에서 계정 삭제 (스토어 심사 필수)
+  - 확인: 오류 없이 `Success` 가 뜨면 완료. 실행 전에도 앱은 동작하지만 위 3가지 기능이 꺼져 있습니다.
+
+- [ ] **2. 개인정보처리방침 문의처 입력** (1분)
+  - `public/privacy.html` 의 `[운영자 이름 · 문의 이메일을 입력하세요]` 를 실제 값으로 바꿔야 합니다.
+  - 운영자 이름(또는 앱 이름/상호)과 문의 이메일을 알려 주면 대신 바꿔 드립니다.
+  - 스토어에 입력할 주소: `https://nurse-shift-calendar.vercel.app/privacy.html`
+
+## 선택 (필요할 때)
+
+- [ ] **3. Google 로그인 마무리** (15분) — 하기 전에는 Google 버튼이 숨겨져 있어 문제없음
+  1. https://console.cloud.google.com → 프로젝트 만들기 (이름은 **영문**, 예: `nurse-shift`)
+  2. API 및 서비스 → OAuth 동의 화면 → 외부 → 앱 이름·지원 이메일 입력 → 테스트 사용자에 본인 Gmail 추가
+  3. 사용자 인증 정보 → OAuth 클라이언트 ID → 웹 애플리케이션
+     - 승인된 JavaScript 원본: `https://nurse-shift-calendar.vercel.app`
+     - 승인된 리디렉션 URI: `https://ianilyiumkvkowcnuawt.supabase.co/auth/v1/callback` (카카오에 넣은 것과 같은 주소)
+  4. 발급된 클라이언트 ID·보안 비밀번호를 Supabase → Authentication → Sign In / Providers → Google 에 입력 → Save
+  5. 모든 사람이 쓰게 하려면 OAuth 동의 화면에서 **앱 게시**
+  - ⚠️ 클라이언트 보안 비밀번호는 채팅·코드에 붙여넣지 말고 Supabase 화면에만 입력하세요.
+  - 자세한 내용: [`AUTH_SETUP.md`](./AUTH_SETUP.md)
+
+- [ ] **4. 메일 발송 한도 늘리기** — 사용자가 많아지면
+  - Supabase 기본 메일은 시간당 발송 수가 매우 적습니다. Authentication → Emails → SMTP Settings 에 무료 SMTP(Resend, Brevo 등) 연결
+
+- [ ] **5. 백그라운드 푸시 알림** — 앱을 꺼 둬도 근무 알림을 받으려면
+  - [`PUSH_SETUP.md`](./PUSH_SETUP.md) 순서대로 (Firebase 서비스 계정 키 → GitHub Secrets 3개 → 함수 배포 → 예약 실행 SQL)
+
+- [ ] **6. 스토어 등록 전**
+  - 구글 플레이 "데이터 보안": 계정 삭제 경로 = 프로필 → 계정 → 계정 삭제 (웹도 같은 경로)
+  - 개인정보 라벨: 개인정보처리방침 1번 표 그대로 (광고·추적 없음, 사진은 기기 안에서만 처리)
+
+## 하지 않아도 되는 것 (확인 완료)
+
+- 서버 1000행 제한: 앱이 1000개씩 나눠 받도록 되어 있어 **Supabase 설정 변경 불필요**
+- 그룹 색상: 이제 각자 폰에만 저장되어 서버 설정 불필요
