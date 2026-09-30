@@ -289,3 +289,52 @@ test('새 배포 후 오래 열린 탭: 엑셀 읽기 파일(워커)을 못 찾�
   await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(fixture('roster.xlsx'));
   await expect(page.getByText('엑셀에서 10월 근무 31일을 등록했어요')).toBeVisible();
 });
+
+test('엑셀 제목에 연도가 없고 5월을 보고 있어도 → 요일·공휴일 칸으로 10월(9/26~10/25), 달이 틀리면 결과 알림에서 옮기기', async ({ page }) => {
+  const XLSX = await import('xlsx');
+  // 2026년 10월 근무표 (9/26 ~ 10/25), 제목은 '분당 5병동 근무표'(연월 없음), 날짜 아래 요일, 3일 개천절
+  const days = [26, 27, 28, 29, 30, ...Array.from({ length: 25 }, (_, i) => i + 1)];
+  const dates = days.map((d, i) => new Date(2026, i < 5 ? 8 : 9, d));
+  const codes = ['D', 'E', 'N', 'OFF'];
+  const rows = [
+    ['분당 5병동 근무표'],
+    ['직급', '이름', ...days.map((d) => (d === 3 ? '3\n개천절' : String(d)))],
+    ['', '', ...dates.map((d) => '일월화수목금토'[d.getDay()])],
+    ['RN', '김간호', ...days.map((_, i) => codes[i % 4])]
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'S');
+  const file = path.join(os.tmpdir(), `roster-noyear-${Date.now()}.xlsx`);
+  XLSX.writeFile(wb, file);
+
+  await openApp(page, { name: '김간호', local: { my_shift_data: { '2026-09-01': 'M' } } });
+  for (let i = 0; i < 4; i++) await page.getByRole('button', { name: '이전 달' }).click(); // 5월 보기
+  await expect(page.getByText('2026년 5월')).toBeVisible();
+  await tab(page, '등록').click();
+  await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(file);
+  await expect(page.getByText('엑셀에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible();
+  let saved = await readLocal(page, 'my_shift_data');
+  expect(saved['2026-09-26']).toBe('D');
+  expect(saved['2026-10-25']).toBe('E');
+  expect(Object.keys(saved).some((k) => k.startsWith('2026-05'))).toBe(false);
+
+  // 결과 알림에서 한 달 옮기기 → 다시 원래대로
+  await page.getByRole('button', { name: '이전 달로' }).click();
+  await expect(page.getByText('엑셀에서 8월 26일~9월 25일 근무 30일을 등록했어요')).toBeVisible();
+  saved = await readLocal(page, 'my_shift_data');
+  expect(saved['2026-08-26']).toBe('D');
+  expect(saved['2026-10-25']).toBeUndefined();
+  expect(saved['2026-09-01']).toBe('E'); // 옮긴 근무 (원래 9/1 의 M 자리)
+  await page.getByRole('button', { name: '다음 달로' }).click();
+  await expect(page.getByText('엑셀에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible();
+  saved = await readLocal(page, 'my_shift_data');
+  expect(saved['2026-09-01']).toBe('M'); // 원래 근무 복원
+  expect(saved['2026-08-26']).toBeUndefined();
+
+  // 근무·메모 전체 삭제 → 지난 가져오기 결과 알림도 닫힘
+  await tab(page, '등록').click();
+  await page.getByRole('button', { name: '근무·메모 전체 삭제' }).click();
+  await confirmOk(page);
+  await tab(page, '내 근무').click();
+  await expect(page.getByText(/근무 30일을 등록했어요/)).toHaveCount(0);
+});

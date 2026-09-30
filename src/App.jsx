@@ -9,6 +9,7 @@ const GroupShareTab = lazy(lazyImport(() => import('./components/GroupShareTab')
 const ImportTab = lazy(lazyImport(() => import('./components/ImportTab')));
 import NameSetup from './components/NameSetup';
 import InstallHint from './components/InstallHint';
+import { moveImportedMonth } from './lib/importMonth';
 import Toaster from './components/Toaster';
 import ConfirmHost from './components/ConfirmHost';
 import { closeTopModal } from './components/Modal';
@@ -623,6 +624,14 @@ export default function App() {
     setImportBanner(null);
     setActiveTab('import');
   };
+  // 달을 잘못 인식했을 때: 방금 등록한 근무를 한 달씩 옮김 (파일을 다시 고를 필요 없이)
+  const handleMoveImportMonth = (delta) => {
+    if (!importBanner) return;
+    const { shifts, banner } = moveImportedMonth(myShiftsRef.current || {}, importBanner, delta);
+    setMyShifts(shifts);
+    setImportBanner(banner);
+    setSelectedDate(`${banner.yearMonth}-01`);
+  };
   const handleUndoImport = () => {
     if (!importBanner) return;
     setMyShifts((prev) => applyChanges(prev || {}, importBanner.previous));
@@ -849,6 +858,7 @@ export default function App() {
               importBanner={importBanner}
               onUndoImport={handleUndoImport}
               onRepickImport={handleRepickImport}
+              onMoveImportMonth={handleMoveImportMonth}
               onCloseImportBanner={() => setImportBanner(null)}
               onOpenImport={() => setActiveTab('import')}
               loadingFromServer={syncStatus === 'connecting'}
@@ -906,6 +916,7 @@ export default function App() {
               onImported={handleImported}
               initialNotice={resume?.notice || ''}
               repickImport={repickImport}
+              onClearedAll={() => setImportBanner(null)}
               onRepickShown={clearRepick}
               accountStatus={accountStatus}
               onOpenAccount={() => setAccountModal('link')}
