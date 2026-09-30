@@ -94,6 +94,62 @@ describe('rosterParse', () => {
     expect(got).toEqual(expected);
   });
 
+  // 실제 사용 사례: '2026년 10월 근무표'(9/26~10/25), 날짜 아래 요일 줄, 3일 개천절·9일 한글날
+  // 사진에서 제목 월을 못 읽거나 잘못 읽어도 요일·공휴일 칸으로 10월을 찾아야 함
+  function wrappedRoster(title, { weekdays = true, holidays = true } = {}) {
+    const days = [26, 27, 28, 29, 30, ...Array.from({ length: 25 }, (_, i) => i + 1)];
+    const dates = days.map((d, i) => new Date(2026, i < 5 ? 8 : 9, d));
+    const colX = (i) => 120 + i * 40;
+    const words = title.map((t, k) => w(t, 200 + k * 90, 10, 280 + k * 90, 40));
+    days.forEach((d, i) => {
+      words.push(w(String(d), colX(i) - 8, 80, colX(i) + 8, 100));
+      // 날짜 바로 뒤에 요일이 읽힌 순서 (예: '5' '월' → '5 월')
+      if (weekdays) words.push(w('일월화수목금토'[dates[i].getDay()], colX(i) - 7, 104, colX(i) + 7, 120));
+    });
+    if (holidays) {
+      words.push(w('개천절', colX(7) - 15, 122, colX(7) + 15, 132));
+      words.push(w('한글날', colX(13) - 15, 122, colX(13) + 15, 132));
+    }
+    const codes = ['D', 'E', 'N', 'OFF'];
+    days.forEach((d, i) => words.push(w(codes[i % 4], colX(i) - 7, 150, colX(i) + 7, 170)));
+    words.push(w('최간호', 20, 150, 80, 170));
+    return words;
+  }
+  const TODAY = new Date(2026, 8, 30);
+  const range = (r) => {
+    const keys = Object.keys(r.people['최간호']).sort();
+    return [keys[0], keys[keys.length - 1]];
+  };
+
+  it("'5 월'(5일 칸 + 요일 '월')을 제목 월로 읽지 않음", () => {
+    expect(detectYearMonth('26 토 27 일 28 월 1 목 5 월 6 화', { year: 2026, month: 9 })).toMatchObject({ found: false });
+    expect(detectYearMonth('10 월 근무표', { year: 2026, month: 1 })).toMatchObject({ month: 10, found: true });
+  });
+
+  it('제목 월을 못 읽었고 다른 달(5월)을 보고 있었어도 → 요일·공휴일로 10월(9/26~10/25)', () => {
+    const r = parseRosterWords(wrappedRoster(['분당', '5병동', '근무표']), { year: 2026, month: 5, today: TODAY });
+    expect(r.error).toBeUndefined();
+    expect([r.year, r.month]).toEqual([2026, 10]);
+    expect(range(r)).toEqual(['2026-09-26', '2026-10-25']);
+  });
+
+  it("제목 '10월'을 '1'로 잘못 읽어도 → 공휴일 칸(개천절 3일)으로 10월", () => {
+    // 2026년 1월과 10월은 1일 요일이 같아서 요일만으로는 구분 불가 → 공휴일로 구분
+    const r = parseRosterWords(wrappedRoster(['2026년', '1O', '근무표']), { year: 2026, month: 9, today: TODAY });
+    expect([r.year, r.month]).toEqual([2026, 10]);
+    expect(range(r)).toEqual(['2026-09-26', '2026-10-25']);
+  });
+
+  it('요일만 있어도 오늘과 가까운 맞는 달, 제목이 맞으면 그대로', () => {
+    const noHoliday = parseRosterWords(wrappedRoster(['근무표'], { holidays: false }), { year: 2026, month: 5, today: TODAY });
+    expect([noHoliday.year, noHoliday.month]).toEqual([2026, 10]);
+    const ok = parseRosterWords(wrappedRoster(['2026년', '10월', '근무표']), { year: 2026, month: 5, today: TODAY });
+    expect([ok.year, ok.month]).toEqual([2026, 10]);
+    // 요일·공휴일 줄이 없으면 예전처럼 제목(없으면 보고 있던 달) 기준
+    const plain = parseRosterWords(wrappedRoster(['2026년', '10월'], { weekdays: false, holidays: false }), { year: 2026, month: 5, today: TODAY });
+    expect(plain.month).toBe(10);
+  });
+
   it("'연차'가 영문으로 읽힌 경우", () => {
     expect(cellToCode('HX')).toBe('연차');
     expect(cellToCode('AX')).toBe('연차');
