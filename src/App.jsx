@@ -598,7 +598,7 @@ export default function App() {
 
   // 사진/엑셀 가져오기 → 내 근무표에 바로 등록하고 달력으로 이동 (되돌리기 가능)
   const [importBanner, setImportBanner] = useState(null);
-  const handleImported = ({ name, source, yearMonth, shifts, uncertain = [] }) => {
+  const handleImported = ({ imp, name, source, yearMonth, shifts, uncertain = [] }) => {
     const current = myShiftsRef.current || {};
     const previous = Object.fromEntries(Object.keys(shifts).map((k) => [k, current[k] || null]));
     setMyShifts((prev) => ({ ...(prev || {}), ...shifts }));
@@ -610,7 +610,17 @@ export default function App() {
       tally[c] = (tally[c] || 0) + 1;
     });
     const counts = Object.entries(tally).sort((x, y) => y[1] - x[1]);
-    setImportBanner({ name, source, yearMonth, count: Object.keys(shifts).length, counts, uncertain, previous, keys: Object.keys(shifts) });
+    setImportBanner({ imp, name, source, yearMonth, count: Object.keys(shifts).length, counts, uncertain, previous, keys: Object.keys(shifts) });
+  };
+  // '내 이름이 아니에요': 방금 등록을 되돌리고 같은 근무표의 이름 선택 창으로 (고른 이름은 다음부터 기억)
+  const [repickImport, setRepickImport] = useState(null);
+  const clearRepick = useCallback(() => setRepickImport(null), []);
+  const handleRepickImport = () => {
+    if (!importBanner?.imp) return;
+    setMyShifts((prev) => applyChanges(prev || {}, importBanner.previous));
+    setRepickImport(importBanner.imp);
+    setImportBanner(null);
+    setActiveTab('import');
   };
   const handleUndoImport = () => {
     if (!importBanner) return;
@@ -830,6 +840,7 @@ export default function App() {
               onDeleteShiftType={handleDeleteShiftType}
               importBanner={importBanner}
               onUndoImport={handleUndoImport}
+              onRepickImport={handleRepickImport}
               onCloseImportBanner={() => setImportBanner(null)}
               onOpenImport={() => setActiveTab('import')}
               loadingFromServer={syncStatus === 'connecting'}
@@ -886,6 +897,8 @@ export default function App() {
               setDayNotes={setDayNotes}
               onImported={handleImported}
               initialNotice={resume?.notice || ''}
+              repickImport={repickImport}
+              onRepickShown={clearRepick}
               accountStatus={accountStatus}
               onOpenAccount={() => setAccountModal('link')}
             />
