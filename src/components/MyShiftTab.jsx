@@ -47,7 +47,8 @@ export default function MyShiftTab({
   onUndoImport,
   onCloseImportBanner,
   onResolveUncertain,
-  onOpenImport
+  onOpenImport,
+  loadingFromServer = false
 }) {
   // 방금 가져온 근무 중 인식이 불확실한 날짜 (달력에 노란 테두리)
   const uncertainSet = new Set(importBanner?.uncertain || []);
@@ -73,7 +74,7 @@ export default function MyShiftTab({
   const [quickCode, setQuickCode] = useState(null);
   const quickMode = quickCode !== null;
   const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
-  const [isPatternOpen, setIsPatternOpen] = useState(false);
+  const [isPatternOpen, setIsPatternOpen] = useState(false); // false | true | 'first'(처음 사용자 안내에서 열림)
 
   // 알림 권한 요청 및 타이머 등록
   const requestNotificationPermission = async () => {
@@ -287,8 +288,9 @@ export default function MyShiftTab({
         </div>
       )}
 
-      {/* 처음 쓰는 사용자: 근무 등록 방법 안내 (근무가 하나라도 생기면 사라짐) */}
-      {!importBanner && Object.keys(myShifts || {}).length === 0 && (
+      {/* 처음 쓰는 사용자: 근무 등록 방법 안내 (근무가 하나라도 생기면 사라짐)
+          서버에서 근무를 불러오는 동안은 숨김 → 새 폰 로그인 직후 안내가 잠깐 떴다 사라지지 않게 */}
+      {!importBanner && !loadingFromServer && Object.keys(myShifts || {}).length === 0 && (
         <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-3xl space-y-3">
           <div>
             <p className="text-sm font-black text-indigo-900">근무를 등록해 볼까요?</p>
@@ -306,7 +308,7 @@ export default function MyShiftTab({
             </button>
             <button
               type="button"
-              onClick={() => setIsPatternOpen(true)}
+              onClick={() => setIsPatternOpen('first')}
               className="p-3 rounded-2xl bg-white border border-indigo-100 text-left cursor-pointer hover:border-indigo-300"
             >
               <span className="block text-lg">🔁</span>
@@ -601,6 +603,8 @@ export default function MyShiftTab({
       {isPatternOpen && (
         <PatternFill
           startDate={selectedDate}
+          // 처음 등록할 때는 넉넉히 3개월 (이번 달 끝까지면 며칠만 채워질 수 있음)
+          defaultPeriod={isPatternOpen === 'first' ? '3' : 'month'}
           myShifts={myShifts || {}}
           onClose={() => setIsPatternOpen(false)}
           onApply={(filled) => {

@@ -46,4 +46,8 @@ describe('근무표에서 내 이름 고르기', () => {
   it('한 명뿐인 근무표', () => {
     expect(pickRosterName(['아무개'], { userName: '뽀송이' })).toEqual({ name: '아무개', how: 'single' });
   });
+  it('영문 이름은 대소문자·띄어쓰기 달라도 같은 사람', () => {
+    expect(pickRosterName(['Kim Minji', 'Lee Sora'], { userName: 'kim minji' })).toEqual({ name: 'Kim Minji', how: 'exact' });
+    expect(pickRosterName(['Kim Minji', 'Lee Sora'], { userName: 'KIMMINJI' }).name).toBe('Kim Minji');
+  });
 });

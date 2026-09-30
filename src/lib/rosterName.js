@@ -6,7 +6,8 @@
 
 export const ROSTER_NAME_KEY = 'roster_name';
 
-const norm = (s) => String(s || '').replace(/\s+/g, '').replace(/\(.*?\)/g, '');
+// 공백·괄호 제거, 영문은 대소문자 구분 없이 (Kim Minji = kim minji)
+const norm = (s) => String(s || '').replace(/\s+/g, '').replace(/\(.*?\)/g, '').toLowerCase();
 
 /** 글자 하나 바꾸기/넣기/빼기 횟수 (편집 거리) */
 export function nameDistance(a, b) {

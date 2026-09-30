@@ -26,6 +26,7 @@ import { applyChanges, mergeWithRemote } from './lib/syncMerge';
 import { queueTypeOp, flushTypeQueue, applyTypeQueue } from './lib/typeSync';
 import { SETTINGS_TS_KEY, decideSettingsSync, fetchMySettings, saveMySettings } from './lib/settingsSync';
 import { ROSTER_NAME_KEY } from './lib/rosterName';
+import { RESTORE_REPLACE_KEY } from './lib/backup';
 
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
 const LEGACY_DEFAULT_NAME = '최수민';
@@ -382,8 +383,10 @@ export default function App() {
       await flushTypeQueue({ upsert: upsertShiftType, remove: deleteShiftType });
       const remote = await fetchMyShifts();
       const local = myShiftsRef.current || {};
+      // 백업 복원 직후: 서버를 기기(백업) 내용으로 완전히 교체 (기준 = 서버 → 차이 전부가 이 기기 변경)
+      const replaceWithLocal = localStorage.getItem(RESTORE_REPLACE_KEY) === '1';
       // 기준 스냅샷이 없으면 이전 버전 사용자 → 기기 값 전체 우선 (기존 동작 유지)
-      const merged = mergeWithRemote(remote, local, syncedShiftsRef.current || readJson(SYNCED_SHIFTS_KEY));
+      const merged = mergeWithRemote(remote, local, replaceWithLocal ? remote : syncedShiftsRef.current || readJson(SYNCED_SHIFTS_KEY));
       const result = await saveShiftChanges(diffShifts(remote, merged));
       if (result?.skipped?.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', result.skipped);
       markSyncedShifts(merged);
@@ -393,10 +396,15 @@ export default function App() {
       try {
         const remoteNotes = await fetchMyNotes();
         const localNotes = dayNotesRef.current || {};
-        const mergedNotes = mergeWithRemote(remoteNotes, localNotes, syncedNotesRef.current || readJson(SYNCED_NOTES_KEY));
+        const mergedNotes = mergeWithRemote(
+          remoteNotes,
+          localNotes,
+          replaceWithLocal ? remoteNotes : syncedNotesRef.current || readJson(SYNCED_NOTES_KEY)
+        );
         const upload = diffShifts(remoteNotes, mergedNotes);
         if (Object.keys(upload).length) await saveNoteChanges(me.id, upload);
         markSyncedNotes(mergedNotes);
+        if (replaceWithLocal) localStorage.removeItem(RESTORE_REPLACE_KEY); // 근무·메모 모두 교체 완료
         setDayNotes((cur) => applyChanges(mergedNotes, diffShifts(localNotes, cur || {})));
       } catch (err) {
         console.error('메모 동기화 실패 (기기에만 저장):', err.message);
@@ -807,6 +815,7 @@ export default function App() {
               onUndoImport={handleUndoImport}
               onCloseImportBanner={() => setImportBanner(null)}
               onOpenImport={() => setActiveTab('import')}
+              loadingFromServer={syncStatus === 'connecting'}
               onResolveUncertain={(dateKey) =>
                 setImportBanner((b) => (b && b.uncertain.includes(dateKey) ? { ...b, uncertain: b.uncertain.filter((k) => k !== dateKey) } : b))
               }

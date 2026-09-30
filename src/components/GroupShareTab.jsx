@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import { toast, formatDateKo } from '../lib/toast';
@@ -9,11 +9,11 @@ import { hasUnread } from '../lib/groupActivity';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import { dayNumberClass, getHoliday } from '../utils/holidays';
 import GroupBoard from './GroupBoard';
+import { readGroupColors, saveGroupColor } from '../lib/groupColors';
 import {
   fetchMyGroups,
   createGroup,
   joinGroup,
-  updateGroupColor,
   leaveGroup,
   deleteGroup,
   fetchGroupSchedule,
@@ -55,7 +55,10 @@ export default function GroupShareTab({
   const [selectedColor, setSelectedColor] = useState('#6366F1');
 
   const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
-  const currentThemeBg = currentGroup?.color || '#6366F1';
+  // 그룹 색상: 내 폰에서 고른 색 → 없으면 그룹을 만든 사람이 정한 기본 색
+  const [myColors, setMyColors] = useState(readGroupColors);
+  const colorOf = (g) => myColors[g?.id] || g?.color || '#6366F1';
+  const currentThemeBg = colorOf(currentGroup);
 
   // 이전/다음 달 이동 (앱 전체 선택 날짜와 공유)
   const goMonth = (delta) => {
@@ -148,6 +151,15 @@ export default function GroupShareTab({
     [profile?.id, myShifts, groupSchedule]
   );
 
+  // 교환 요청에서 고른 날짜의 멤버별 근무 (보고 있는 달 밖의 날짜도 정확히) → { profileId: code }
+  const loadDayCodes = useCallback(
+    async (dateKey) => {
+      const { shifts } = await fetchGroupSchedule(currentGroupId, dateKey, dateKey);
+      return Object.fromEntries(Object.entries(shifts).map(([pid, byDate]) => [pid, byDate[dateKey] || '']));
+    },
+    [currentGroupId]
+  );
+
   // 본인 근무는 로컬 최신값, 동료 근무는 서버 조회값
   const getMemberShifts = (member) =>
     member.id === profile?.id ? myShifts : groupSchedule.shifts[member.id] || {};
@@ -176,6 +188,7 @@ export default function GroupShareTab({
 
     await withLoading(async () => {
       const group = await createGroup(newGroupName.trim(), selectedColor);
+      setMyColors(saveGroupColor(group.id, selectedColor));
       await fetchMyGroupsFromDB();
       setActiveGroupId(group.id);
       setNewGroupName('');
@@ -207,19 +220,8 @@ export default function GroupShareTab({
     }, '그룹 참여 실패');
   };
 
-  // 3. 기존 그룹 색상 커스텀 변경: 색상 선택기를 끄는 동안 화면은 바로 바꾸고, 서버 저장은 멈춘 뒤 한 번만
-  const colorTimerRef = useRef(null);
-  useEffect(() => () => clearTimeout(colorTimerRef.current), []);
-  const handleChangeGroupColor = (groupId, hexColor) => {
-    setGroups((prev) => (prev || []).map((g) => (g.id === groupId ? { ...g, color: hexColor } : g)));
-    clearTimeout(colorTimerRef.current);
-    colorTimerRef.current = setTimeout(() => {
-      updateGroupColor(groupId, hexColor).catch((err) => {
-        toast(`색상 변경 실패\n${errorText(err)}`, 'error');
-        fetchMyGroupsFromDB();
-      });
-    }, 600);
-  };
+  // 3. 그룹 색상 변경: 내 폰에서만 적용 (서버에 올리지 않음 → 다른 멤버 화면의 색은 그대로)
+  const handleChangeGroupColor = (groupId, hexColor) => setMyColors(saveGroupColor(groupId, hexColor));
 
   // 4. 초대하기: 공유 시트(카톡 등)로 초대 링크 보내기, 안 되면 복사
   const handleInvite = async (group) => {
@@ -375,7 +377,7 @@ export default function GroupShareTab({
                     <div
                       key={g.id}
                       onClick={() => setActiveGroupId(g.id)}
-                      style={{ backgroundColor: g.color || '#6366F1' }}
+                      style={{ backgroundColor: colorOf(g) }}
                       className="p-3.5 text-white rounded-2xl flex items-center justify-between cursor-pointer shadow-xs transition hover:opacity-95"
                     >
                       <span className="font-black text-sm min-w-0 truncate">{g.name} ({g.members?.length || 1}명)</span>
@@ -428,6 +430,8 @@ export default function GroupShareTab({
                     <Palette size={11} className="text-white drop-shadow-md" />
                     <input
                       type="color"
+                      aria-label="그룹 색상 (내 폰에서만 적용)"
+                      title="그룹 색상 (내 폰에서만 적용)"
                       value={currentThemeBg}
                       onChange={(e) => handleChangeGroupColor(currentGroup.id, e.target.value)}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
@@ -596,6 +600,7 @@ export default function GroupShareTab({
             privacyBlur={privacyBlur}
             defaultDate={selectedDayKey}
             getCode={getCode}
+            loadDayCodes={loadDayCodes}
             onSwapApplied={handleSwapApplied}
           />
 

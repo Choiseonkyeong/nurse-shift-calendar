@@ -40,12 +40,12 @@ export function expandPattern(cycle, startKey, period, { weekdayAligned = false 
   return result;
 }
 
-export default function PatternFill({ startDate, myShifts, onApply, onClose }) {
+export default function PatternFill({ startDate, myShifts, onApply, onClose, defaultPeriod = 'month' }) {
   const shiftTypes = useShiftTypes();
   const [cycle, setCycle] = useState(PRESETS[1].cycle);
   const [weekdayAligned, setWeekdayAligned] = useState(false);
   const [start, setStart] = useState(startDate);
-  const [period, setPeriod] = useState('month');
+  const [period, setPeriod] = useState(defaultPeriod);
   const [overwrite, setOverwrite] = useState(true);
 
   const generated = useMemo(

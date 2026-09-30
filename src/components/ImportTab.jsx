@@ -18,6 +18,13 @@ import { isChunkLoadError, reloadForUpdate, UPDATE_NOTICE } from '../lib/appUpda
 /** 배포 전 화면에서 새 파일을 못 불러온 경우 → 새 버전으로 새로고침하고 다시 시도 안내 */
 const recoverIfStale = (err) => isChunkLoadError(err) && reloadForUpdate(UPDATE_NOTICE);
 
+// 엑셀 표의 영문 머리글·직급 (이름으로 보지 않음)
+const ENGLISH_HEADER_WORDS = new Set([
+  'name', 'names', 'no', 'num', 'number', 'total', 'sum', 'rank', 'grade', 'date', 'day', 'days', 'remark', 'remarks',
+  'note', 'notes', 'team', 'ward', 'dept', 'department', 'off', 'rn', 'hn', 'cn', 'an', 'pn', 'uhn', 'head', 'charge',
+  'staff', 'nurse', 'nurses', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun', 'duty', 'shift', 'schedule', 'id'
+]);
+
 // 목록 한 줄 (설정 화면처럼): 아이콘 · 제목/설명 · (화살표)
 const rowCls = 'w-full px-3 py-3 flex items-center gap-3 text-left bg-white hover:bg-slate-50 cursor-pointer';
 const RowIcon = ({ className, children }) => (
@@ -234,17 +241,17 @@ export default function ImportTab({
               // 2. 근무 코드 매칭용 단어 제외
               const isShiftCodeOnly = /^(D|E|N|M|OFF|DD|DDEE|DE|N\/|\/)$/i.test(val);
               
-              // 3. 순수 한글 2~5자 이름 추출 (띄어쓴 이름 '남 궁민' 도 붙여서)
-              val = val.replace(/\s+/g, '');
-              const isKoreanName = /^[가-힣]{2,5}$/.test(val);
+              // 3. 이름: 한글 2~5자 (띄어쓴 이름 '남 궁민' 도 붙여서) 또는 영문 이름 (Kim Minji)
+              const korean = val.replace(/\s+/g, '');
+              const isKoreanName = /^[가-힣]{2,5}$/.test(korean) && !excludeKeywords.includes(korean);
+              const isEnglishName =
+                /^[A-Za-z][A-Za-z .'-]{1,29}$/.test(val) &&
+                (val.match(/[A-Za-z]/g) || []).length >= 3 &&
+                !ENGLISH_HEADER_WORDS.has(val.toLowerCase().replace(/[^a-z]/g, '')) &&
+                !cellToCode(val, shiftTypes);
 
-              if (
-                val && 
-                isKoreanName && 
-                !isShiftCodeOnly && 
-                !excludeKeywords.includes(val)
-              ) {
-                foundName = val;
+              if (!isShiftCodeOnly && (isKoreanName || isEnglishName)) {
+                foundName = isKoreanName ? korean : val.replace(/\s+/g, ' ');
                 break;
               }
             }

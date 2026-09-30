@@ -106,6 +106,9 @@ function filtersOf(url) {
   return (row) => Object.entries(f).every(([k, test]) => test(row[k]));
 }
 
+// 실제 Supabase API 의 기본 최대 행 수
+export const MAX_ROWS = 1000;
+
 export async function installFakeSupabase(context, state) {
   await context.route(/supabase\.co\//, async (route) => {
     if (state.offline) return route.abort('internetdisconnected');
@@ -218,9 +221,17 @@ export async function installFakeSupabase(context, state) {
 
     const userId = userIdFrom(req.headers()['authorization'] || '');
     const myProfile = profileOf(state, userId);
+    // 실제 Supabase 처럼 한 번에 최대 MAX_ROWS 행 (offset/limit 로 나눠 받기)
+    const paged = (rows) => {
+      const offset = Number(url.searchParams.get('offset')) || 0;
+      const limit = Math.min(Number(url.searchParams.get('limit')) || MAX_ROWS, MAX_ROWS);
+      return rows.slice(offset, offset + limit);
+    };
 
     // ---------------- RPC ----------------
     const rpc = path.split('/rpc/')[1];
+    // 느린 서버 흉내: state.delay = { rpc이름: ms }
+    if (rpc && state.delay?.[rpc]) await new Promise((r) => setTimeout(r, state.delay[rpc]));
     if (rpc) {
       switch (rpc) {
         case 'ensure_profile': {
@@ -231,7 +242,13 @@ export async function installFakeSupabase(context, state) {
           return json(p);
         }
         case 'get_my_shifts':
-          return json(Object.entries(state.shifts[myProfile.id] || {}).map(([work_date, code]) => ({ work_date, code })));
+          return json(
+            paged(
+              Object.entries(state.shifts[myProfile.id] || {})
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([work_date, code]) => ({ work_date, code }))
+            )
+          );
         case 'set_my_shifts': {
           const mine = (state.shifts[myProfile.id] ||= {});
           Object.entries(body.p_changes).forEach(([k, v]) => (v ? (mine[k] = v) : delete mine[k]));
@@ -311,7 +328,8 @@ export async function installFakeSupabase(context, state) {
               }
             })
           );
-          return json(rows);
+          rows.sort((a, b) => a.work_date.localeCompare(b.work_date) || a.profile_id.localeCompare(b.profile_id));
+          return json(paged(rows));
         }
         case 'create_shift_swap': {
           const snapshot = {};
@@ -374,7 +392,9 @@ export async function installFakeSupabase(context, state) {
     const match = filtersOf(url);
     if (table === 'day_notes') {
       const mine = (state.notes[myProfile.id] ||= {});
-      if (method === 'GET') return json(Object.entries(mine).map(([note_date, b]) => ({ note_date, body: b })));
+      if (method === 'GET') {
+        return json(paged(Object.entries(mine).sort(([a], [b]) => a.localeCompare(b)).map(([note_date, b]) => ({ note_date, body: b }))));
+      }
       if (method === 'POST') {
         (Array.isArray(body) ? body : [body]).forEach((r) => (mine[r.note_date] = r.body));
         return route.fulfill({ status: 201, body: '' });

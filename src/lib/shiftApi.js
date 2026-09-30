@@ -7,6 +7,18 @@ const unwrap = ({ data, error }) => {
   return data;
 };
 
+// 서버(Supabase)는 한 번에 최대 1000행만 돌려줌 → 오래 쓴 사용자·큰 그룹도 빠짐없이 받도록 나눠서 끝까지 조회
+// (정렬 기준이 있어야 페이지가 겹치거나 빠지지 않음)
+export const PAGE_SIZE = 1000;
+export async function fetchAllRows(makeQuery) {
+  const all = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const rows = unwrap(await makeQuery().range(from, from + PAGE_SIZE - 1)) || [];
+    all.push(...rows);
+    if (rows.length < PAGE_SIZE) return all;
+  }
+}
+
 /** 세션 확보: 없으면 익명 로그인 (Supabase Auth > Anonymous Sign-ins 활성화 필요) */
 export async function ensureSession() {
   const supabase = await getSupabase();
@@ -32,7 +44,7 @@ export async function updateDisplayName(profileId, displayName) {
 /** 내 근무 전체 → { 'YYYY-MM-DD': 'D', ... } */
 export async function fetchMyShifts(from = null, to = null) {
   const supabase = await getSupabase();
-  const rows = unwrap(await supabase.rpc('get_my_shifts', { p_from: from, p_to: to })) || [];
+  const rows = await fetchAllRows(() => supabase.rpc('get_my_shifts', { p_from: from, p_to: to }).order('work_date'));
   return Object.fromEntries(rows.map((r) => [r.work_date, r.code]));
 }
 
@@ -63,10 +75,6 @@ export async function joinGroup(inviteCode) {
   return unwrap(await supabase.rpc('join_group', { p_invite_code: inviteCode }));
 }
 
-export async function updateGroupColor(groupId, color) {
-  const supabase = await getSupabase();
-  unwrap(await supabase.from('groups').update({ color }).eq('id', groupId));
-}
 
 export async function leaveGroup(groupId, profileId) {
   const supabase = await getSupabase();
@@ -82,11 +90,12 @@ export async function deleteGroup(groupId) {
 /** 그룹 근무표 → { shifts: { [profileId]: { 'YYYY-MM-DD': 'D' } }, styles: { [profileId]: { D: { bg, fg } } } } */
 export async function fetchGroupSchedule(groupId, from, to) {
   const supabase = await getSupabase();
-  const rows = unwrap(await supabase.rpc('get_group_schedule', {
-    p_group_id: groupId,
-    p_from: from,
-    p_to: to
-  })) || [];
+  const rows = await fetchAllRows(() =>
+    supabase
+      .rpc('get_group_schedule', { p_group_id: groupId, p_from: from, p_to: to })
+      .order('work_date')
+      .order('profile_id')
+  );
   const shifts = {};
   const styles = {};
   rows.forEach((r) => {
@@ -141,7 +150,7 @@ export async function deleteShiftType(code) {
 /** { 'YYYY-MM-DD': '메모' } */
 export async function fetchMyNotes() {
   const supabase = await getSupabase();
-  const rows = unwrap(await supabase.from('day_notes').select('note_date, body')) || [];
+  const rows = await fetchAllRows(() => supabase.from('day_notes').select('note_date, body').order('note_date'));
   return Object.fromEntries(rows.map((r) => [r.note_date, r.body]));
 }
 
@@ -228,7 +237,8 @@ export async function fetchGroupActivity(groupIds, myProfileId) {
     .select('group_id')
     .in('group_id', groupIds)
     .eq('target_id', myProfileId)
-    .eq('status', 'pending');
+    .eq('status', 'pending')
+    .limit(PAGE_SIZE);
   (swaps || []).forEach((s) => {
     result[s.group_id].pendingSwaps += 1;
   });
