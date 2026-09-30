@@ -27,23 +27,62 @@ function unfold(text) {
       const idx = line.indexOf(':');
       if (idx < 0) return null;
       const [name, ...params] = line.slice(0, idx).split(';');
-      return { name: name.toUpperCase(), params: params.join(';').toUpperCase(), value: line.slice(idx + 1) };
+      return { name: name.toUpperCase(), params: params.join(';'), value: line.slice(idx + 1) }; // 매개변수는 TZID 이름 때문에 원래 대소문자 유지
     })
     .filter(Boolean);
 }
 
 const unescapeText = (s) => s.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
 
+/** 매개변수 값 (예: TZID="Asia/Seoul" → Asia/Seoul) */
+function paramOf(params, key) {
+  const m = new RegExp(`(?:^|;)${key}=("[^"]*"|[^;]*)`, 'i').exec(params || '');
+  return m ? m[1].replace(/^"|"$/g, '').trim() : '';
+}
+
+// Outlook 등이 쓰는 Windows 시간대 이름 중 흔한 것
+const WINDOWS_ZONES = {
+  'korea standard time': 'Asia/Seoul',
+  'tokyo standard time': 'Asia/Tokyo',
+  'china standard time': 'Asia/Shanghai',
+  utc: 'UTC',
+  'pacific standard time': 'America/Los_Angeles',
+  'eastern standard time': 'America/New_York',
+  'central standard time': 'America/Chicago',
+  'gmt standard time': 'Europe/London'
+};
+
+/** 그 시간대 기준 시각(벽시계) → 실제 시각. 모르는 시간대면 null (기기 시간대로 간주) */
+function zonedTime(tzid, y, mo, d, hh, mm, ss) {
+  const zone = WINDOWS_ZONES[tzid.toLowerCase()] || tzid.replace(/^\/+/, '');
+  let fmt;
+  try {
+    fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric'
+    });
+  } catch (e) {
+    return null;
+  }
+  const wall = Date.UTC(y, mo - 1, d, hh, mm, ss);
+  const offsetAt = (t) => {
+    const p = Object.fromEntries(fmt.formatToParts(new Date(t)).map((x) => [x.type, Number(x.value)]));
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - t;
+  };
+  let t = wall - offsetAt(wall);
+  t = wall - offsetAt(t); // 서머타임 경계 보정
+  return new Date(t);
+}
+
 /** DTSTART/DTEND 값 → 로컬 Date (종일 여부 포함) */
 function parseIcsDate(value, params) {
   const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/.exec(value.trim());
   if (!m) return null;
   const [, y, mo, d, hh, mm, ss, z] = m;
-  const allDay = params.includes('VALUE=DATE') || !hh;
+  const allDay = /(^|;)VALUE=DATE(;|$)/i.test(params) || !hh;
   if (allDay) return { date: new Date(+y, +mo - 1, +d), allDay: true };
-  const date = z
-    ? new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss))
-    : new Date(+y, +mo - 1, +d, +hh, +mm, +ss); // TZID 지정은 기기 시간대로 간주
+  if (z) return { date: new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss)), allDay: false };
+  const tzid = paramOf(params, 'TZID');
+  const date = (tzid && zonedTime(tzid, +y, +mo, +d, +hh, +mm, +ss)) || new Date(+y, +mo - 1, +d, +hh, +mm, +ss); // 시간대 없음 = 기기 시간대
   return { date, allDay: false };
 }
 

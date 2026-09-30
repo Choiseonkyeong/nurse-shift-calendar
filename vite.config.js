@@ -33,10 +33,12 @@ function ocrAssets() {
   }
 }
 
+// 테스트: 기기 시간대를 한국으로 고정 (.ics 시간 일정 → 한국 시간 기준 검증). npx vitest 로 바로 실행해도 같게
+if (process.env.VITEST) process.env.TZ = 'Asia/Seoul'
+
 export default defineConfig({
   plugins: [react(), ocrAssets()],
   test: {
-    // npm test 는 TZ=Asia/Seoul 로 실행 (.ics 시간 일정 → 한국 시간 기준 검증)
     include: ['tests/**/*.test.js']
   }
 })

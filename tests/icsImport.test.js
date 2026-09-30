@@ -23,6 +23,9 @@ const ICS = [
   'END:VCALENDAR'
 ].join('\r\n');
 
+const cal = (...events) =>
+  ['BEGIN:VCALENDAR', ...events.flatMap((e) => ['BEGIN:VEVENT', ...e, 'END:VEVENT']), 'END:VCALENDAR'].join('\r\n');
+
 describe('icsImport', () => {
   it('근무 이름 인식', () => {
     expect(matchShiftCode('D')).toBe('D');
@@ -38,6 +41,41 @@ describe('icsImport', () => {
     expect(r.shifts).toEqual({ '2026-10-01': 'N', '2026-10-02': 'OFF', '2026-10-03': 'OFF' });
     expect(r.notes).toEqual({ '2026-10-05': '10:00 치과 예약' }); // TZ=Asia/Seoul
     expect(r.eventCount).toBe(3);
+  });
+
+  it('기기 시간대는 한국으로 고정 (npx vitest 로 바로 실행해도 같게)', () => {
+    expect(new Date(2026, 0, 1).getTimezoneOffset()).toBe(-540);
+  });
+
+  it('일정의 시간대(TZID)를 한국 시각으로 바꿔서 가져옴', () => {
+    const r = parseIcs(cal(
+      ['DTSTART;TZID=America/New_York:20261005T090000', 'SUMMARY:미국 회의'], // EDT 09:00 = 한국 22:00
+      ['DTSTART;TZID=America/New_York:20261006T120000', 'SUMMARY:자정 넘김'], // 한국 다음 날 01:00
+      ['DTSTART;TZID=America/New_York:20261102T090000', 'SUMMARY:서머타임 끝'], // EST 09:00 = 한국 23:00
+      ['DTSTART;TZID="Europe/London":20261010T090000', 'SUMMARY:따옴표'], // BST 09:00 = 한국 17:00
+      ['DTSTART;TZID=Korea Standard Time:20261011T100000', 'SUMMARY:윈도우 이름'],
+      ['DTSTART;TZID=Asia/Seoul:20261012T100000', 'SUMMARY:서울'],
+      ['DTSTART;TZID=Unknown/Zone:20261013T100000', 'SUMMARY:모르는 시간대'], // 기기 시간대로
+      ['DTSTART;VALUE=DATE-TIME:20261014T100000', 'SUMMARY:종일 아님']
+    ));
+    expect(r.notes).toEqual({
+      '2026-10-05': '22:00 미국 회의',
+      '2026-10-07': '01:00 자정 넘김',
+      '2026-11-02': '23:00 서머타임 끝',
+      '2026-10-10': '17:00 따옴표',
+      '2026-10-11': '10:00 윈도우 이름',
+      '2026-10-12': '10:00 서울',
+      '2026-10-13': '10:00 모르는 시간대',
+      '2026-10-14': '10:00 종일 아님'
+    });
+  });
+
+  it('시간대가 있는 반복 일정·제외 날짜', () => {
+    const r = parseIcs(cal([
+      'UID:tz', 'DTSTART;TZID=Asia/Seoul:20261005T070000', 'SUMMARY:D',
+      'RRULE:FREQ=DAILY;COUNT=3', 'EXDATE;TZID=Asia/Seoul:20261006T070000'
+    ]));
+    expect(r.shifts).toEqual({ '2026-10-05': 'D', '2026-10-07': 'D' });
   });
 });
 
@@ -58,9 +96,6 @@ describe('exportData', () => {
     expect(csv).toContain('2026-10-02,금,OFF,,"회식, 7시; ""준비"""');
   });
 });
-
-const cal = (...events) =>
-  ['BEGIN:VCALENDAR', ...events.flatMap((e) => ['BEGIN:VEVENT', ...e, 'END:VEVENT']), 'END:VCALENDAR'].join('\r\n');
 
 describe('반복 일정 (RRULE)', () => {
   it('매주 월·수 나이트, 4회, 하루 제외(EXDATE)', () => {
