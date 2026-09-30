@@ -1,7 +1,7 @@
 // src/lib/rosterOcr.js
 // 근무표 사진 → 단어 좌표 (Tesseract.js, 기기 안에서 처리 / 무료 / 서버 전송 없음)
 // 인식률을 위해: 해상도 정규화 → 흑백 → 조명 보정(적응형 이진화) → 표 선 제거 후 OCR
-import { parseRosterWords, cellToCode, extractName } from './rosterParse';
+import { parseRosterWords, cellToCode, extractName, nameQuality } from './rosterParse';
 
 const TARGET_WIDTH = 2400;
 
@@ -21,11 +21,93 @@ function loadImage(file) {
   });
 }
 
+const widthOf = (img) => img.naturalWidth || img.width;
+const heightOf = (img) => img.naturalHeight || img.height;
+
+/**
+ * 기울어진 사진 바로 세우기 (-4°~4°)
+ * 표의 가로선·글자 줄이 가장 수평이 되는 각도 = 어두운 픽셀을 그 각도로 가로줄에 모았을 때 가장 뾰족한 각도.
+ * 1° 만 기울어도 오른쪽 끝 날짜 줄이 수십 px 내려가고, 표 선이 사선이라 지워지지 않아 날짜 숫자와 붙어 못 읽음
+ * @returns 회전한 canvas (거의 수평이면 원본 그대로)
+ */
+export function deskew(img) {
+  const W0 = widthOf(img);
+  const H0 = heightOf(img);
+  const s = Math.min(1, 900 / W0);
+  const w = Math.max(1, Math.round(W0 * s));
+  const h = Math.max(1, Math.round(H0 * s));
+  const small = document.createElement('canvas');
+  small.width = w;
+  small.height = h;
+  const sctx = small.getContext('2d', { willReadFrequently: true });
+  sctx.drawImage(img, 0, 0, w, h);
+  const d = sctx.getImageData(0, 0, w, h).data;
+  const xs = [];
+  const ys = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 150) {
+        xs.push(x);
+        ys.push(y);
+      }
+    }
+  }
+  if (xs.length < 200) return img;
+  const pad = Math.ceil(w * 0.08);
+  const score = (deg) => {
+    const t = Math.tan((deg * Math.PI) / 180);
+    const hist = new Float64Array(h + pad * 2);
+    for (let k = 0; k < xs.length; k++) {
+      const r = Math.round(ys[k] - xs[k] * t) + pad;
+      if (r >= 0 && r < hist.length) hist[r] += 1;
+    }
+    let sum = 0;
+    for (let r = 0; r < hist.length; r++) sum += hist[r] * hist[r];
+    return sum;
+  };
+  let best = 0;
+  let bestScore = score(0);
+  for (let deg = -4; deg <= 4.001; deg += 0.25) {
+    const sc = score(deg);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = deg;
+    }
+  }
+  const coarse = best;
+  for (let deg = coarse - 0.25; deg <= coarse + 0.25; deg += 0.05) {
+    const sc = score(deg);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = deg;
+    }
+  }
+  // 1° 미만은 그대로: 회전하면 글자가 다시 그려지며 흐려져 D 가 OFF 로 읽히는 등 오히려 나빠짐 (실험 결과)
+  // 작은 기울기는 날짜 줄 기울기 보정(findHeader·slope)으로 충분
+  if (Math.abs(best) < 0.9) return img;
+  const a = (-best * Math.PI) / 180;
+  const cw = Math.round(W0 * Math.abs(Math.cos(a)) + H0 * Math.abs(Math.sin(a)));
+  const ch = Math.round(H0 * Math.abs(Math.cos(a)) + W0 * Math.abs(Math.sin(a)));
+  const out = document.createElement('canvas');
+  out.width = cw;
+  out.height = ch;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, cw, ch);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.translate(cw / 2, ch / 2);
+  ctx.rotate(a);
+  ctx.drawImage(img, -W0 / 2, -H0 / 2);
+  out.deskewAngle = best;
+  return out;
+}
+
 /** 적응형 이진화 + 긴 가로/세로 선 제거 → canvas */
 export function preprocess(img) {
-  const scale = Math.min(3, TARGET_WIDTH / img.naturalWidth);
-  const w = Math.round(img.naturalWidth * scale);
-  const h = Math.round(img.naturalHeight * scale);
+  const scale = Math.min(3, TARGET_WIDTH / widthOf(img));
+  const w = Math.round(widthOf(img) * scale);
+  const h = Math.round(heightOf(img) * scale);
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
@@ -140,10 +222,10 @@ export async function ocrWords(worker, canvas, psm = '11') {
 
 /** 보정 없이 해상도만 맞춘 canvas */
 function scaledCanvas(img) {
-  const scale = Math.min(3, TARGET_WIDTH / img.naturalWidth);
+  const scale = Math.min(3, TARGET_WIDTH / widthOf(img));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(img.naturalWidth * scale);
-  canvas.height = Math.round(img.naturalHeight * scale);
+  canvas.width = Math.round(widthOf(img) * scale);
+  canvas.height = Math.round(heightOf(img) * scale);
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -151,6 +233,100 @@ function scaledCanvas(img) {
 }
 
 export { loadImage, scaledCanvas, createOcrWorker };
+
+/**
+ * 이름 칸을 원본 사진에서 크게 잘라냄 → [회색조, 이진화] (표 선·직급 칸 제거)
+ *  - 전체 이진화 이미지에서 자르면 흐린 사진의 작은 이름 글자(받침·획)가 사라짐 → 원본에서 따로
+ *  - 왼쪽 직급 칸(HN·CN·A)과 칸 테두리가 같이 읽히면 '[A] 이경은', '내정민서' 처럼 섞임 → 세로선 기준으로 잘라냄
+ * @param targetH 잘라낸 줄 높이를 이 높이로 확대
+ */
+function cropNameVariants(src, x0, y0, x1, y1, targetH = 110) {
+  const w = Math.max(1, Math.round(x1 - x0));
+  const h = Math.max(1, Math.round(y1 - y0));
+  const scale = Math.min(6, Math.max(1, targetH / h));
+  const W = Math.round(w * scale);
+  const H = Math.round(h * scale);
+  const tmp = document.createElement('canvas');
+  tmp.width = W;
+  tmp.height = H;
+  const tctx = tmp.getContext('2d', { willReadFrequently: true });
+  tctx.imageSmoothingQuality = 'high';
+  tctx.drawImage(src, x0, y0, w, h, 0, 0, W, H);
+  const d = tctx.getImageData(0, 0, W, H).data;
+  const lum = new Float32Array(W * H);
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < W * H; i++) {
+    lum[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+    hist[Math.round(lum[i])]++;
+  }
+  // Otsu 임계값 (칸 배경색이 있어도 글자·선만 남도록)
+  let sum = 0;
+  for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sumB = 0;
+  let wB = 0;
+  let best = 0;
+  let thr = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (!wB) continue;
+    const wF = W * H - wB;
+    if (!wF) break;
+    sumB += t * hist[t];
+    const between = wB * wF * (sumB / wB - (sum - sumB) / wF) ** 2;
+    if (between > best) {
+      best = between;
+      thr = t;
+    }
+  }
+  const dark = (x, y) => lum[y * W + x] <= thr;
+  // 세로선: 높이의 70% 이상이 어두운 열. 왼쪽 60% 안의 가장 오른쪽 선 = 직급 칸과 이름 칸 경계
+  const vline = [];
+  for (let x = 0; x < W; x++) {
+    let n = 0;
+    for (let y = 0; y < H; y++) if (dark(x, y)) n++;
+    vline.push(n >= H * 0.7);
+  }
+  let left = 0;
+  for (let x = Math.floor(W * 0.6); x >= 0; x--) {
+    if (vline[x]) {
+      left = x + 1;
+      break;
+    }
+  }
+  let right = W;
+  for (let x = Math.ceil(W * 0.75); x < W; x++) {
+    if (vline[x]) {
+      right = x;
+      break;
+    }
+  }
+  // 가로선: 너비의 70% 이상이 어두운 줄은 지움
+  const hline = [];
+  for (let y = 0; y < H; y++) {
+    let n = 0;
+    for (let x = left; x < right; x++) if (dark(x, y)) n++;
+    hline.push(n >= (right - left) * 0.7);
+  }
+  const padPx = 24;
+  const make = (binary) => {
+    const c = document.createElement('canvas');
+    c.width = right - left + padPx * 2;
+    c.height = H + padPx * 2;
+    const ctx = c.getContext('2d');
+    const out = ctx.createImageData(c.width, c.height);
+    out.data.fill(255);
+    for (let y = 0; y < H; y++) {
+      for (let x = left; x < right; x++) {
+        const v = vline[x] || hline[y] ? 255 : binary ? (dark(x, y) ? 0 : 255) : Math.min(255, Math.round(lum[y * W + x]));
+        const o = ((y + padPx) * c.width + (x - left + padPx)) * 4;
+        out.data[o] = out.data[o + 1] = out.data[o + 2] = v;
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+    return c;
+  };
+  return [make(false), make(true)];
+}
 
 /** canvas 의 사각형 영역을 여백을 둔 새 canvas 로 (Tesseract 는 글자 주변 여백이 있어야 잘 읽음) */
 export function cropCell(src, x0, y0, x1, y1, { filter = true } = {}) {
@@ -305,23 +481,52 @@ function looksLikeD(canvas) {
 async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCanvas = null) {
   const { grid } = result;
 
-  // 이름 칸만 잘라 한 줄 모드로 다시 읽기 (1차에서 '윤다은'→'다은', 누락 등 보정)
-  await worker.setParameters({ tessedit_pageseg_mode: '7' });
+  // 이름 칸 다시 읽기: 원본에서 크게 잘라 (회색조·이진화) × (한 줄·여러 줄: 'N-keep' 같은 둘째 줄) 로 읽고
+  // 가장 이름다운 결과 (성씨로 시작하는 2~4자, 인식 확신도) 선택. 1차에서 읽은 이름도 후보
+  const nameSrc = rawCanvas || canvas;
+  // 이름은 한글만: 흐린 한글이 'WEF' 같은 영문으로 읽히지 않게 영문·숫자·괄호 제외 (끝나면 해제)
+  await worker.setParameters({ tessedit_char_blacklist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]{}|' });
   const renamed = new Map();
   const taken = new Set();
   for (const row of grid.rows) {
     const cy = row.y0 + grid.slope * ((row.nameX0 + row.nameX1) / 2);
-    const { canvas: cell, ink } = cropCell(canvas, row.nameX0, cy - grid.pitch * 0.45, row.nameX1, cy + grid.pitch * 0.45, { filter: false });
+    const { ink } = cropCell(canvas, row.nameX0, cy - grid.pitch * 0.45, row.nameX1, cy + grid.pitch * 0.45, { filter: false });
     let name = row.name;
+    let bestScore = nameQuality(name) ? nameQuality(name) + 6 : 0;
     if (ink >= 0.004) {
-      const { data } = await worker.recognize(cell);
-      const reread = extractName(data.text);
-      if (reread && data.confidence >= 60 && (reread.length >= name.length || /번째 줄/.test(name))) name = reread;
+      // 여러 번 읽은 결과를 이름별로 점수 합산 (같은 이름이 여러 번 나오면 그 이름)
+      const votes = new Map();
+      if (nameQuality(name)) votes.set(name, nameQuality(name) + 6);
+      // 줄 전체(80·120px) + 위쪽 60%('남영주 / (N-keep)'처럼 둘째 줄이 있는 칸의 이름 줄만)
+      const crops = [
+        [cy - grid.pitch * 0.48, cy + grid.pitch * 0.48, 80],
+        [cy - grid.pitch * 0.48, cy + grid.pitch * 0.48, 120],
+        [cy - grid.pitch * 0.48, cy + grid.pitch * 0.1, 80]
+      ];
+      for (const [top, bottom, targetH] of crops) {
+        const variants = cropNameVariants(nameSrc, row.nameX0, top, row.nameX1, bottom, targetH);
+        for (const psm of ['7', '6']) {
+          await worker.setParameters({ tessedit_pageseg_mode: psm });
+          for (const v of variants) {
+            const { data } = await worker.recognize(v);
+            const reread = extractName(data.text);
+            const q = nameQuality(reread);
+            if (q) votes.set(reread, (votes.get(reread) || 0) + q + data.confidence / 10);
+          }
+        }
+      }
+      [...votes.entries()].forEach(([n, score]) => {
+        if (score > bestScore) {
+          bestScore = score;
+          name = n;
+        }
+      });
     }
     if (taken.has(name)) name = `${name}(${renamed.size + 1})`;
     taken.add(name);
     renamed.set(row, name);
   }
+  await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_blacklist: '' });
 
   const cells = [];
   grid.rows.forEach((row) =>
@@ -380,6 +585,23 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
     }
   }
 
+  // 4회차: 원시 줄 모드(PSM 13)로 한 번 더 — ① 아무것도 못 읽은 칸 ② 읽은 결과끼리 다른 칸(투표용)
+  //  - 글자 하나뿐인 'N' 칸을 단어·한 줄 모드가 빈 결과로 주는 경우 (실험: PSM 8·7·10 은 빈 결과, 13 은 N 92%)
+  //  - 'OFF' 가 한 줄 모드에서 '야'(→N)로 읽히는 경우 → 여러 결과 투표로 바로잡음
+  const readsOf = (c) => [c.word, c.line, c.raw].filter((o) => o && o.code);
+  const needsVote = (c) => new Set(readsOf(c).map((o) => o.code)).size !== 1;
+  if (cells.some(needsVote)) {
+    await worker.setParameters({ tessedit_pageseg_mode: '13' });
+    for (const c of cells) {
+      if (!needsVote(c)) continue;
+      const r13 = await read(c);
+      if (!r13.code) continue;
+      // 아무것도 못 읽었던 칸은 확신이 높을 때만 그대로, 아니면 '확인 필요'(노란 테두리)
+      if (!readsOf(c).length) c.r13 = r13.confidence >= 85 ? r13 : { ...r13, confidence: Math.min(r13.confidence, 59) };
+      else c.r13 = r13;
+    }
+  }
+
   const people = {};
   const unread = {};
   grid.rows.forEach((r) => {
@@ -388,11 +610,26 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
   cells.forEach((c) => {
     // 칸만 잘라 읽은 결과가 우선. 1차(표 전체) 결과는 칸 인식이 모두 실패했을 때만 사용
     // (1차는 옆 줄 글자가 섞여 들어오는 경우가 있음)
-    const options = [c.word, c.line, c.raw].filter((o) => o && o.code);
+    const options = [c.word, c.line, c.raw, c.r13].filter((o) => o && o.code);
     if (!options.length && c.prev?.code) options.push({ ...c.prev, confidence: Math.min(c.prev.confidence, 55) });
-    // 한글이 섞인 결과(연차 등)는 한 줄 모드 우선, 그 외에는 신뢰도 높은 쪽
-    const korean = options.find((o) => /[가-힣]/.test(o.raw) && o.confidence >= 50);
-    const best = korean || options.sort((x, y) => y.confidence - x.confidence)[0];
+    // 두 글자 이상 한글(연차 등)은 한 줄 모드가 정확 → 우선. 한 글자 한글('야' 등)은 오인식이 잦아 우선하지 않음
+    const korean = options.find((o) => /[가-힣]{2,}/.test(o.raw) && o.confidence >= 50);
+    // 그 외: 같은 근무로 읽힌 결과들의 신뢰도 합이 가장 큰 근무 (그 근무 중 신뢰도 높은 결과를 대표로)
+    let best = korean;
+    if (!best && options.length) {
+      const votes = new Map();
+      options.forEach((o) => votes.set(o.code, (votes.get(o.code) || 0) + Math.max(o.confidence, 1)));
+      const [code, weight] = [...votes.entries()].sort((x, y) => y[1] - x[1])[0];
+      best = options.filter((o) => o.code === code).sort((x, y) => y.confidence - x.confidence)[0];
+      // 결과가 갈렸고 압도적이지 않으면 '확인 필요'(노란 테두리)
+      const share = weight / [...votes.values()].reduce((a, b) => a + b, 0);
+      if (votes.size > 1 && share < 0.7) best = { ...best, confidence: Math.min(best.confidence, 59) };
+    }
+    // 'OFF' 근거가 글자 하나('O'·'0')뿐이면 작은 사진의 'D' 일 수 있음 → '확인 필요'
+    const oneLetterOff = (o) => o.code === 'OFF' && /^[0oO]$/.test(String(o.raw || '').replace(/[^0-9a-z]/gi, ''));
+    if (best && best.code === 'OFF' && options.filter((o) => o.code === 'OFF').every(oneLetterOff)) {
+      best = { ...best, confidence: Math.min(best.confidence, 59) };
+    }
     if (best) people[c.name][c.key] = { code: best.code, raw: best.raw, confidence: best.confidence };
     // 글자는 있는데 근무로 못 읽은 칸 → 확인 화면에서 '?' 로 표시
     else unread[c.name] = [...(unread[c.name] || []), c.key];
@@ -405,13 +642,28 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
   return { ...result, people, names, unread };
 }
 
+/** 날짜 줄 위(제목이 있는 곳)만 잘라 읽기 */
+async function readTitle(worker, src, headerTop) {
+  const h = Math.max(20, Math.round(headerTop));
+  if (!(h > 0)) return '';
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = h;
+  c.getContext('2d').drawImage(src, 0, 0, src.width, h, 0, 0, src.width, h);
+  await worker.setParameters({ tessedit_pageseg_mode: '6' });
+  const { data } = await worker.recognize(c);
+  await worker.setParameters({ tessedit_pageseg_mode: '11' });
+  return data.text || '';
+}
+
 /**
  * @param file        이미지 파일
  * @param opts        { year, month, shiftTypes, onProgress(0~1, 메시지) }
  */
 export async function recognizeRoster(file, { year, month, shiftTypes = [], onProgress = () => {} } = {}) {
   onProgress(0.02, '사진 보정 중...');
-  const img = await loadImage(file);
+  // 기울어진 사진은 먼저 바로 세움 (이후 모든 단계가 회전한 이미지 기준)
+  const img = deskew(await loadImage(file));
   const canvas = preprocess(img);
 
   onProgress(0.06, '인식 엔진 준비 중... (처음 한 번은 조금 걸려요)');
@@ -428,6 +680,14 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
       if (retry.error) return result;
       result = retry;
       source = raw;
+    }
+    // 제목(2026년 9월)을 못 읽었으면 날짜 줄 위쪽만 잘라 한 번 더 (표 전체를 읽을 때는 제목이 빠지기도 함)
+    if (!result.found && result.grid) {
+      const titleText = await readTitle(worker, scaledCanvas(img), result.grid.headerTop);
+      if (titleText) {
+        const again = parseRosterWords(await ocrWords(worker, source), { year, month, shiftTypes, titleText });
+        if (!again.error && again.found) result = again;
+      }
     }
     stage = () => {};
     onProgress(0.4, '칸별 정밀 인식 중...');

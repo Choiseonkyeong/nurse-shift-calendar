@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cellToCode, detectYearMonth, extractName, parseRosterWords } from '../src/lib/rosterParse';
+import { cellToCode, detectYearMonth, extractName, parseRosterWords, nameQuality, fixSurname } from '../src/lib/rosterParse';
 
 const w = (text, x0, y0, x1, y1, confidence = 90) => ({ text, x0, y0, x1, y1, confidence });
 
@@ -148,6 +148,59 @@ describe('rosterParse', () => {
     // 요일·공휴일 줄이 없으면 예전처럼 제목(없으면 보고 있던 달) 기준
     const plain = parseRosterWords(wrappedRoster(['2026년', '10월'], { weekdays: false, holidays: false }), { year: 2026, month: 5, today: TODAY });
     expect(plain.month).toBe(10);
+  });
+
+  it('기울어진 사진: 날짜 줄이 오른쪽으로 갈수록 내려가도(1.5°) 한 줄로 찾고, 칸이 밀리지 않음', () => {
+    const slope = 0.026; // tan(1.5°)
+    const days = [26, 27, 28, 29, 30, ...Array.from({ length: 25 }, (_, i) => i + 1)];
+    const colX = (i) => 200 + i * 60;
+    const words = [w('2026년', 300, 10, 380, 40), w('10월', 390, 10, 440, 40)];
+    const codes = ['D', 'E', 'N', 'OFF'];
+    days.forEach((d, i) => {
+      const x = colX(i);
+      words.push(w(String(d), x - 10, 80 + slope * x, x + 10, 96 + slope * x));
+      words.push(w(codes[i % 4], x - 10, 160 + slope * x, x + 10, 176 + slope * x));
+    });
+    words.push(w('최간호', 60, 160 + slope * 90, 130, 176 + slope * 90));
+    const r = parseRosterWords(words, { year: 2026, month: 10, today: TODAY });
+    expect(r.error).toBeUndefined();
+    const got = r.people['최간호'];
+    expect(Object.keys(got).length).toBe(30);
+    expect(got['2026-09-26'].code).toBe('D');
+    expect(got['2026-10-25'].code).toBe(codes[29 % 4]);
+  });
+
+  it('흐린 사진에서 요일 줄(토 일 월 …)이 근무 글자로 읽혀도 사람 줄로 잡지 않음 (이름이 한 줄씩 밀리지 않게)', () => {
+    const days = Array.from({ length: 31 }, (_, i) => i + 1);
+    const colX = (i) => 200 + i * 40;
+    const words = [w('2026년', 300, 10, 380, 40), w('12월', 390, 10, 440, 40)];
+    days.forEach((d, i) => {
+      words.push(w(String(d), colX(i) - 8, 80, colX(i) + 8, 96));
+      // 요일 줄: 일부는 요일로, 일부는 근무처럼(D·N·야) 잘못 읽힘
+      const wd = '일월화수목금토'[new Date(2026, 11, d).getDay()];
+      words.push(w(i % 3 === 0 ? ['D', 'N', '야'][i % 3 === 0 ? (i / 3) % 3 : 0] : wd, colX(i) - 7, 104, colX(i) + 7, 120));
+      words.push(w(['D', 'E', 'N', 'OFF'][i % 4], colX(i) - 7, 150, colX(i) + 7, 166));
+    });
+    words.push(w('분당', 40, 104, 90, 120), w('김간호', 40, 150, 100, 166));
+    const r = parseRosterWords(words, { year: 2026, month: 12, today: TODAY });
+    expect(r.names).toEqual(['김간호']);
+  });
+
+  it('제목 줄만 따로 다시 읽은 글자(titleText)로 연/월', () => {
+    const r = parseRosterWords(wrappedRoster(['분당', '5병동'], { weekdays: false, holidays: false }), {
+      year: 2026, month: 5, today: TODAY, titleText: '<분당 5병동 2026년 10월 근무표 OFF 11>'
+    });
+    expect([r.year, r.month, r.found]).toEqual([2026, 10, true]);
+  });
+
+  it("'연차'가 흐려 '연체·연자·4X'로 읽힌 경우, 이름다운 정도", () => {
+    expect(cellToCode('연체')).toBe('연차');
+    expect(cellToCode('연자')).toBe('연차');
+    expect(cellToCode('4X')).toBe('연차');
+    expect(nameQuality('남영주')).toBeGreaterThan(nameQuality('대내')); // '(N-keep)' 이 잡티로 읽힌 두 글자
+    expect(nameQuality('김비나')).toBeGreaterThan(nameQuality('비나'));
+    expect(nameQuality('3번째 줄')).toBe(0);
+    expect(fixSurname('롱숙언')).toBe('홍숙언');
   });
 
   it("'연차'가 영문으로 읽힌 경우", () => {

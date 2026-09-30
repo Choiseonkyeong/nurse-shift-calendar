@@ -640,6 +640,7 @@ export default function App() {
 
   const handleSaveName = () => {
     if (tempUserName.trim()) {
+      localStorage.setItem(NAME_CONFIRMED_KEY, '1');
       setUserName(tempUserName.trim().slice(0, 30));
       setIsEditingName(false);
     }
@@ -669,6 +670,7 @@ export default function App() {
       <NameSetup
         onSubmit={(name) => {
           const finalName = name || DEFAULT_NAME;
+          localStorage.setItem(NAME_CONFIRMED_KEY, '1'); // 직접 입력한 이름 → 예전 기본 이름('최수민') 확인 창 안 띄움
           setNameSkipped(!name);
           nameSkippedRef.current = !name;
           setUserName(finalName);
@@ -699,6 +701,7 @@ export default function App() {
           setGroupNamePrompt(null);
           nameSkippedRef.current = false;
           setNameSkipped(false);
+          localStorage.setItem(NAME_CONFIRMED_KEY, '1');
           setUserName(name);
           setTempUserName(name);
           // 그룹 멤버 목록에 바로 새 이름이 보이도록 서버 프로필 먼저 반영
