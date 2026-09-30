@@ -8,6 +8,7 @@ const AllowanceTab = lazy(lazyImport(() => import('./components/AllowanceTab')))
 const GroupShareTab = lazy(lazyImport(() => import('./components/GroupShareTab')));
 const ImportTab = lazy(lazyImport(() => import('./components/ImportTab')));
 import NameSetup from './components/NameSetup';
+import InstallHint from './components/InstallHint';
 import Toaster from './components/Toaster';
 import ConfirmHost from './components/ConfirmHost';
 import { closeTopModal } from './components/Modal';
@@ -823,6 +824,13 @@ export default function App() {
               </div>
             }
           >
+          {activeTab === 'myShift' && userName && (
+            <InstallHint
+              accountLinked={accountStatus === 'linked'}
+              hasData={Object.keys(myShifts || {}).length > 0}
+              onLinkAccount={() => setAccountModal('link')}
+            />
+          )}
           {activeTab === 'myShift' && (
             <MyShiftTab
               selectedDate={selectedDate}

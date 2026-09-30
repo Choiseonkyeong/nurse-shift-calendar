@@ -5,7 +5,6 @@ import { toast } from '../lib/toast';
 import Modal from './Modal';
 import { confirmDialog } from '../lib/confirm';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive, ChevronRight } from 'lucide-react';
-import { unregisterDevice } from '../lib/pushNotifications';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
@@ -554,29 +553,34 @@ export default function ImportTab({
         </div>
 
         <div className="pt-1 text-center">
+          {/* 근무·메모만 지움 (이 폰 + 서버). 이름·계정·그룹·근무 종류·설정은 그대로, 첫 화면으로 가지 않음 */}
           <button
             onClick={async () => {
+              const count = Object.keys(myShifts || {}).length + Object.keys(dayNotes || {}).length;
+              if (!count) {
+                toast('지울 근무·메모가 없어요.');
+                return;
+              }
               if (
                 await confirmDialog({
-                  title: '전체 초기화할까요?',
+                  title: '근무·메모를 모두 지울까요?',
                   message:
-                    '이 기기의 근무표·메모·설정을 모두 지우고 처음 상태로 돌아가요.\n\n' +
-                    (accountStatus === 'linked'
-                      ? '연결된 계정의 서버 데이터는 남아 있어서, 다시 로그인하면 불러올 수 있어요.'
-                      : '계정을 연결하지 않아서 서버에 저장된 근무와 참여 중인 그룹에도 다시 들어갈 수 없어요. (복구 불가)'),
-                  confirmText: '초기화',
+                    '달력의 근무와 날짜별 메모를 이 폰과 서버에서 모두 지워요. 다른 폰에서 로그인해도 돌아오지 않아요.\n\n' +
+                    '이름·계정·그룹·근무 종류·시급·연차 설정은 그대로예요.\n' +
+                    "되돌리고 싶을 수 있으면 먼저 위의 '백업 저장'을 해 두세요.",
+                  confirmText: '모두 지우기',
                   danger: true
                 })
               ) {
-                await unregisterDevice(); // 초기화 후 이전 계정 알림이 오지 않도록 토큰 해제
-                localStorage.clear();
-                window.location.reload();
+                setMyShifts({});
+                setDayNotes({});
+                toast('근무·메모를 모두 지웠어요.', 'success');
               }
             }}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-500 hover:text-rose-700 hover:underline cursor-pointer"
           >
             <Trash2 size={14} />
-            <span>전체 초기화 (복구 불가)</span>
+            <span>근무·메모 전체 삭제</span>
           </button>
           <a
             href="/privacy.html"

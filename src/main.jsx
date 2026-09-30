@@ -6,6 +6,7 @@ import './index.css'
 import { applyTheme, watchSystemTheme } from './lib/theme'
 import { handleWebOAuthReturn, listenNativeOAuth } from './lib/socialAuth'
 import { installUpdateGuard } from './lib/appUpdate'
+import { captureInstallPrompt } from './lib/installHint'
 
 // 첫 화면 전에 테마 적용 (깜빡임 방지)
 applyTheme()
@@ -22,6 +23,9 @@ const render = () =>
 
 // 새 버전 배포 후 오래 열린 탭: 돌아올 때 새 버전 확인, 파일 로드 실패 시 새로고침
 installUpdateGuard()
+
+// 홈 화면 설치 창 이벤트는 첫 화면 전에 올 수 있어 미리 받아 둠 (lib/installHint)
+captureInstallPrompt()
 
 // 카카오·구글 로그인에서 돌아온 경우: 세션·데이터 정리를 먼저 끝내고 화면 그리기
 listenNativeOAuth().catch((err) => console.warn('소셜 로그인 복귀 대기 실패', err))
