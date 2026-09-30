@@ -16,7 +16,9 @@ const LN = {
 };
 vi.mock('@capacitor/local-notifications', () => ({ LocalNotifications: LN }));
 
-const { buildReminders, syncLocalReminders, enableLocalReminders, MAX_REMINDERS } = await import('../src/lib/localReminders');
+const { buildReminders, syncLocalReminders, enableLocalReminders, getAlarmPermission, MAX_REMINDERS, REMINDER_DAYS } = await import(
+  '../src/lib/localReminders'
+);
 
 const TYPES = [
   { code: 'D', label: 'Day (데이)', kind: 'work' },
@@ -86,6 +88,27 @@ describe('syncLocalReminders', () => {
     native.value = false;
     expect(await syncLocalReminders({ enabled: true })).toBe(0);
     expect(await enableLocalReminders()).toBe(false);
+  });
+
+  it('앱을 오래 안 열어도 알림이 이어지도록 90일치(최대 60개)까지 예약', () => {
+    expect(REMINDER_DAYS).toBe(90);
+    const shifts = {};
+    for (let i = 1; i <= 80; i += 3) shifts[new Date(Date.UTC(2026, 8, 28 + i)).toISOString().slice(0, 10)] = 'D';
+    const list = buildReminders({ myShifts: shifts, startTimes: START, shiftTypes: TYPES, now: NOW });
+    expect(list.length).toBe(Object.keys(shifts).length); // 80일 뒤 근무까지 모두
+  });
+
+  it('이 기기 알림 권한 상태 (앱: 플러그인, 웹: 브라우저, 미지원)', async () => {
+    expect(await getAlarmPermission()).toBe('granted');
+    LN.checkPermissions.mockResolvedValueOnce({ display: 'denied' });
+    expect(await getAlarmPermission()).toBe('missing');
+    native.value = false;
+    expect(await getAlarmPermission()).toBe('unsupported'); // 테스트 환경엔 Notification 없음
+    globalThis.window = { Notification: { permission: 'default' } };
+    expect(await getAlarmPermission()).toBe('missing');
+    globalThis.window.Notification.permission = 'granted';
+    expect(await getAlarmPermission()).toBe('granted');
+    delete globalThis.window;
   });
 
   it('켤 때 권한 요청 + 안드로이드 알림 채널 생성', async () => {

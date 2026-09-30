@@ -5,7 +5,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
-export const REMINDER_DAYS = 30;
+export const REMINDER_DAYS = 90; // 앱을 오래 안 열어도 알림이 이어지도록 (개수는 MAX_REMINDERS 까지)
 export const MAX_REMINDERS = 60;
 const CHANNEL_ID = 'shift-reminders';
 const KIND = 'shift-start';
@@ -53,6 +53,30 @@ export function buildReminders({ myShifts = {}, startTimes = {}, shiftTypes = []
     });
   }
   return out;
+}
+
+/**
+ * 이 기기의 알림 권한 상태 (알림 설정은 계정을 따라 다른 기기로 동기화되므로, 켜져 있어도 이 기기엔 권한이 없을 수 있음)
+ * @returns 'granted' | 'missing' | 'unsupported'
+ */
+export async function getAlarmPermission() {
+  if (isNativeApp()) {
+    const { display } = await LocalNotifications.checkPermissions().catch(() => ({ display: 'denied' }));
+    return display === 'granted' ? 'granted' : 'missing';
+  }
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+  return (await webNotificationState()) === 'granted' ? 'granted' : 'missing';
+}
+
+/** 웹 알림 권한: 권한 API(설정 변경이 바로 반영됨) → 없으면 Notification.permission */
+export async function webNotificationState() {
+  try {
+    const status = await window.navigator?.permissions?.query({ name: 'notifications' });
+    if (status?.state) return status.state; // 'granted' | 'denied' | 'prompt'
+  } catch (e) {
+    /* 권한 API 가 없는 브라우저 */
+  }
+  return window.Notification.permission;
 }
 
 /** 알림 권한 요청 (알림을 켤 때). 허용되면 true */

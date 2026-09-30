@@ -120,6 +120,20 @@ test('웹 푸시 설정이 없으면 알림 창에 웹 알림 한계 안내', as
   await expect(page.getByText(/웹에서는 이 화면이 열려 있을 때만/)).toBeVisible();
 });
 
+test('다른 기기에서 켠 알림이 동기화됐는데 이 기기에 권한이 없으면 "권한 필요" → 허용하면 정상 표시', async ({ page, context }) => {
+  await openApp(page, { local: { shift_alarm_settings: { enabled: true, minutesBefore: 60 } } });
+  const alarm = page.getByRole('button', { name: '권한 필요' });
+  await expect(alarm).toBeVisible();
+  await alarm.click();
+  await expect(page.getByText(/이 기기에서는 알림 권한이 없어서 알림이 오지 않아요/)).toBeVisible();
+
+  await context.grantPermissions(['notifications']);
+  await page.getByRole('button', { name: '이 기기에서 알림 허용하기' }).click();
+  await expect(page.getByText(/1시간 전 알림이 설정되었습니다/)).toBeVisible();
+  await expect(page.getByRole('button', { name: '1시간 전', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '권한 필요' })).toHaveCount(0);
+});
+
 test('근무 종류: 새 근무 추가 화면에서 Esc → 목록으로, 한 번 더 → 닫힘 (내용이 바뀐 창도 Esc 동작)', async ({ page }) => {
   await openApp(page);
   await page.getByRole('button', { name: /종류/ }).first().click();
