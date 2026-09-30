@@ -39,7 +39,7 @@ SQL Editor → New query → 아래 파일을 **하나씩 전체** 붙여넣고 
 
 ## 3. 웹에서도 창을 닫았을 때 알림 받기 (선택)
 
-앱(APK·iOS)은 4번 푸시 설정만 하면 되고, **웹 버전**도 브라우저를 닫은 상태에서 알림을 받으려면:
+앱(APK·iOS)은 설정 없이 알림이 오고, **웹 버전**도 브라우저를 닫은 상태에서 알림을 받으려면:
 
 1. Firebase 콘솔 → 프로젝트 설정 → **내 앱 → 웹 앱 추가** → 표시되는 `firebaseConfig` 값 복사
 2. Firebase 콘솔 → 프로젝트 설정 → **클라우드 메시징 → 웹 푸시 인증서 → 키 쌍 생성** → 키 복사
@@ -50,9 +50,9 @@ SQL Editor → New query → 아래 파일을 **하나씩 전체** 붙여넣고 
 
 설정 전에는 웹에서 "이 화면이 열려 있을 때만" 알림이 옵니다. 발송은 앱과 같은 서버 함수가 담당하므로 4번 푸시 설정이 먼저 되어 있어야 합니다.
 
-## 4. 백그라운드 푸시 알림 (선택)
+## 4. 웹 버전 백그라운드 푸시 알림 (선택)
 
-[`docs/PUSH_SETUP.md`](./PUSH_SETUP.md) 참고
+앱(Android/iOS)은 폰 안에서 알림을 예약하므로 **설정 불필요**. 웹에서 브라우저를 닫아도 알림을 받게 하려면 [`docs/PUSH_SETUP.md`](./PUSH_SETUP.md) 참고
 (Firebase 서비스 계정 키, GitHub Secrets 3개, Deploy Supabase Functions 실행, `pg_cron`/`pg_net` + vault + `000300` 마이그레이션, `google-services.json`)
 
 ## 5. 스토어 등록 전 확인 (플레이스토어·앱스토어)

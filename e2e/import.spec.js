@@ -254,3 +254,20 @@ test('엑셀 근무표의 영문 이름(Kim Minji)도 인식, 대소문자 달�
   const saved = await readLocal(page, 'my_shift_data');
   expect([1, 2, 3, 4].map((d) => saved[`2026-11-0${d}`])).toEqual(['D', 'E', 'N', 'OFF']);
 });
+
+test('새 배포 후 오래 열린 탭: 엑셀 읽기 파일(워커)을 못 찾으면 새로고침 → 다시 시도 안내', async ({ page, context }) => {
+  let failed = false;
+  await context.route(/\/assets\/xlsxWorker-.*\.js$/, (route) => {
+    if (failed) return route.continue();
+    failed = true;
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+  await openApp(page, { name: '김간호' });
+  await tab(page, '등록').click();
+  await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(fixture('roster.xlsx'));
+  await expect(page.getByText(/앱이 최신 버전으로 업데이트됐어요/)).toBeVisible({ timeout: 30000 });
+  expect(failed).toBe(true);
+  // 새로고침 후 다시 올리면 정상 등록
+  await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(fixture('roster.xlsx'));
+  await expect(page.getByText('엑셀에서 10월 근무 31일을 등록했어요')).toBeVisible();
+});

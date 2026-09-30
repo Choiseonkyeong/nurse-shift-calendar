@@ -31,8 +31,9 @@ export const isWebPushAvailable = () =>
   'PushManager' in window &&
   'Notification' in window;
 
-/** 서버가 보내는 알림(앱: FCM, 웹: 웹 푸시)을 쓰는지 */
-export const usesServerPush = () => isNativePush() || isWebPushAvailable();
+/** 서버가 보내는 알림(웹 푸시)을 쓰는지
+ *  앱(Android/iOS)은 폰 안에서 예약하는 알림(lib/localReminders)을 써서 Firebase·서버 설정 없이 동작 */
+export const usesServerPush = () => isWebPushAvailable();
 
 /** 웹: Firebase 초기화 + 알림용 서비스 워커 등록 */
 async function prepareWebPush() {

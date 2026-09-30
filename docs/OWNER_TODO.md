@@ -5,7 +5,7 @@
 
 ## 꼭 해야 하는 것
 
-- [ ] **1. Supabase SQL 3개 실행** (3분)
+- [x] **1. Supabase SQL 3개 실행** (3분) — ✅ 2026-09-30 완료 (확인 쿼리 결과 1·1·1)
   - Supabase 대시보드 → SQL Editor → New query → 아래 파일 내용을 **하나씩 전체** 붙여넣고 Run
     1. `supabase/migrations/20260928000800_shift_swaps.sql` — 그룹 근무 교환 요청
     2. `supabase/migrations/20260928000900_profile_settings.sql` — 시급·연차·알림 설정을 서버에 저장 (새 폰 로그인 시 복원)
@@ -33,10 +33,13 @@
 - [ ] **4. 메일 발송 한도 늘리기** — 사용자가 많아지면
   - Supabase 기본 메일은 시간당 발송 수가 매우 적습니다. Authentication → Emails → SMTP Settings 에 무료 SMTP(Resend, Brevo 등) 연결
 
-- [ ] **5. 백그라운드 푸시 알림** — 앱을 꺼 둬도 근무 알림을 받으려면
-  - [`PUSH_SETUP.md`](./PUSH_SETUP.md) 순서대로 (Firebase 서비스 계정 키 → GitHub Secrets 3개 → 함수 배포 → 예약 실행 SQL)
+- [ ] **5. 웹 버전 푸시 알림** — 웹에서 브라우저를 닫아도 알림을 받게 하려면 (선택)
+  - 설치한 앱(Android/iOS)은 폰 안에서 알림을 예약하므로 **이 설정 없이도 앱을 꺼 둔 상태에서 알림이 옵니다.**
+  - 웹까지 원할 때만 [`PUSH_SETUP.md`](./PUSH_SETUP.md) 순서대로 (Firebase → GitHub Secrets 3개 → 함수 배포 → 예약 실행 SQL)
 
 - [ ] **6. 스토어 등록 전**
+  - 안드로이드 출시용 서명: GitHub → Settings → Secrets and variables → Actions 에 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` 등록 (지금은 테스트용 APK 만 만들어짐)
+  - iOS 출시용 서명: Apple 개발자 계정 필요, Secrets 에 `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64` 등록
   - 구글 플레이 "데이터 보안": 계정 삭제 경로 = 프로필 → 계정 → 계정 삭제 (웹도 같은 경로)
   - 개인정보 라벨: 개인정보처리방침 1번 표 그대로 (광고·추적 없음, 사진은 기기 안에서만 처리)
 
@@ -44,3 +47,4 @@
 
 - 서버 1000행 제한: 앱이 1000개씩 나눠 받도록 되어 있어 **Supabase 설정 변경 불필요**
 - 그룹 색상: 이제 각자 폰에만 저장되어 서버 설정 불필요
+- 앱 근무 알림: 폰 안에서 예약 → Firebase·서버 설정 불필요

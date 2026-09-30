@@ -15,6 +15,10 @@
         "badge",
         "sound"
       ]
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_shift",
+      "iconColor": "#6366F1"
     }
   },
   "experimental": {
