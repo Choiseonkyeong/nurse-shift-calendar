@@ -32,7 +32,8 @@ export function buildReminderMessage(r: DueReminder): PushMessage {
   const start = r.start_time.slice(0, 5);
   return {
     title: `⏰ ${formatLeadTime(r.reminder_minutes)} 뒤 ${r.code} 근무 시작`,
-    body: `${r.display_name} 님, ${start}에 ${r.label} 근무가 시작됩니다. 준비해 주세요!`,
+    // 이름 없이 시작한 사용자(기본 이름 '나')는 호칭 없이
+    body: `${r.display_name && r.display_name !== '나' ? `${r.display_name} 님, ` : ''}${start}에 ${r.label} 근무가 시작됩니다. 준비해 주세요!`,
     data: { type: 'shift_start', work_date: r.work_date, code: r.code },
     androidChannelId: 'shift-reminders'
   };

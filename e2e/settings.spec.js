@@ -158,3 +158,27 @@ test('앱 확인 창: 다른 팝업 위에 뜨고, 취소·Esc 는 아무것도 
   await expect(page.getByRole('dialog', { name: '근무 종류 관리' })).toBeVisible();
   expect(Object.keys(state.types[pid])).toEqual(['야']);
 });
+
+test('달력에 쓰인 근무 종류도 한 번에 삭제: 그 날짜들을 비우고 서버에서도 삭제', async ({ page }) => {
+  const state = createFakeState();
+  await openApp(page, { state, local: { my_shift_data: { '2026-09-10': '야', '2026-09-11': '야', '2026-09-12': 'D' } } });
+  await waitSaved(page);
+  const pid = Object.keys(state.profiles)[0];
+  state.types[pid] = {
+    야: { code: '야', label: '야간당직', kind: 'work', bg_color: '#E0E7FF', text_color: '#3730A3', night_hours: 0 }
+  };
+  await page.reload();
+  await waitSaved(page);
+  await expect.poll(() => state.shifts[pid]?.['2026-09-10']).toBe('야');
+
+  await page.getByRole('button', { name: /종류/ }).click();
+  await page.getByRole('button', { name: /야간당직/ }).click();
+  await page.getByRole('button', { name: '삭제' }).click();
+  await expect(page.getByRole('dialog', { name: "'야' 근무를 삭제할까요?" })).toContainText('2일');
+  await confirmOk(page);
+
+  await expect.poll(() => Object.keys(state.types[pid] || {})).toEqual([]);
+  expect(state.shifts[pid]).toEqual({ '2026-09-12': 'D' });
+  expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-12': 'D' });
+  await expect(page.getByRole('button', { name: /야간당직/ })).toHaveCount(0);
+});

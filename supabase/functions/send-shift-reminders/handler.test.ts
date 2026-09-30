@@ -44,6 +44,9 @@ Deno.test('message text', () => {
   const m = buildReminderMessage(reminder([]));
   assertEquals(m.title, '⏰ 1시간 뒤 D 근무 시작');
   assertEquals(m.body, '최수민 님, 07:30에 Day (데이) 근무가 시작됩니다. 준비해 주세요!');
+  // 이름 없이 시작한 사용자(기본 이름 '나')는 호칭 없이
+  const noName = buildReminderMessage({ ...reminder([]), display_name: '나' });
+  assertEquals(noName.body, '07:30에 Day (데이) 근무가 시작됩니다. 준비해 주세요!');
 });
 
 Deno.test('rejects missing/wrong secret without claiming', async () => {

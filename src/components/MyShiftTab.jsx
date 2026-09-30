@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
 import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle } from 'lucide-react';
@@ -9,6 +10,14 @@ import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { isNativePush, usesServerPush, enablePushReminders, disablePushReminders } from '../lib/pushNotifications';
 import { shareMonthImage } from '../lib/shareCalendar';
+
+/** 근무 하나 바꾸기 (빈 코드 = 그 날짜 삭제, 빈 값을 남기지 않음) */
+const withShift = (prev, dateKey, code) => {
+  const next = { ...(prev || {}) };
+  if (code) next[dateKey] = code;
+  else delete next[dateKey];
+  return next;
+};
 
 /** 등록한 날짜 범위 → "8월" 또는 "7월 26일~8월 25일" */
 const importPeriod = ({ keys = [], yearMonth }) => {
@@ -115,7 +124,7 @@ export default function MyShiftTab({
         toast('🔕 알림이 해제되었습니다.', 'info');
       }
     } catch (err) {
-      toast(`알림 설정 실패: ${err.message}`, 'error');
+      toast(`알림 설정 실패\n${errorText(err)}`, 'error');
     } finally {
       setIsAlarmModalOpen(false);
     }
@@ -172,7 +181,7 @@ export default function MyShiftTab({
       if (delay <= 0) return;
 
       timers.push(setTimeout(() => {
-        new Notification(`⏰ [근무 알림] ${userName} 님!`, {
+        new Notification(userName ? `⏰ [근무 알림] ${userName} 님!` : '⏰ 근무 알림', {
           body: `잠시 후 (${startTimeStr}) ${code} 근무가 시작됩니다. 준비해 주세요!`,
           icon: '/icon-192.png'
         });
@@ -189,7 +198,7 @@ export default function MyShiftTab({
       setIsSharing(true);
       await shareMonthImage({ year, month, myShifts, shiftTypes, userName });
     } catch (err) {
-      toast(`이미지 공유 실패: ${err.message}`, 'error');
+      toast(`이미지 공유 실패\n${errorText(err)}`, 'error');
     } finally {
       setIsSharing(false);
     }
@@ -203,7 +212,7 @@ export default function MyShiftTab({
     setSelectedDate(dateKey);
     if (quickMode) {
       // 빠른 입력: 팝업 없이 선택한 근무를 바로 적용
-      setMyShifts((prev) => ({ ...(prev || {}), [dateKey]: quickCode }));
+      setMyShifts((prev) => withShift(prev, dateKey, quickCode));
       onResolveUncertain?.(dateKey);
       return;
     }
@@ -214,8 +223,7 @@ export default function MyShiftTab({
   // 근무 코드 변경 처리
   const handleSelectShiftCode = (code) => {
     if (!editingDateKey) return;
-    const updated = { ...myShifts, [editingDateKey]: code };
-    setMyShifts(updated);
+    setMyShifts((prev) => withShift(prev, editingDateKey, code));
     onResolveUncertain?.(editingDateKey);
     setIsEditModalOpen(false);
   };
@@ -586,7 +594,7 @@ export default function MyShiftTab({
           onClose={() => setIsTypeManagerOpen(false)}
           onSave={onSaveShiftType}
           onDelete={onDeleteShiftType}
-          isCodeInUse={(code) => Object.values(myShifts || {}).includes(code)}
+          usedDays={(code) => Object.values(myShifts || {}).filter((c) => c === code).length}
         />
       )}
 

@@ -1,6 +1,7 @@
 // 웹(PWA) 오프라인 지원: 앱 화면과 빌드 파일을 캐시해 인터넷 없이도 열리게 함
 // (근무 데이터는 기기 localStorage 에 있고, 서버 동기화는 온라인이 되면 앱이 처리)
-const CACHE = 'nurse-shift-v2';
+// v3: 예전 버전이 개인정보처리방침 같은 다른 페이지를 앱 첫 화면('/') 자리에 저장하던 캐시 정리
+const CACHE = 'nurse-shift-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -32,11 +33,14 @@ self.addEventListener('fetch', (event) => {
   if (req.cache === 'no-store') return;
 
   // 페이지: 네트워크 우선(최신 배포), 오프라인이면 캐시
+  //  - 앱 화면(/, /?join=…, 로그인 후 돌아온 주소)은 '/' 한 곳에 저장
+  //  - 개인정보처리방침 등 다른 페이지는 각자 주소로 저장 (앱 첫 화면을 덮어쓰지 않게)
   if (req.mode === 'navigate') {
+    const key = url.pathname === '/' || url.pathname === '/index.html' ? '/' : url.pathname;
     event.respondWith(
       fetch(req)
-        .then((res) => putCache('/', res))
-        .catch(() => caches.match('/'))
+        .then((res) => putCache(key, res))
+        .catch(() => caches.match(key).then((hit) => hit || caches.match('/')))
     );
     return;
   }

@@ -46,6 +46,8 @@ describe('전체 백업/복원', () => {
     expect(dst.getItem('synced_shift_data')).toBeNull();
     expect(dst.getItem('synced_day_notes')).toBeNull();
     expect(JSON.parse(dst.getItem('pending_type_ops')).upsert['교']).toMatchObject({ label: '교육' });
+    // 복원한 설정이 서버의 예전 설정보다 최신으로 취급됨
+    expect(Date.parse(dst.getItem('settings_updated_at'))).toBeGreaterThan(Date.now() - 5000);
   });
 
   it('잘못된 파일 거부', () => {

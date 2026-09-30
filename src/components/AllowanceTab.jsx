@@ -344,10 +344,12 @@ export default function AllowanceTab({
                 onChange={(e) => handleStartDayChange(e.target.value)}
                 className="bg-white border border-slate-200 px-2.5 py-1 rounded-xl font-black text-indigo-600 text-xs outline-none focus:border-indigo-400 cursor-pointer shadow-2xs"
               >
-                <option value={1}>1일 (1일 ~ 말일)</option>
-                <option value={16}>16일 (전월16일 ~ 당월15일)</option>
-                <option value={21}>21일 (전월21일 ~ 당월20일)</option>
-                <option value={26}>26일 (전월26일 ~ 당월25일)</option>
+                {/* 병원마다 정산일이 달라 1~28일 모두 선택 가능 (29일 이후는 2월에 날짜가 없어 제외) */}
+                {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>
+                    {d === 1 ? '1일 (1일 ~ 말일)' : `${d}일 (전월${d}일 ~ 당월${d - 1}일)`}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

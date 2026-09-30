@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import Modal from './Modal';
 import { X, Plus, ChevronLeft, Trash2, Check } from 'lucide-react';
@@ -23,7 +24,7 @@ const EMPTY = { code: '', label: '', kind: 'work', bg: PALETTE[6][0], fg: PALETT
  * 근무 종류 관리 (추가 / 이름·색상·시간 수정 / 삭제)
  * - 기본 근무(D/E/N/M/OFF/연차)는 코드 변경·삭제 불가
  */
-export default function ShiftTypeManager({ onClose, onSave, onDelete, isCodeInUse }) {
+export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays = () => 0 }) {
   const shiftTypes = useShiftTypes();
   const [editing, setEditing] = useState(null); // null = 목록, 객체 = 편집 폼
   const [isNew, setIsNew] = useState(false);
@@ -56,20 +57,25 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, isCodeInUs
       });
       setEditing(null);
     } catch (err) {
-      setError(err.message || '저장하지 못했습니다.');
+      setError(errorText(err, '저장하지 못했어요.'));
     }
   };
 
   const handleDelete = async () => {
-    if (isCodeInUse(editing.code)) {
-      return setError('달력에 입력된 근무는 삭제할 수 없습니다. 해당 날짜의 근무를 먼저 지워 주세요.');
-    }
-    if (!(await confirmDialog({ title: `'${editing.code}' 근무를 삭제할까요?`, confirmText: '삭제', danger: true }))) return;
+    // 달력에 입력된 날짜가 있으면 그 날짜들을 빈칸으로 만들고 함께 삭제 (하나씩 지우지 않아도 되게)
+    const days = usedDays(editing.code);
+    const ok = await confirmDialog({
+      title: `'${editing.code}' 근무를 삭제할까요?`,
+      message: days ? `달력에 입력된 ${days}일의 '${editing.code}' 근무도 함께 지워져요.` : '',
+      confirmText: '삭제',
+      danger: true
+    });
+    if (!ok) return;
     try {
-      await onDelete(editing.code);
+      await onDelete(editing.code, { clear: days > 0 });
       setEditing(null);
     } catch (err) {
-      setError(err.message || '삭제하지 못했습니다.');
+      setError(errorText(err, '삭제하지 못했어요.'));
     }
   };
 

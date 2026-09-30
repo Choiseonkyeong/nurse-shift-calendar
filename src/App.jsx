@@ -127,7 +127,8 @@ export default function App() {
   const [myShifts, setMyShifts] = useState(() => {
     try {
       const saved = localStorage.getItem('my_shift_data');
-      return saved ? JSON.parse(saved) || {} : {};
+      // 예전 버전에서 '근무 삭제'가 빈 값으로 남긴 날짜는 정리
+      return Object.fromEntries(Object.entries((saved && JSON.parse(saved)) || {}).filter(([, v]) => v));
     } catch (e) {
       return {};
     }
@@ -550,7 +551,22 @@ export default function App() {
     }
   };
 
-  const handleDeleteShiftType = async (code) => {
+  const handleDeleteShiftType = async (code, { clear = false } = {}) => {
+    if (clear) {
+      // 이 근무가 들어간 날짜를 먼저 비움 (서버는 달력에 쓰인 근무 종류 삭제를 거부하므로 서버에도 먼저 반영)
+      const changes = Object.fromEntries(
+        Object.entries(myShiftsRef.current || {}).filter(([, c]) => c === code).map(([k]) => [k, null])
+      );
+      setMyShifts((prev) => applyChanges(prev || {}, changes));
+      if (profile && syncedShiftsRef.current) {
+        try {
+          await saveShiftChanges(changes);
+          markSyncedShifts(applyChanges(syncedShiftsRef.current, changes));
+        } catch (err) {
+          // 오프라인: 기기에서 지운 근무는 다음 연결 때 올라가고, 종류 삭제는 그 뒤에 다시 시도됨
+        }
+      }
+    }
     await saveTypeToServer({ type: 'remove', code }, () => deleteShiftType(code));
     setCustomShiftTypes((prev) => (prev || []).filter((t) => t.code !== code));
   };
@@ -690,6 +706,7 @@ export default function App() {
                     autoFocus
                     maxLength={30}
                     aria-label="이름"
+                    placeholder="이름"
                     onChange={(e) => setTempUserName(e.target.value)}
                     className="min-w-0 flex-1 max-w-[8rem] px-2 py-1 text-xs text-slate-800 font-bold rounded-lg border border-slate-300 outline-none focus:border-indigo-400"
                     onKeyDown={(e) => {
@@ -704,7 +721,8 @@ export default function App() {
                   type="button"
                   className="flex items-center gap-1 cursor-pointer group max-w-full"
                   onClick={() => {
-                    setTempUserName(userName);
+                    // 이름 없이 시작한 경우 기본 이름('나')을 지우고 빈 칸으로
+                    setTempUserName(nameSkipped ? '' : userName);
                     setIsEditingName(true);
                   }}
                   aria-label="이름 수정"
@@ -777,7 +795,7 @@ export default function App() {
               myShifts={myShifts || {}}
               setMyShifts={setMyShifts}
               shiftConfigs={shiftConfigs}
-              userName={userName}
+              userName={nameSkipped ? '' : userName}
               profile={profile}
               alarmSettings={alarmSettings}
               setAlarmSettings={setAlarmSettings}

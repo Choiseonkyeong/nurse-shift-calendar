@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { errorText } from '../lib/errorText';
+import { decodeCsv } from '../lib/csvText';
 import { toast } from '../lib/toast';
 import Modal from './Modal';
 import { confirmDialog } from '../lib/confirm';
@@ -98,18 +100,30 @@ export default function ImportTab({
       const buffer = await file.arrayBuffer();
       {
         try {
-          const workbook = XLSX.read(buffer, { type: 'array' });
+          // CSV 는 인코딩을 직접 판별 (UTF-8, 안 되면 한국어 엑셀 기본 저장 형식 EUC-KR)
+          const isCsv = /\.csv$/i.test(file.name) || file.type === 'text/csv';
+          const workbook = isCsv
+            ? XLSX.read(decodeCsv(buffer), { type: 'string', cellNF: true })
+            : XLSX.read(buffer, { type: 'array', cellNF: true }); // cellNF: 날짜 서식 판별용
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
 
           const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:Z100');
           const matrix = [];
+          // 날짜 서식 칸(예: 2026-10-01)은 실제 날짜로 기억 → 표 위쪽 날짜 행을 정확한 날짜로 매핑
+          const dateCells = {}; // 'R:C' → 'YYYY-MM-DD'
           for (let R = range.s.r; R <= range.e.r; ++R) {
             const row = [];
             for (let C = range.s.c; C <= range.e.c; ++C) {
               const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
               const cell = worksheet[cellAddress];
-              row.push(cell ? String(cell.v).trim() : '');
+              const date = cell?.t === 'n' && cell.z && XLSX.SSF.is_date(cell.z) ? XLSX.SSF.parse_date_code(cell.v) : null;
+              if (date?.y) {
+                dateCells[`${R - range.s.r}:${C - range.s.c}`] = `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
+                row.push(String(date.d));
+              } else {
+                row.push(cell ? String(cell.v).trim() : '');
+              }
             }
             matrix.push(row);
           }
@@ -136,8 +150,6 @@ export default function ImportTab({
             parsedMonth = sMonth;
           }
 
-          const targetYM = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`;
-
           const prevDateObj = new Date(parsedYear, parsedMonth - 2, 1);
           const prevYear = prevDateObj.getFullYear();
           const prevMonth = prevDateObj.getMonth() + 1;
@@ -159,6 +171,17 @@ export default function ImportTab({
 
             if (numberCols.length >= 15) {
               dateRowIdx = r;
+              // 날짜 서식 칸이면 적힌 날짜 그대로 (제목에 연월이 없어도 정확)
+              const exact = numberCols.map(({ col }) => [col, dateCells[`${r}:${col}`]]).filter(([, k]) => k);
+              if (exact.length >= 15) {
+                exact.forEach(([col, key]) => (colToDateMap[col] = key));
+                if (!foundHeaderYearMonth) {
+                  const ym = exact[Math.floor(exact.length / 2)][1];
+                  parsedYear = Number(ym.slice(0, 4));
+                  parsedMonth = Number(ym.slice(5, 7));
+                }
+                break;
+              }
               let isCurrentMonthPart = false;
 
               numberCols.forEach(({ col, day }) => {
@@ -177,6 +200,8 @@ export default function ImportTab({
               break;
             }
           }
+
+          const targetYM = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`;
 
           if (dateRowIdx === -1) {
             toast('엑셀 파일에서 날짜 행을 찾지 못했습니다.', 'error');
@@ -198,8 +223,8 @@ export default function ImportTab({
 
             let foundName = '';
             
-            // 앞쪽 4개 열(A~D열) 순회하며 정확한 이름 정제
-            for (let c = 0; c < Math.min(4, row.length); c++) {
+            // 앞쪽 6개 열(A~F열: 번호·직급·사번 다음에 이름이 있는 표까지) 순회하며 이름 정제
+            for (let c = 0; c < Math.min(6, row.length); c++) {
               let val = String(row[c] || '').trim();
               if (!val) continue;
 
@@ -209,8 +234,9 @@ export default function ImportTab({
               // 2. 근무 코드 매칭용 단어 제외
               const isShiftCodeOnly = /^(D|E|N|M|OFF|DD|DDEE|DE|N\/|\/)$/i.test(val);
               
-              // 3. 순수 한글 2~4자 이름 추출
-              const isKoreanName = /^[가-힣]{2,4}$/.test(val);
+              // 3. 순수 한글 2~5자 이름 추출 (띄어쓴 이름 '남 궁민' 도 붙여서)
+              val = val.replace(/\s+/g, '');
+              const isKoreanName = /^[가-힣]{2,5}$/.test(val);
 
               if (
                 val && 
@@ -312,7 +338,7 @@ export default function ImportTab({
     } catch (err) {
       console.error(err);
       if (recoverIfStale(err)) setStatusMessage('앱이 새 버전으로 업데이트되어 새로고침하는 중이에요...');
-      else setStatusMessage(`❌ 사진 인식 실패: ${err.message}`);
+      else setStatusMessage(`❌ 사진 인식 실패: ${errorText(err)}`);
     } finally {
       setOcrProgress(null);
       setIsProcessing(false);
@@ -333,7 +359,7 @@ export default function ImportTab({
       }
       setIcsPreview({ ...parsed, fileName: file.name });
     } catch (err) {
-      setStatusMessage(`❌ ${err.message}`);
+      setStatusMessage(`❌ ${errorText(err)}`);
     }
   };
 
@@ -376,7 +402,7 @@ export default function ImportTab({
       });
       if (result !== 'cancelled') setStatusMessage('✅ 백업 파일을 저장했습니다. 카톡 나에게 보내기·드라이브 등에 보관해 두세요.');
     } catch (err) {
-      setStatusMessage(`❌ 백업 실패: ${err.message}`);
+      setStatusMessage(`❌ 백업 실패: ${errorText(err)}`);
     }
   };
 
@@ -400,7 +426,7 @@ export default function ImportTab({
       restoreBackup(data);
       window.location.reload();
     } catch (err) {
-      setStatusMessage(`❌ ${err.message}`);
+      setStatusMessage(`❌ ${errorText(err)}`);
     }
   };
 
@@ -420,7 +446,7 @@ export default function ImportTab({
       );
       if (result !== 'cancelled') setStatusMessage(kind === 'csv' ? '✅ 엑셀(CSV) 파일로 내보냈습니다.' : '✅ 캘린더(.ics) 파일로 내보냈습니다.');
     } catch (err) {
-      setStatusMessage(`❌ 내보내기 실패: ${err.message}`);
+      setStatusMessage(`❌ 내보내기 실패: ${errorText(err)}`);
     }
   };
 
