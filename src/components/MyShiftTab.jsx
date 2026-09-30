@@ -9,7 +9,15 @@ import PatternFill from './PatternFill';
 import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey } from '../utils/dateUtils';
 import { usesServerPush, enablePushReminders, disablePushReminders, toStartTimes } from '../lib/pushNotifications';
-import { isNativeApp, enableLocalReminders, syncLocalReminders, REMINDER_DAYS } from '../lib/localReminders';
+import {
+  isNativeApp,
+  enableLocalReminders,
+  syncLocalReminders,
+  getAlarmPermission,
+  webNotificationState,
+  REMINDER_DAYS,
+  MAX_REMINDERS
+} from '../lib/localReminders';
 import { shareMonthImage } from '../lib/shareCalendar';
 
 /** 근무 하나 바꾸기 (빈 코드 = 그 날짜 삭제, 빈 값을 남기지 않음) */
@@ -70,6 +78,21 @@ export default function MyShiftTab({
 
   const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
 
+  // 이 기기의 알림 권한 (설정은 다른 기기에서 켜져 동기화됐는데 이 기기엔 권한이 없는 경우 알려 주기 위해)
+  const [alarmPerm, setAlarmPerm] = useState('granted');
+  useEffect(() => {
+    let alive = true;
+    const check = () => getAlarmPermission().then((p) => alive && setAlarmPerm(p)).catch(() => {});
+    check();
+    const onVisible = () => document.visibilityState === 'visible' && check();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [alarmSettings.enabled, isAlarmModalOpen]);
+  const alarmBlocked = Boolean(alarmSettings.enabled) && alarmPerm !== 'granted';
+
   const shiftTypes = useShiftTypes();
   // 빠른 입력: null = 꺼짐, '' = 지우기, 그 외 = 선택한 근무 코드
   const [quickCode, setQuickCode] = useState(null);
@@ -84,8 +107,8 @@ export default function MyShiftTab({
       return false;
     }
 
-    let permission = Notification.permission;
-    if (permission === 'default') {
+    let permission = await webNotificationState();
+    if (permission !== 'granted' && permission !== 'denied') {
       permission = await Notification.requestPermission();
     }
 
@@ -191,7 +214,7 @@ export default function MyShiftTab({
 
   useEffect(() => {
     if (isNativeApp() || usesServerPush() || !alarmSettings?.enabled) return;
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (!('Notification' in window) || alarmPerm !== 'granted') return;
 
     const shiftTimes = shiftConfigs.shiftTimes || {};
     const timers = [];
@@ -220,7 +243,7 @@ export default function MyShiftTab({
     });
 
     return () => timers.forEach(clearTimeout);
-  }, [alarmSettings?.enabled, alarmSettings?.minutesBefore, myShifts, shiftConfigs.shiftTimes, shiftTypes, userName, dayTick]);
+  }, [alarmSettings?.enabled, alarmSettings?.minutesBefore, myShifts, shiftConfigs.shiftTimes, shiftTypes, userName, dayTick, alarmPerm]);
 
   // 이번 달 근무표 이미지 공유/저장
   const [isSharing, setIsSharing] = useState(false);
@@ -383,17 +406,25 @@ export default function MyShiftTab({
           >
             {isSharing ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
           </button>
-          {/* 알람 설정 버튼 */}
+          {/* 알람 설정 버튼 (켜져 있어도 이 기기에 알림 권한이 없으면 '권한 필요') */}
           <button
             onClick={() => setIsAlarmModalOpen(true)}
             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-2xl text-xs font-black transition border cursor-pointer whitespace-nowrap ${
-              alarmSettings.enabled
-                ? 'bg-amber-50 text-amber-600 border-amber-200'
-                : 'bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600'
+              alarmBlocked
+                ? 'bg-rose-50 text-rose-600 border-rose-200'
+                : alarmSettings.enabled
+                  ? 'bg-amber-50 text-amber-600 border-amber-200'
+                  : 'bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600'
             }`}
           >
-            {alarmSettings.enabled ? <Bell size={13} className="fill-amber-500" /> : <BellOff size={13} />}
-            <span>{alarmSettings.enabled ? `${alarmSettings.minutesBefore >= 60 ? `${alarmSettings.minutesBefore / 60}시간` : `${alarmSettings.minutesBefore}분`} 전` : '알림'}</span>
+            {alarmBlocked ? (
+              <AlertTriangle size={13} />
+            ) : alarmSettings.enabled ? (
+              <Bell size={13} className="fill-amber-500" />
+            ) : (
+              <BellOff size={13} />
+            )}
+            <span>{alarmBlocked ? '권한 필요' : alarmSettings.enabled ? `${formatLead(alarmSettings.minutesBefore)} 전` : '알림'}</span>
           </button>
           </div>
         </div>
@@ -661,6 +692,25 @@ export default function MyShiftTab({
               </button>
             </div>
 
+            {alarmBlocked && (
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-100 space-y-2">
+                <p className="text-[11px] font-bold text-rose-700">
+                  {alarmPerm === 'unsupported'
+                    ? '이 브라우저는 알림을 지원하지 않아요. 앱을 설치하면 알림을 받을 수 있어요.'
+                    : '알림이 켜져 있지만 이 기기에서는 알림 권한이 없어서 알림이 오지 않아요.'}
+                </p>
+                {alarmPerm !== 'unsupported' && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleAlarm(alarmSettings.minutesBefore)}
+                    className="w-full py-2 rounded-xl bg-rose-600 text-white text-xs font-black cursor-pointer"
+                  >
+                    이 기기에서 알림 허용하기
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
               {[
                 { min: 30, label: '30분 전 알림' },
@@ -685,7 +735,7 @@ export default function MyShiftTab({
 
             {isNativeApp() ? (
               <p className="text-[11px] font-bold text-slate-500 bg-slate-50 rounded-2xl p-3">
-                앱을 꺼 둬도 알림이 와요. 앞으로 {REMINDER_DAYS}일 동안의 근무를 미리 예약하고, 앱을 열 때마다 이어서 예약해요.
+                앱을 꺼 둬도 알림이 와요. 앞으로 {REMINDER_DAYS}일 동안의 근무(최대 {MAX_REMINDERS}개)를 미리 예약하고, 앱을 열 때마다 이어서 예약해요.
               </p>
             ) : !usesServerPush() && (
               <p className="text-[11px] font-bold text-slate-500 bg-slate-50 rounded-2xl p-3">
