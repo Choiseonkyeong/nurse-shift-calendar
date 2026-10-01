@@ -12,7 +12,8 @@ import InstallHint from './components/InstallHint';
 import { moveImportedMonth } from './lib/importMonth';
 import Toaster from './components/Toaster';
 import ConfirmHost from './components/ConfirmHost';
-import { closeTopModal } from './components/Modal';
+import { closeTopModal, onModalsChange, openModalCount } from './components/Modal';
+import { installWebBack } from './lib/webBack';
 import { toast } from './lib/toast';
 import AccountModal from './components/AccountModal';
 import AuthLanding from './components/AuthLanding';
@@ -63,18 +64,22 @@ export default function App() {
   // 안드로이드 뒤로가기: 팝업 닫기 → 내 근무 탭으로 → 앱 종료 (기본 동작은 바로 앱 종료)
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
+  // 팝업 닫기 → 내 근무 탭으로. 처리했으면 true
+  const handleBack = useCallback(() => {
+    if (closeTopModal()) return true;
+    if (activeTabRef.current !== 'myShift') {
+      setActiveTab('myShift');
+      return true;
+    }
+    return false;
+  }, []);
   useEffect(() => {
     if (!window.Capacitor?.isNativePlatform?.()) return undefined;
     let handle = null;
     let cancelled = false;
     import('@capacitor/app').then(({ App: CapApp }) =>
       CapApp.addListener('backButton', () => {
-        if (closeTopModal()) return;
-        if (activeTabRef.current !== 'myShift') {
-          setActiveTab('myShift');
-          return;
-        }
-        CapApp.exitApp();
+        if (!handleBack()) CapApp.exitApp();
       }).then((h) => {
         if (cancelled) h.remove();
         else handle = h;
@@ -84,7 +89,23 @@ export default function App() {
       cancelled = true;
       handle?.remove();
     };
-  }, []);
+  }, [handleBack]);
+
+  // 웹(브라우저·홈 화면 앱) 뒤로가기도 같은 순서로 (기본 동작은 앱을 나가 버림)
+  const webBackRef = useRef(null);
+  useEffect(() => {
+    if (window.Capacitor?.isNativePlatform?.()) return undefined;
+    const web = installWebBack({ needGuard: () => openModalCount() > 0 || activeTabRef.current !== 'myShift', onBack: handleBack });
+    webBackRef.current = web;
+    const off = onModalsChange(web.sync);
+    web.sync();
+    return () => {
+      off();
+      web.dispose();
+      webBackRef.current = null;
+    };
+  }, [handleBack]);
+  useEffect(() => webBackRef.current?.sync(), [activeTab]);
 
   // 탭을 바꾸면 맨 위부터 보이게
   const scrollAreaRef = useRef(null);
@@ -214,7 +235,7 @@ export default function App() {
     // 주소에서 초대 코드 제거 (새로고침해도 다시 입력되지 않게)
     const url = new URL(window.location.href);
     url.searchParams.delete('join');
-    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     toast(`초대 코드 ${inviteCode} 가 입력됐어요. [그룹 참여하기]를 눌러 주세요.`, 'info');
   }, [inviteCode]);
   const [privacyBlur, setPrivacyBlur] = useState(false);
