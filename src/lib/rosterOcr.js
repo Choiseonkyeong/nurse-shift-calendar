@@ -478,7 +478,7 @@ function looksLikeD(canvas) {
  *  - 1회차: 단어 모드(PSM 8) — 영문 한두 글자(D/E/N/O/OFF) 정확도가 가장 높음
  *  - 2회차: 1회차에서 확신이 없는 칸만 한 줄 모드(PSM 7) — 한글(연차 등) 인식이 좋음
  */
-async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCanvas = null) {
+async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCanvas = null, onNameProgress = () => {}) {
   const { grid } = result;
 
   // 이름 칸 다시 읽기: 원본에서 크게 잘라 (회색조·이진화) × (한 줄·여러 줄: 'N-keep' 같은 둘째 줄) 로 읽고
@@ -488,7 +488,8 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
   await worker.setParameters({ tessedit_char_blacklist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]{}|' });
   const renamed = new Map();
   const taken = new Set();
-  for (const row of grid.rows) {
+  for (const [rowIdx, row] of grid.rows.entries()) {
+    onNameProgress(rowIdx, grid.rows.length);
     const cy = row.y0 + grid.slope * ((row.nameX0 + row.nameX1) / 2);
     const { ink } = cropCell(canvas, row.nameX0, cy - grid.pitch * 0.45, row.nameX1, cy + grid.pitch * 0.45, { filter: false });
     let name = row.name;
@@ -496,7 +497,9 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
     if (ink >= 0.004) {
       // 여러 번 읽은 결과를 이름별로 점수 합산 (같은 이름이 여러 번 나오면 그 이름)
       const votes = new Map();
+      const counts = new Map(); // 같은 이름이 몇 번 읽혔는지 → 성씨로 시작하는 세 글자 이름이 세 번 나오면 그만 읽음 (폰에서 시간 단축)
       if (nameQuality(name)) votes.set(name, nameQuality(name) + 6);
+      let sure = false;
       // 줄 전체(80·120px) + 위쪽 60%('남영주 / (N-keep)'처럼 둘째 줄이 있는 칸의 이름 줄만)
       const crops = [
         [cy - grid.pitch * 0.48, cy + grid.pitch * 0.48, 80],
@@ -504,14 +507,22 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
         [cy - grid.pitch * 0.48, cy + grid.pitch * 0.1, 80]
       ];
       for (const [top, bottom, targetH] of crops) {
+        if (sure) break;
         const variants = cropNameVariants(nameSrc, row.nameX0, top, row.nameX1, bottom, targetH);
         for (const psm of ['7', '6']) {
+          if (sure) break;
           await worker.setParameters({ tessedit_pageseg_mode: psm });
           for (const v of variants) {
             const { data } = await worker.recognize(v);
             const reread = extractName(data.text);
             const q = nameQuality(reread);
-            if (q) votes.set(reread, (votes.get(reread) || 0) + q + data.confidence / 10);
+            if (!q) continue;
+            votes.set(reread, (votes.get(reread) || 0) + q + data.confidence / 10);
+            counts.set(reread, (counts.get(reread) || 0) + 1);
+            if (q >= 80 && counts.get(reread) >= 3) {
+              sure = true;
+              break;
+            }
           }
         }
       }
@@ -690,14 +701,16 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
       }
     }
     stage = () => {};
-    onProgress(0.4, '칸별 정밀 인식 중...');
+    onProgress(0.4, '이름 확인 중...');
     result = await refineCells(
       result,
       source,
       worker,
       shiftTypes,
-      (p) => onProgress(0.4 + p * 0.58, `칸별 정밀 인식 중... ${Math.round(p * 100)}%`),
-      source === canvas ? scaledCanvas(img) : null
+      (p) => onProgress(0.5 + p * 0.48, `칸별 정밀 인식 중... ${Math.round(p * 100)}%`),
+      source === canvas ? scaledCanvas(img) : null,
+      // 이름 다시 읽기 단계도 진행률 표시 (멈춘 것처럼 보이지 않게)
+      (i, n) => onProgress(0.4 + (i / n) * 0.1, `이름 확인 중... ${i + 1}/${n}`)
     );
     onProgress(1, '완료');
     return result;

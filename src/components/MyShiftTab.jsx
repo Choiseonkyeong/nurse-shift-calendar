@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
+import { needsRetakeHint } from '../lib/importQuality';
 import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
@@ -334,6 +335,12 @@ export default function MyShiftTab({
               <AlertTriangle size={12} className="shrink-0" /> 노란 테두리 {importBanner.uncertain.length}일은 사진과 비교해 확인해 주세요 (눌러서 수정)
             </p>
           )}
+          {/* 확인할 칸이 많으면(10% 이상) 대개 사진이 작거나 흐린 경우 → 다시 찍는 방법 안내 */}
+          {needsRetakeHint(importBanner) && (
+              <p className="text-[11px] font-bold text-indigo-100" role="note">
+                사진이 작거나 흐려서 확인할 칸이 많아요. 근무표를 화면에 크게 띄우거나 가까이서 반듯하게 다시 찍으면 더 정확해요.
+              </p>
+            )}
           {/* 사진·엑셀에서 달을 잘못 인식했으면 한 달씩 옮기기 */}
           {importBanner.imp && (
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-100">
