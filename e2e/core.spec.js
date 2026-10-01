@@ -167,3 +167,23 @@ test('처음 사용자 안내에서 반복 패턴을 열면 기본 3개월 → �
   expect(Object.keys(saved).length).toBeGreaterThanOrEqual(90);
   expect(saved['2026-12-27']).toBeTruthy();
 });
+
+test('앱을 켜 둔 채 날짜가 바뀌면 다시 볼 때 오늘(다음 달)로, 다른 날짜를 보고 있었으면 그대로', async ({ page }) => {
+  await openApp(page);
+  await page.clock.setFixedTime(new Date('2026-09-30T23:50:00+09:00'));
+  await page.reload();
+  await expect(page.getByText('9월 30일 (수) 메모')).toBeVisible();
+  // 밤 근무 후 아침에 다시 열기
+  await page.clock.setFixedTime(new Date('2026-10-01T07:30:00+09:00'));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(page.getByText('2026년 10월')).toBeVisible();
+  await expect(page.getByText('10월 1일 (목) 메모')).toBeVisible();
+
+  // 다른 날짜(10/15)를 보고 있었으면 날짜가 바뀌어도 그대로
+  await page.getByRole('button', { name: /^10월 15일 (?!\()/ }).click();
+  await page.keyboard.press('Escape');
+  await page.clock.setFixedTime(new Date('2026-10-02T07:30:00+09:00'));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForTimeout(300);
+  await expect(page.getByText('10월 15일 (목) 메모')).toBeVisible();
+});
