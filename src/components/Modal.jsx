@@ -3,6 +3,17 @@ import { createPortal } from 'react-dom';
 
 // 열린 팝업 순서 (안드로이드 뒤로가기: 맨 위 팝업부터 닫기)
 const openModals = [];
+const listeners = new Set();
+const notify = () => listeners.forEach((fn) => fn());
+
+/** 열린 팝업 수 */
+export const openModalCount = () => openModals.length;
+
+/** 팝업이 열리고 닫힐 때마다 호출 (웹 뒤로가기 처리용). 해제 함수 반환 */
+export function onModalsChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 
 /** 맨 위 팝업 닫기. 팝업이 열려 있었으면 true (닫을 수 없는 필수 창이어도 true → 뒤로가기로 앱이 꺼지지 않게) */
 export function closeTopModal() {
@@ -29,9 +40,11 @@ export default function Modal({ onClose, label, children, align = 'center', zInd
 
   useEffect(() => {
     openModals.push(onCloseRef);
+    notify();
     return () => {
       const i = openModals.lastIndexOf(onCloseRef);
       if (i !== -1) openModals.splice(i, 1);
+      notify();
     };
   }, []);
 
