@@ -2,6 +2,7 @@
 // 근무표 사진 → 단어 좌표 (Tesseract.js, 기기 안에서 처리 / 무료 / 서버 전송 없음)
 // 인식률을 위해: 해상도 정규화 → 흑백 → 조명 보정(적응형 이진화) → 표 선 제거 후 OCR
 import { parseRosterWords, cellToCode, extractName, nameQuality } from './rosterParse';
+import { resilientWorker } from './resilientWorker';
 
 const TARGET_WIDTH = 2400;
 
@@ -715,7 +716,8 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
 
   onProgress(0.06, '인식 엔진 준비 중... (처음 한 번은 조금 걸려요)');
   let stage = (p) => onProgress(0.1 + p * 0.3, `표 구조 분석 중... ${Math.round(p * 100)}%`);
-  const worker = await createOcrWorker((p) => stage(p));
+  // 특정 칸에서 엔진이 죽으면 새로 만들어 이어서 (그 칸만 못 읽은 칸으로)
+  const worker = await resilientWorker(() => createOcrWorker((p) => stage(p)));
 
   try {
     let source = canvas;

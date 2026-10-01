@@ -183,3 +183,17 @@ test('아주 큰 사진(약 4800만 화소): 아이폰 캔버스 한도(1670만 
   expect(await page.evaluate(() => window.__maxCanvas)).toBeLessThanOrEqual(16777216);
   fs.rmSync(file, { force: true });
 });
+
+test('인식 엔진이 어떤 칸에서 죽어도(Tesseract Assert → Aborted) 등록 전체가 실패하지 않고 이어서 읽음', async ({ page }) => {
+  test.setTimeout(240000);
+  // roster-oct-photo.jpg 를 -1.5° 돌린 사진: 칸별 인식 중 엔진 내부 오류(pageres.cpp Assert)가 나는 사진
+  const roster = makeRoster({ year: 2026, month: 10, seed: 3 });
+  const me = roster.people.find((p) => p.name === '한소희');
+  await openApp(page, { name: '한소희' });
+  await tab(page, '등록').click();
+  await photoInput(page).setInputFiles(fixture('roster-oct-crash.jpg'));
+  await expect(page.getByText(/사진에서 9월 26일~10월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
+  const saved = await readLocal(page, 'my_shift_data');
+  expect(Object.keys(saved).length).toBeGreaterThanOrEqual(27);
+  expect(Object.keys(saved).every((k) => k in me.codes)).toBe(true);
+});
