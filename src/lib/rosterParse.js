@@ -38,7 +38,9 @@ export function cellToCode(text, shiftTypes = []) {
   if (CELL_ALIASES[key]) return CELL_ALIASES[key];
   if (/^[o0]ff?$/i.test(key)) return 'OFF';
   // '연차' 두 글자가 영문으로 읽히는 경우가 잦음 (연→H·A·E, 차→X·K)
-  if (/^[haeo][xk]$/i.test(key)) return '연차';
+  if (/^[haeo4][xk]$/i.test(key)) return '연차';
+  // '차'가 흐려 '연체·연자·연치'로 읽힌 경우 (근무표에 '연'으로 시작하는 다른 두 글자 근무는 없음)
+  if (/^연[가-힣]$/.test(key)) return '연차';
   return null;
 }
 
@@ -60,7 +62,7 @@ export function detectYearMonth(text, fallback) {
 const SURNAMES = '김이박최정강조윤장임한오서신권황안송전홍유고문양손배백허남심노하곽성차주우구민류나진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예경봉사부';
 // 모양이 비슷해서 잘 헷갈리는 자모 묶음 (초성·중성·종성 번호)
 const LOOKALIKE = [
-  [[12, 13, 14], [0, 1, 15], [7, 8, 17], [3, 4, 16], [11, 18], [9, 10]],
+  [[12, 13, 14], [0, 1, 15], [7, 8, 17], [3, 4, 16], [5, 11, 18], [9, 10]],
   [[0, 2], [1, 3, 5, 7], [4, 6], [8, 12, 13, 17, 18], [9, 10, 11], [14, 15, 16], [19, 20]],
   [[4, 16, 17, 21], [1, 2, 24], [7, 25], [19, 20], [8]]
 ];
@@ -83,6 +85,13 @@ export function fixSurname(name) {
   return fix ? fix + name.slice(1) : name;
 }
 
+/** 사람 이름다운 정도 (여러 번 읽은 결과 중 고르기용). 0 = 이름 아님 */
+export function nameQuality(name) {
+  if (!name || /번째 줄/.test(name) || !/^[가-힣]{2,5}$/.test(name)) return 0;
+  // 두 글자는 성이 빠졌거나 잡티('(N-keep)'이 '대내'로)일 수 있어 낮게
+  return Math.max(1, (SURNAMES.includes(name[0]) ? 50 : 0) + (name.length === 3 ? 30 : name.length === 2 ? -35 : 15));
+}
+
 /** "홍길동(N-keep)", "RN 홍길동", "홍 길 동" → 한글 이름 */
 export function extractName(text) {
   const joined = String(text || '');
@@ -94,17 +103,23 @@ export function extractName(text) {
 
 const center = (w) => ({ x: (w.x0 + w.x1) / 2, y: (w.y0 + w.y1) / 2 });
 
-/** 가장 날짜 헤더다운 숫자 묶음 찾기 */
+/**
+ * 가장 날짜 헤더다운 숫자 묶음 찾기
+ * 기울어진 사진은 날짜 줄이 한쪽으로 내려가므로(1.2° 면 표 끝에서 수십 px) 기울기 후보를 바꿔 가며 같은 줄로 묶음
+ */
 function findHeader(words) {
   const nums = words
     .filter((w) => /^\d{1,2}$/.test(w.text) && +w.text >= 1 && +w.text <= 31)
     .map((w) => ({ ...w, day: +w.text, ...center(w), h: w.y1 - w.y0 }));
   let best = null;
+  const slopes = [0, -0.01, 0.01, -0.02, 0.02, -0.03, 0.03, -0.04, 0.04];
   for (const seed of nums) {
     const band = Math.max(seed.h, 8) * 0.8;
-    const row = nums.filter((n) => Math.abs(n.y - seed.y) <= band);
-    const distinct = new Set(row.map((n) => n.day)).size;
-    if (!best || distinct > best.distinct) best = { row, distinct, y: median(row.map((n) => n.y)), h: median(row.map((n) => n.h)) };
+    for (const k of slopes) {
+      const row = nums.filter((n) => Math.abs(n.y - (seed.y + k * (n.x - seed.x))) <= band);
+      const distinct = new Set(row.map((n) => n.day)).size;
+      if (!best || distinct > best.distinct) best = { row, distinct, y: median(row.map((n) => n.y)), h: median(row.map((n) => n.h)) };
+    }
   }
   return best && best.distinct >= 7 ? best : null;
 }
@@ -271,9 +286,10 @@ const WEEKDAY_CHARS = '일월화수목금토';
  *  - 사진에서 제목 숫자를 잘못 읽거나(10월 → 1, 5월) 제목이 없어도 올바른 달로
  */
 function verifyYearMonth(ym, header, clean, headerWords, today) {
-  const near = clean.filter((w) => Math.abs(center(w).y - header.y) <= header.h * 4);
+  const dy = (w) => center(w).y - header.yAt(center(w).x); // 기울어진 날짜 줄 기준 높이 차
+  const near = clean.filter((w) => Math.abs(dy(w)) <= header.h * 4);
   const weekdays = near
-    .filter((w) => w.text.length === 1 && WEEKDAY_CHARS.includes(w.text) && Math.abs(center(w).y - header.y) > header.h * 0.5)
+    .filter((w) => w.text.length === 1 && WEEKDAY_CHARS.includes(w.text) && Math.abs(dy(w)) > header.h * 0.5)
     .map((w) => ({ x: center(w).x, wd: WEEKDAY_CHARS.indexOf(w.text) }));
   const holidays = near
     .map((w) => ({ x: center(w).x, h: FIXED_HOLIDAYS.find(([re]) => re.test(w.text)) }))
@@ -306,7 +322,8 @@ function verifyYearMonth(ym, header, clean, headerWords, today) {
   const current = scored.find((c) => c.year === ym.year && c.month === ym.month);
   const best = scored.sort((a, b) => b.s - a.s || dist(a) - dist(b))[0];
   // 요일은 여러 개가 맞아야(오인식 대비) 바꿈. 제목에서 읽은 달이 같은 점수면 그대로
-  const enough = holidays.length ? best.s >= 3 : Math.floor(best.s) >= Math.max(5, weekdays.length * 0.6);
+  // 흐린 사진은 요일이 몇 개만 읽히므로 3개 이상 & 읽힌 요일의 60% 이상이 맞으면 인정
+  const enough = holidays.length ? best.s >= 3 : Math.floor(best.s) >= Math.max(3, weekdays.length * 0.6);
   // 제목에서 읽은 달은 날짜가 실제로 더 맞을 때만 바꿈 (같은 날짜를 9월/10월로 부르는 차이는 제목대로)
   const better = ym.found ? Math.floor(best.s) > Math.floor(current.s) : best.s > current.s;
   if (!enough || !better) return ym;
@@ -315,22 +332,30 @@ function verifyYearMonth(ym, header, clean, headerWords, today) {
 
 /**
  * @param words  [{ text, x0, y0, x1, y1, confidence }]
- * @param opts   { year, month (fallback), shiftTypes, today }
+ * @param opts   { year, month (fallback), shiftTypes, today, titleText(제목 줄만 따로 다시 읽은 글자) }
  * @returns { year, month, people: { 이름: { 'YYYY-MM-DD': { code, raw, confidence } } }, names, error? }
  */
-export function parseRosterWords(words, { year, month, shiftTypes = [], today = new Date() } = {}) {
+export function parseRosterWords(words, { year, month, shiftTypes = [], today = new Date(), titleText = '' } = {}) {
   const clean = words
     .map((w) => ({ ...w, text: String(w.text || '').trim() }))
     .filter((w) => w.text && w.x1 > w.x0 && w.y1 > w.y0);
 
-  const allText = clean.map((w) => w.text).join(' ');
+  const allText = `${titleText} ${clean.map((w) => w.text).join(' ')}`;
   const ym = detectYearMonth(allText, { year, month });
 
   const header = findHeader(clean);
   if (!header) {
     return { ...ym, people: {}, names: [], error: '날짜(1~31) 줄을 찾지 못했습니다. 표 전체가 보이도록 반듯하게 다시 찍어 주세요.' };
   }
-  const headerWords = clean.filter((w) => Math.abs(center(w).y - header.y) <= header.h * 0.8);
+  // 기울어진 사진 보정: 헤더 숫자들의 x-y 기울기 (날짜 줄 높이 = headerYAt(x))
+  const hp = header.row.map((w) => ({ x: (w.x0 + w.x1) / 2, y: (w.y0 + w.y1) / 2 }));
+  const mx = hp.reduce((a, q) => a + q.x, 0) / hp.length;
+  const my = hp.reduce((a, q) => a + q.y, 0) / hp.length;
+  const vx = hp.reduce((a, q) => a + (q.x - mx) ** 2, 0) || 1;
+  const slope = Math.max(-0.2, Math.min(0.2, hp.reduce((a, q) => a + (q.x - mx) * (q.y - my), 0) / vx));
+  const headerYAt = (x) => my + slope * (x - mx);
+  header.yAt = headerYAt;
+  const headerWords = clean.filter((w) => Math.abs(center(w).y - headerYAt(center(w).x)) <= header.h * 0.8);
   let cols = fitColumns(header, ym.year, ym.month, headerWords, clean);
   if (cols.shiftMonth && !ym.found) {
     // 제목에서 월을 못 읽었고 날짜 대부분이 다른 달 → 그 달 근무표로
@@ -345,13 +370,6 @@ export function parseRosterWords(words, { year, month, shiftTypes = [], today = 
     Object.assign(ym, checked);
     cols = fitColumns(header, ym.year, ym.month, headerWords, clean);
   }
-  // 기울어진 사진 보정: 헤더 숫자들의 x-y 기울기
-  const hp = header.row.map((w) => ({ x: (w.x0 + w.x1) / 2, y: (w.y0 + w.y1) / 2 }));
-  const mx = hp.reduce((a, q) => a + q.x, 0) / hp.length;
-  const my = hp.reduce((a, q) => a + q.y, 0) / hp.length;
-  const vx = hp.reduce((a, q) => a + (q.x - mx) ** 2, 0) || 1;
-  const slope = Math.max(-0.2, Math.min(0.2, hp.reduce((a, q) => a + (q.x - mx) * (q.y - my), 0) / vx));
-  const headerYAt = (x) => my + slope * (x - mx);
   const firstColLeft = cols.idxToX(cols.minIdx) - cols.widthAt(cols.minIdx) * 0.6;
   const belowHeader = (w) => center(w).y > headerYAt(center(w).x) + header.h * 0.8;
 
@@ -374,7 +392,13 @@ export function parseRosterWords(words, { year, month, shiftTypes = [], today = 
     else clusters.push({ ys: [w.y0] });
   });
   const minCount = Math.max(3, Math.round(cols.centers.length * 0.15));
-  const rowYs = clusters.filter((c) => c.ys.length >= minCount).map((c) => median(c.ys));
+  let rowYs = clusters.filter((c) => c.ys.length >= minCount).map((c) => median(c.ys));
+  // 날짜 아래 요일 줄(토 일 월 …)이 흐린 사진에서 근무 글자로 잘못 읽혀 사람 줄로 잡히면 모든 이름이 한 줄씩 밀림 → 제외
+  // (날짜 칸 범위 안에서 요일 글자가 든 짧은 단어('월', '화우', '일!')가 3개 이상인 줄)
+  const weekdayWords = clean
+    .filter((w) => w.text.length <= 3 && /[월화수목금토일]/.test(w.text) && center(w).x > firstColLeft && center(w).x < lastColRight)
+    .map((w) => deskewY(center(w).x, center(w).y));
+  rowYs = rowYs.filter((y) => weekdayWords.filter((wy) => Math.abs(wy - y) < wordH * 0.9).length < 3);
   if (!rowYs.length) {
     return { ...ym, people: {}, names: [], error: '근무 칸을 찾지 못했습니다. 표 전체가 보이도록 밝은 곳에서 다시 찍어 주세요.' };
   }
@@ -461,6 +485,7 @@ export function parseRosterWords(words, { year, month, shiftTypes = [], today = 
   const grid = {
     slope,
     pitch,
+    headerTop: Math.min(...header.row.map((w) => w.y0)), // 이 위쪽이 제목 영역
     rows: rows.map((r) => ({ name: r.name, y0: r.y0, nameX0: r.nameX0, nameX1: r.nameX1 })),
     cols: cols.centers
       .filter((c) => c.idx >= 1 || cols.centers.some((k) => k.idx === 1))
