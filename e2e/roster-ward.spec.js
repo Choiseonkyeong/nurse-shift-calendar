@@ -120,3 +120,66 @@ test('작은 사진(가로 약 900px): 이름 확인 진행률이 보이고, 확
   await expect(page.getByText(/사진에서 2월 26일~3월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
   await expect(page.getByRole('note')).toContainText('다시 찍으면 더 정확해요');
 });
+
+test('옆으로 누운 사진(폰을 돌려 찍었는데 자동 회전 꺼짐)도 돌려서 읽음: 30칸 모두 정답', async ({ page }) => {
+  test.setTimeout(240000);
+  // roster-oct-photo.jpg 를 시계 방향 90° 돌린 것
+  const roster = makeRoster({ year: 2026, month: 10, seed: 3 });
+  const me = roster.people.find((p) => p.name === '한소희');
+  await openApp(page, { name: '한소희' });
+  await tab(page, '등록').click();
+  await photoInput(page).setInputFiles(fixture('roster-oct-sideways.jpg'));
+  await expect(page.getByText(/사진 방향 바꿔 읽는 중/)).toBeVisible({ timeout: 120000 });
+  await expect(page.getByText('사진에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible({ timeout: 200000 });
+  expect(await readLocal(page, 'my_shift_data')).toEqual(me.codes);
+});
+
+test('아주 큰 사진(약 4800만 화소): 아이폰 캔버스 한도(1670만 화소)를 넘는 캔버스를 만들지 않고 인식', async ({ page, browser }) => {
+  test.setTimeout(240000);
+  // 표가 가운데 있는 6000×8000 세로 사진 + 1.5° 기울기 (기울기 보정 캔버스까지 확인)
+  const maker = await browser.newPage();
+  const src = fs.readFileSync(fixture('roster-oct-photo.jpg')).toString('base64');
+  const b64 = await maker.evaluate(async (src) => {
+    const img = new Image();
+    img.src = 'data:image/jpeg;base64,' + src;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = 6000;
+    c.height = 8000;
+    const x = c.getContext('2d');
+    x.fillStyle = '#d9d4c8';
+    x.fillRect(0, 0, c.width, c.height);
+    x.translate(3000, 4000);
+    x.rotate((1.5 * Math.PI) / 180);
+    const w = 5600;
+    const h = (img.height / img.width) * w;
+    x.drawImage(img, -w / 2, -h / 2, w, h);
+    return c.toDataURL('image/jpeg', 0.8).split(',')[1];
+  }, src);
+  await maker.close();
+  const file = path.join(os.tmpdir(), `huge-${Date.now()}.jpg`);
+  fs.writeFileSync(file, Buffer.from(b64, 'base64'));
+
+  // 앱이 만드는 캔버스 중 가장 큰 넓이 기록
+  await page.addInitScript(() => {
+    window.__maxCanvas = 0;
+    const desc = (k) => Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, k);
+    const W = desc('width');
+    const H = desc('height');
+    const note = (el) => (window.__maxCanvas = Math.max(window.__maxCanvas, W.get.call(el) * H.get.call(el)));
+    Object.defineProperty(HTMLCanvasElement.prototype, 'width', { get: W.get, set(v) { W.set.call(this, v); note(this); } });
+    Object.defineProperty(HTMLCanvasElement.prototype, 'height', { get: H.get, set(v) { H.set.call(this, v); note(this); } });
+  });
+  const roster = makeRoster({ year: 2026, month: 10, seed: 3 });
+  const me = roster.people.find((p) => p.name === '한소희');
+  await openApp(page, { name: '한소희' });
+  await tab(page, '등록').click();
+  await photoInput(page).setInputFiles(file);
+  await expect(page.getByText(/사진에서 9월 26일~10월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
+  const saved = await readLocal(page, 'my_shift_data');
+  const wrong = Object.entries(me.codes).filter(([k, v]) => saved[k] && saved[k] !== v);
+  expect(Object.keys(saved).length).toBeGreaterThanOrEqual(28);
+  expect(wrong).toEqual([]);
+  expect(await page.evaluate(() => window.__maxCanvas)).toBeLessThanOrEqual(16777216);
+  fs.rmSync(file, { force: true });
+});

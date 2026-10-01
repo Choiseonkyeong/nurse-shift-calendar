@@ -24,6 +24,41 @@ function loadImage(file) {
 const widthOf = (img) => img.naturalWidth || img.width;
 const heightOf = (img) => img.naturalHeight || img.height;
 
+// 아이폰 브라우저는 캔버스 한 장이 약 1670만 화소를 넘으면 빈 이미지가 됨 (아이폰 15 Pro 이후 기본 사진 2400만 화소)
+// 인식은 폭 2400px 로 하므로 처음에 긴 변 4000px 로 줄여도 정확도는 같고 메모리·시간만 줄어듦
+const MAX_SIDE = 4000;
+export function fitSize(img) {
+  const W0 = widthOf(img);
+  const H0 = heightOf(img);
+  const s = MAX_SIDE / Math.max(W0, H0);
+  if (s >= 1) return img;
+  const c = document.createElement('canvas');
+  c.width = Math.round(W0 * s);
+  c.height = Math.round(H0 * s);
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+
+/** 90°·180°·270° 회전 (폰을 돌려 찍었는데 화면 자동 회전이 꺼져 옆으로 누운 사진) */
+export function rotateQuarter(img, deg) {
+  const W0 = widthOf(img);
+  const H0 = heightOf(img);
+  const side = deg % 180 !== 0;
+  const c = document.createElement('canvas');
+  c.width = side ? H0 : W0;
+  c.height = side ? W0 : H0;
+  const ctx = c.getContext('2d');
+  // 정수 픽셀 위치로 옮긴 뒤 돌림 (가운데 기준이면 홀수 크기에서 반 픽셀 밀려 글자가 흐려짐)
+  if (deg === 90) ctx.translate(H0, 0);
+  else if (deg === 270) ctx.translate(0, W0);
+  else ctx.translate(W0, H0);
+  ctx.rotate((deg * Math.PI) / 180);
+  ctx.drawImage(img, 0, 0);
+  return c;
+}
+
 /**
  * 기울어진 사진 바로 세우기 (-4°~4°)
  * 표의 가로선·글자 줄이 가장 수평이 되는 각도 = 어두운 픽셀을 그 각도로 가로줄에 모았을 때 가장 뾰족한 각도.
@@ -674,8 +709,9 @@ async function readTitle(worker, src, headerTop) {
 export async function recognizeRoster(file, { year, month, shiftTypes = [], onProgress = () => {} } = {}) {
   onProgress(0.02, '사진 보정 중...');
   // 기울어진 사진은 먼저 바로 세움 (이후 모든 단계가 회전한 이미지 기준)
-  const img = deskew(await loadImage(file));
-  const canvas = preprocess(img);
+  const base = fitSize(await loadImage(file));
+  let img = deskew(base);
+  let canvas = preprocess(img);
 
   onProgress(0.06, '인식 엔진 준비 중... (처음 한 번은 조금 걸려요)');
   let stage = (p) => onProgress(0.1 + p * 0.3, `표 구조 분석 중... ${Math.round(p * 100)}%`);
@@ -688,9 +724,30 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
     if (result.error) {
       const raw = scaledCanvas(img);
       const retry = parseRosterWords(await ocrWords(worker, raw), { year, month, shiftTypes });
-      if (retry.error) return result;
-      result = retry;
-      source = raw;
+      if (!retry.error) {
+        result = retry;
+        source = raw;
+      }
+    }
+    // 그래도 못 찾으면 옆으로·거꾸로 찍힌 사진일 수 있음 → 돌려서 다시
+    if (result.error) {
+      const turns = [90, 270, 180];
+      let found = null;
+      for (const [i, deg] of turns.entries()) {
+        stage = (p) => onProgress(0.1 + p * 0.3, `사진 방향 바꿔 읽는 중... (${i + 1}/${turns.length})`);
+        const turned = deskew(rotateQuarter(base, deg));
+        const c = preprocess(turned);
+        const r = parseRosterWords(await ocrWords(worker, c), { year, month, shiftTypes });
+        if (!r.error) {
+          found = { turned, c, r };
+          break;
+        }
+      }
+      if (!found) return result;
+      img = found.turned;
+      canvas = found.c;
+      source = found.c;
+      result = found.r;
     }
     // 제목(2026년 9월)을 못 읽었으면 날짜 줄 위쪽만 잘라 한 번 더 (표 전체를 읽을 때는 제목이 빠지기도 함)
     if (!result.found && result.grid) {

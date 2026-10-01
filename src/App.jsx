@@ -116,6 +116,29 @@ export default function App() {
   const [selectedDate, _setSelectedDate] = useState(today.dateStr);
   const setSelectedDate = (raw) => _setSelectedDate(toDateKey(raw));
 
+  // 앱을 켜 둔 채 날짜가 바뀌면(밤 근무 후 아침에 다시 열기 등) 어제를 보고 있던 경우만 오늘로
+  const todayKeyRef = useRef(today.dateStr);
+  const [, setTodayKey] = useState(today.dateStr);
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState === 'hidden') return;
+      const now = getTodayDateObj().dateStr;
+      const prev = todayKeyRef.current;
+      if (now === prev) return;
+      todayKeyRef.current = now;
+      setTodayKey(now); // 다시 그려서 '오늘' 기준 갱신
+      _setSelectedDate((sel) => (sel === prev ? now : sel));
+    };
+    const timer = setInterval(check, 60000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', check);
+    };
+  }, []);
+
   // 기존 사용자 여부 (레거시 group_shifts 데이터 연결 판단용) — 저장 effect 실행 전에 판정
   const [hadStoredName] = useState(() => localStorage.getItem('shift_user_name') !== null);
   // 첫 실행이면 빈 이름 → 이름 입력 화면 표시 후 서버 연결
