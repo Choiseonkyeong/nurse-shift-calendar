@@ -73,3 +73,14 @@ describe('엑셀 날짜 줄의 달 확인', () => {
     expect(keys).toEqual(['2026-09-30', '2026-10-01']);
   });
 });
+
+describe('사진이 작거나 흐릴 때 다시 찍기 안내', () => {
+  it('확인할 칸이 3칸 이상이고 10% 이상일 때만, 사진에서만', async () => {
+    const { needsRetakeHint } = await import('../src/lib/importQuality');
+    const days = (n) => Array.from({ length: n }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`);
+    expect(needsRetakeHint({ source: '사진', uncertain: days(4), count: 31 })).toBe(true); // 작은 사진
+    expect(needsRetakeHint({ source: '사진', uncertain: days(2), count: 31 })).toBe(false); // 보통
+    expect(needsRetakeHint({ source: '사진', uncertain: days(3), count: 31 })).toBe(false); // 10% 미만
+    expect(needsRetakeHint({ source: '엑셀', uncertain: days(10), count: 31 })).toBe(false);
+  });
+});

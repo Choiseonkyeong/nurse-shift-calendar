@@ -109,3 +109,14 @@ test("이름이 예전 기본 이름('최수민')과 같아도 직접 입력했�
   await expect(page.getByRole('heading', { name: /최수민/ })).toBeVisible();
   await expect(page.getByText('이름을 확인해 주세요')).toHaveCount(0);
 });
+
+test('작은 사진(가로 약 900px): 이름 확인 진행률이 보이고, 확인할 칸이 많으면 다시 찍기 안내', async ({ page }) => {
+  test.setTimeout(240000);
+  // 그린 설정: makeRoster({ year: 2027, month: 3, seed: 10 }), renderRosterImage(…, { scale: 0.7, photo: { rotate: 0.4, blur: 0.3, quality: 75 } })
+  await openApp(page, { name: '김하늘' });
+  await tab(page, '등록').click();
+  await photoInput(page).setInputFiles(fixture('roster-small.jpg'));
+  await expect(page.getByText(/이름 확인 중\.\.\. \d+\/\d+/)).toBeVisible({ timeout: 120000 }); // 멈춘 것처럼 보이지 않게
+  await expect(page.getByText(/사진에서 2월 26일~3월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
+  await expect(page.getByRole('note')).toContainText('다시 찍으면 더 정확해요');
+});
