@@ -197,3 +197,14 @@ test('인식 엔진이 어떤 칸에서 죽어도(Tesseract Assert → Aborted) 
   expect(Object.keys(saved).length).toBeGreaterThanOrEqual(27);
   expect(Object.keys(saved).every((k) => k in me.codes)).toBe(true);
 });
+
+test('아주 흐리고 작은 사진: 엉뚱한 근무를 넣지 않고 다시 찍기 안내', async ({ page }) => {
+  test.setTimeout(240000);
+  // 그린 설정: makeRoster({ year: 2027, month: 1, seed: 24 }), renderRosterImage(…, { photo: { rotate: -0.8, blur: 0.8, quality: 45 } })
+  await openApp(page, { name: '김하늘', local: { my_shift_data: { '2027-01-10': 'E' } } });
+  await tab(page, '등록').click();
+  await photoInput(page).setInputFiles(fixture('roster-blurry.jpg'));
+  await expect(page.getByText(/사진이 흐려서 근무를 거의 읽지 못했어요/)).toBeVisible({ timeout: 200000 });
+  expect(await readLocal(page, 'my_shift_data')).toEqual({ '2027-01-10': 'E' }); // 기존 근무 그대로
+  await expect(page.getByRole('dialog', { name: '본인 이름 선택' })).toHaveCount(0);
+});
