@@ -2,6 +2,7 @@
 // 근무표 사진 → 단어 좌표 (Tesseract.js, 기기 안에서 처리 / 무료 / 서버 전송 없음)
 // 인식률을 위해: 해상도 정규화 → 흑백 → 조명 보정(적응형 이진화) → 표 선 제거 후 OCR
 import { parseRosterWords, cellToCode, extractName, nameQuality } from './rosterParse';
+import { resilientWorker } from './resilientWorker';
 
 const TARGET_WIDTH = 2400;
 
@@ -508,6 +509,48 @@ function looksLikeD(canvas) {
   return corner(x0, y0) > 0.5 && corner(x0, y1 - ch + 1) > 0.5;
 }
 
+/** 표 전체(줄 × 날짜 열) 중 확신 있게 읽은 칸 비율 */
+export function sureRatio(result) {
+  const total = (result.names || []).length * (result.grid?.cols || []).length;
+  if (!total) return 0;
+  let sure = 0;
+  Object.values(result.people || {}).forEach((cells) => {
+    sure += Object.values(cells).filter((v) => v.confidence >= 60).length;
+  });
+  return sure / total;
+}
+
+/** 칸 글자 덩어리의 가로/세로 비율 (D·E·N·M 한 글자 ≈ 1, OFF 세 글자 ≈ 2.5) */
+function inkAspect(canvas) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const { width: W, height: H } = canvas;
+  const d = ctx.getImageData(0, 0, W, H).data;
+  // 잉크가 있는 열·행 (점 같은 작은 잡티는 무시: 한 열에 2픽셀 이상)
+  const cols = new Uint16Array(W);
+  const rows = new Uint16Array(H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (d[(y * W + x) * 4] < 128) {
+        cols[x]++;
+        rows[y]++;
+      }
+    }
+  }
+  const span = (arr) => {
+    let a = -1;
+    let b = -1;
+    arr.forEach((v, i) => {
+      if (v >= 2) {
+        if (a < 0) a = i;
+        b = i;
+      }
+    });
+    return a < 0 ? 0 : b - a + 1;
+  };
+  const h = span(rows);
+  return h ? span(cols) / h : 0;
+}
+
 /**
  * 2차 인식: 표 구조(행=이름, 열=날짜)를 알고 난 뒤 칸마다 잘라서 다시 읽는다.
  *  - 1회차: 단어 모드(PSM 8) — 영문 한두 글자(D/E/N/O/OFF) 정확도가 가장 높음
@@ -581,7 +624,7 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
       const half = grid.pitch * 0.45;
       const { canvas: cell, ink } = cropCell(canvas, col.x - col.w * 0.58, cy - half, col.x + col.w * 0.58, cy + half);
       const box = [col.x - col.w * 0.58, cy - half, col.x + col.w * 0.58, cy + half];
-      if (ink >= 0.004) cells.push({ name: renamed.get(row), key: col.key, cell, box, prev: result.people[row.name]?.[col.key] });
+      if (ink >= 0.004) cells.push({ name: renamed.get(row), key: col.key, cell, box, aspect: inkAspect(cell), prev: result.people[row.name]?.[col.key] });
     })
   );
 
@@ -593,6 +636,9 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
     if (/^[0oOD]$/.test(raw.replace(/[^0-9a-z]/gi, '')) && looksLikeD(c.cell)) code = 'D';
     return { code, raw, confidence: data.confidence };
   };
+  // 한 글자 근무(D·E·N·M)로 읽혔는데 글자 덩어리가 넓으면(OFF 처럼 여러 글자) 의심
+  // (실험: 한 글자 칸 비율 ≤ 1.2, OFF 칸 ≥ 1.9. 흐린 사진에서 'OFF' 를 'D' 72% 로 읽은 경우)
+  const tooWide = (c, o) => /^[A-Za-z]$/.test(o.code) && c.aspect >= 1.6;
 
   const total = cells.length * 1.4 || 1;
   let done = 0;
@@ -608,7 +654,7 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
   }
   await worker.setParameters({ tessedit_pageseg_mode: '7' });
   for (const c of cells) {
-    if (c.word.code && c.word.confidence >= 70) continue;
+    if (c.word.code && c.word.confidence >= 70 && !tooWide(c, c.word)) continue;
     c.line = await read(c);
     tick();
   }
@@ -676,6 +722,7 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
     if (best && best.code === 'OFF' && options.filter((o) => o.code === 'OFF').every(oneLetterOff)) {
       best = { ...best, confidence: Math.min(best.confidence, 59) };
     }
+    if (best && tooWide(c, best)) best = { ...best, confidence: Math.min(best.confidence, 59) };
     if (best) people[c.name][c.key] = { code: best.code, raw: best.raw, confidence: best.confidence };
     // 글자는 있는데 근무로 못 읽은 칸 → 확인 화면에서 '?' 로 표시
     else unread[c.name] = [...(unread[c.name] || []), c.key];
@@ -715,7 +762,8 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
 
   onProgress(0.06, '인식 엔진 준비 중... (처음 한 번은 조금 걸려요)');
   let stage = (p) => onProgress(0.1 + p * 0.3, `표 구조 분석 중... ${Math.round(p * 100)}%`);
-  const worker = await createOcrWorker((p) => stage(p));
+  // 특정 칸에서 엔진이 죽으면 새로 만들어 이어서 (그 칸만 못 읽은 칸으로)
+  const worker = await resilientWorker(() => createOcrWorker((p) => stage(p)));
 
   try {
     let source = canvas;
@@ -769,6 +817,9 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
       // 이름 다시 읽기 단계도 진행률 표시 (멈춘 것처럼 보이지 않게)
       (i, n) => onProgress(0.4 + (i / n) * 0.1, `이름 확인 중... ${i + 1}/${n}`)
     );
+    // 확실히 읽은 칸이 표의 40% 도 안 되면 표 구조를 잘못 잡은 것 → 엉뚱한 근무를 넣지 않고 다시 찍기 안내
+    // (실험: 정상 사진 0.68~1.0, 아주 흐린 작은 사진 0.09)
+    if (sureRatio(result) < 0.4) return { error: '사진이 흐려서 근무를 거의 읽지 못했어요. 표에 가까이, 밝은 곳에서 초점을 맞춰 다시 찍어 주세요.' };
     onProgress(1, '완료');
     return result;
   } finally {

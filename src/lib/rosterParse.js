@@ -118,7 +118,10 @@ function findHeader(words) {
     for (const k of slopes) {
       const row = nums.filter((n) => Math.abs(n.y - (seed.y + k * (n.x - seed.x))) <= band);
       const distinct = new Set(row.map((n) => n.day)).size;
-      if (!best || distinct > best.distinct) best = { row, distinct, y: median(row.map((n) => n.y)), h: median(row.map((n) => n.h)) };
+      // 큰 기울기(1.1° 넘음)는 확실히 더 많이 맞을 때만: 사진은 먼저 바로 세우므로(0.9° 이상 회전) 남은 기울기는 작음.
+      // 흐린 사진에서 날짜 몇 개를 못 읽으면 큰 기울기 띠가 여러 줄 숫자(합계 열 등)를 대각선으로 엮어 더 많아 보임
+      const score = distinct - (Math.abs(k) > 0.02 ? 3 : 0);
+      if (!best || score > best.score) best = { row, distinct, score, y: median(row.map((n) => n.y)), h: median(row.map((n) => n.h)) };
     }
   }
   return best && best.distinct >= 7 ? best : null;
