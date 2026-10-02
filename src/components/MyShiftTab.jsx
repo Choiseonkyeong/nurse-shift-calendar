@@ -707,8 +707,28 @@ export default function MyShiftTab({
           myShifts={myShifts || {}}
           onClose={() => setIsPatternOpen(false)}
           onApply={(filled) => {
+            // 되돌리기용: 적용 전 그 날짜들의 근무 (빈칸이었으면 null)
+            const before = Object.fromEntries(Object.keys(filled).map((k) => [k, myShifts?.[k] || null]));
             setMyShifts((prev) => ({ ...(prev || {}), ...filled }));
             setIsPatternOpen(false);
+            const count = Object.keys(filled).length;
+            if (!count) return;
+            toast(`${count}일에 반복 패턴을 입력했어요.`, 'success', {
+              action: {
+                label: '되돌리기',
+                onClick: () => {
+                  setMyShifts((prev) => {
+                    const next = { ...(prev || {}) };
+                    Object.entries(before).forEach(([k, v]) => {
+                      if (v) next[k] = v;
+                      else delete next[k];
+                    });
+                    return next;
+                  });
+                  toast('반복 패턴 입력을 되돌렸어요.');
+                }
+              }
+            });
           }}
         />
       )}

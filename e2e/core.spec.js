@@ -187,3 +187,21 @@ test('앱을 켜 둔 채 날짜가 바뀌면 다시 볼 때 오늘(다음 달)�
   await page.waitForTimeout(300);
   await expect(page.getByText('10월 15일 (목) 메모')).toBeVisible();
 });
+
+test('반복 패턴으로 기존 근무를 덮어써도 알림의 되돌리기로 적용 전 그대로 (빈칸이던 날은 다시 빈칸)', async ({ page }) => {
+  // 사진·엑셀로 등록해 둔 근무가 있는 상태
+  const before = { '2026-09-10': 'E', '2026-09-28': 'N', '2026-09-30': '연차' };
+  await openApp(page, { local: { my_shift_data: before } });
+  await page.getByRole('button', { name: '패턴', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '반복 패턴 입력' });
+  await expect(dialog.getByText(/일 겹침/)).toBeVisible(); // 덮어쓰기 기본 체크
+  await dialog.getByRole('button', { name: /일에 적용하기/ }).click();
+  await expect(page.getByText(/일에 반복 패턴을 입력했어요/)).toBeVisible();
+  const applied = await readLocal(page, 'my_shift_data');
+  expect(applied).not.toEqual(before);
+  expect(applied['2026-09-10']).toBe('E'); // 적용 범위 밖은 그대로
+
+  await page.getByRole('button', { name: '되돌리기' }).click();
+  await expect(page.getByText('반복 패턴 입력을 되돌렸어요.')).toBeVisible();
+  expect(await readLocal(page, 'my_shift_data')).toEqual(before);
+});

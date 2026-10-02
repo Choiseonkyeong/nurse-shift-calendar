@@ -16,7 +16,7 @@ export default function Toaster() {
     () =>
       subscribeToast((item) => {
         setItems((cur) => [...cur.slice(-2), item]);
-        const ms = item.type === 'error' ? 6000 : 3500;
+        const ms = item.action ? 8000 : item.type === 'error' ? 6000 : 3500;
         setTimeout(() => setItems((cur) => cur.filter((x) => x.id !== item.id)), ms);
       }),
     []
@@ -30,7 +30,7 @@ export default function Toaster() {
       role="status"
       aria-live="polite"
     >
-      {items.map(({ id, message, type }) => {
+      {items.map(({ id, message, type, action }) => {
         const { cls, Icon } = STYLE[type] || STYLE.info;
         return (
           <div
@@ -39,6 +39,18 @@ export default function Toaster() {
           >
             <Icon size={15} className="shrink-0 mt-px" />
             <span className="flex-1">{message}</span>
+            {action && (
+              <button
+                type="button"
+                onClick={() => {
+                  setItems((cur) => cur.filter((x) => x.id !== id));
+                  action.onClick();
+                }}
+                className="shrink-0 -my-0.5 px-2 py-0.5 rounded-lg bg-white/20 hover:bg-white/30 font-black underline-offset-2 cursor-pointer"
+              >
+                {action.label}
+              </button>
+            )}
             <button
               type="button"
               aria-label="안내 닫기"
