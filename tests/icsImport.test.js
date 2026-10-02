@@ -95,6 +95,15 @@ describe('exportData', () => {
     expect(csv).toContain('2026-10-01,목,D,Day (데이),');
     expect(csv).toContain('2026-10-02,금,OFF,,"회식, 7시; ""준비"""');
   });
+
+  it('CSV: = + - @ 로 시작하는 메모는 엑셀이 계산식(#NAME?)으로 읽지 않게 탭을 붙여 글자로', () => {
+    const csv = toCsv({}, { '2026-10-05': '-BLS 교육', '2026-10-06': '=면담', '2026-10-07': '+1시간 연장', '2026-10-08': '@수간호사', '2026-10-09': '교육 - 2시' });
+    expect(csv).toContain('2026-10-05,월,,,"\t-BLS 교육"');
+    expect(csv).toContain('2026-10-06,화,,,"\t=면담"');
+    expect(csv).toContain('2026-10-07,수,,,"\t+1시간 연장"');
+    expect(csv).toContain('2026-10-08,목,,,"\t@수간호사"');
+    expect(csv).toContain('2026-10-09,금,,,교육 - 2시'); // 가운데 '-' 는 그대로
+  });
 });
 
 describe('반복 일정 (RRULE)', () => {

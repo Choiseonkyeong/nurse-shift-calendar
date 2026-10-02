@@ -3,7 +3,7 @@ import { errorText } from '../lib/errorText';
 import Modal from './Modal';
 import SocialButtons from './SocialButtons';
 import { KakaoOpenExternal } from './InstallHint';
-import { currentInstallEnv } from '../lib/installHint';
+import { currentInstallEnv, inAppName, isInAppEnv } from '../lib/installHint';
 import { CalendarHeart } from 'lucide-react';
 
 /**
@@ -40,11 +40,11 @@ export default function NameSetup({ onSubmit, onLogin, onCancel, initialName = '
                 : '이름은 그룹에서 동료에게 보일 때만 쓰여요. 비워 두고 바로 시작해도 돼요.'}
           </p>
         </div>
-        {/* 카카오톡 안 브라우저: 여기서 시작하면 크롬·사파리에선 다시 시작해야 해서 먼저 옮기도록 */}
-        {!required && currentInstallEnv().startsWith('kakao') && (
+        {/* 카카오톡·밴드 등 앱 안 브라우저: 여기서 시작하면 크롬·사파리에선 다시 시작해야 해서 먼저 옮기도록 */}
+        {!required && isInAppEnv(currentInstallEnv()) && (
           <div className="p-3 rounded-2xl bg-amber-50 border border-amber-100 space-y-2 text-left">
             <p className="text-[11px] font-bold text-amber-900">
-              카카오톡 안에서 열렸어요. 홈 화면에 앱처럼 추가하려면 먼저 아래 버튼으로 열어서 시작하세요.
+              {inAppName(navigator.userAgent || '') || '이 앱'} 안에서 열렸어요. 홈 화면에 앱처럼 추가하려면 먼저 아래 버튼으로 열어서 시작하세요.
             </p>
             <KakaoOpenExternal />
           </div>

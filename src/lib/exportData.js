@@ -9,8 +9,10 @@ const sortedDates = (myShifts, dayNotes) =>
     .sort();
 
 const csvCell = (v) => {
-  const s = String(v ?? '');
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = String(v ?? '');
+  // '-BLS 교육', '=면담' 처럼 = + - @ 로 시작하면 엑셀이 계산식으로 읽어 #NAME? 이 됨 → 앞에 탭을 붙여 글자로
+  if (/^[=+\-@\t\r]/.test(s)) s = `\t${s}`;
+  return /[",\n\r\t]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
 /** 엑셀에서 한글이 깨지지 않도록 BOM 포함 */
