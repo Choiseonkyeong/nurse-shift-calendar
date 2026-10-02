@@ -111,3 +111,33 @@ test('아이폰 사파리: 공유 → 홈 화면에 추가 안내 / 안드로이
   await expect.poll(() => page.evaluate(() => window.__prompted)).toBe(true);
   await expect(hint).toHaveCount(0);
 });
+
+test('밴드(안드로이드) 안 브라우저: 크롬으로 열기(intent) 안내 / 네이버 앱(아이폰): 공유 버튼 안내 대신 주소 복사', async ({ browser }) => {
+  const BAND_UA = 'Mozilla/5.0 (Linux; Android 14; SM-S918N Build/UP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0 Mobile Safari/537.36 BAND/16.1.0';
+  const band = await browser.newContext({ userAgent: BAND_UA });
+  const page = await band.newPage();
+  await openApp(page, { name: null });
+  await expect(page.getByText('밴드 안에서 열렸어요. 홈 화면에 앱처럼 추가하려면')).toBeVisible(); // 첫 화면
+  await expect(page.getByRole('link', { name: '크롬으로 열기' })).toHaveAttribute('href', /^intent:\/\/localhost:\d+\/#Intent;scheme=http;package=com\.android\.chrome;/);
+  await page.getByRole('button', { name: '이름 없이 시작하기' }).click();
+  const hint = page.getByRole('region', { name: '홈 화면에 추가 안내' });
+  await expect(hint).toContainText('밴드 안에서 열렸어요');
+  await expect(hint).toContainText("밴드 화면의 ⋮ 또는 ··· 메뉴 → '다른 브라우저로 열기'");
+  await page.getByRole('button', { name: /^9월 10일/ }).first().click();
+  await page.getByRole('button', { name: /^Day/ }).click();
+  await expect(hint).toContainText('계정을 연결'); // 밴드에서 쓴 근무는 크롬으로 안 옮겨짐
+  await band.close();
+
+  const NAVER_IOS_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 NAVER(inapp; search; 2000; 12.6.1)';
+  const naver = await browser.newContext({ userAgent: NAVER_IOS_UA, permissions: ['clipboard-read', 'clipboard-write'] });
+  const p = await naver.newPage();
+  await openApp(p);
+  const h = p.getByRole('region', { name: '홈 화면에 추가 안내' });
+  await expect(h).toContainText('네이버 앱 안에서 열렸어요');
+  await expect(h).toContainText('사파리로 열어서');
+  await expect(h).not.toContainText("'홈 화면에 추가'를 눌러"); // 앱 안에는 없는 메뉴 안내 X
+  await h.getByRole('button', { name: '주소 복사' }).click();
+  await expect(p.getByText('주소를 복사했어요')).toBeVisible();
+  expect(await p.evaluate(() => navigator.clipboard.readText())).toMatch(/^http:\/\/localhost:\d+\//);
+  await naver.close();
+});
