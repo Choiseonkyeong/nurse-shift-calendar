@@ -208,3 +208,19 @@ test('아주 흐리고 작은 사진: 엉뚱한 근무를 넣지 않고 다시 �
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2027-01-10': 'E' }); // 기존 근무 그대로
   await expect(page.getByRole('dialog', { name: '본인 이름 선택' })).toHaveCount(0);
 });
+
+test('엑셀 화면 캡처(브라우저·옆 목록이 함께 찍힘, 표가 화면 일부): 표만 잘라 크게 다시 읽어 이름·근무 인식', async ({ page }) => {
+  test.setTimeout(240000);
+  // 그린 설정: makeRoster({ year: 2026, month: 11, seed: 31 }), renderSpreadsheetScreenshot(…, { dpr: 1 }) — 1440×900
+  // 이전에는 옆 목록 글자가 이름 칸에 섞여 '정민서'를 다른 글자로 읽어 이름 선택 창이 떴음
+  const roster = makeRoster({ year: 2026, month: 11, seed: 31 });
+  const me = roster.people.find((p) => p.name === '정민서');
+  await openApp(page, { name: '정민서' });
+  await tab(page, '등록').click();
+  await photoInput(page).setInputFiles(fixture('roster-screenshot.png'));
+  await expect(page.getByText(/사진에서 10월 26일~11월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
+  await expect(page.getByRole('dialog', { name: '본인 이름 선택' })).toHaveCount(0);
+  const saved = await readLocal(page, 'my_shift_data');
+  const right = Object.entries(me.codes).filter(([k, v]) => saved[k] === v).length;
+  expect(right).toBeGreaterThanOrEqual(29);
+});
