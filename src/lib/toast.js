@@ -6,9 +6,10 @@ let seq = 0;
 /**
  * @param message 안내 문구 (줄바꿈 가능)
  * @param type 'info' | 'success' | 'error'
+ * @param opts { action: { label, onClick } } 안내 옆 버튼 (예: 되돌리기). 버튼이 있으면 조금 더 오래 보임
  */
-export function toast(message, type = 'info') {
-  const item = { id: ++seq, message: String(message), type };
+export function toast(message, type = 'info', { action } = {}) {
+  const item = { id: ++seq, message: String(message), type, action };
   listeners.forEach((fn) => fn(item));
 }
 

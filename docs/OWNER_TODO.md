@@ -17,9 +17,21 @@
   - 운영자 이름(또는 앱 이름/상호)과 문의 이메일을 알려 주면 대신 바꿔 드립니다.
   - 스토어에 입력할 주소: `https://nurse-shift-calendar.vercel.app/privacy.html`
 
+- [ ] **3. 엑셀 읽기 라이브러리(SheetJS) 보안 업데이트 허용** (1분)
+  - 지금 쓰는 엑셀 읽기 라이브러리에 보안 경고가 1건 있습니다(조작된 엑셀 파일을 열면 앱이 오래 멈출 수 있음).
+  - 새 버전은 SheetJS 사이트(`cdn.sheetjs.com`)에서만 받을 수 있어, Claude Code 작업 환경에서 이 주소를 허용해야 합니다.
+  - 방법: Claude Code 세션 제목 줄의 클라우드 환경 메뉴 → **Edit** → Network access 의 허용 도메인에 `cdn.sheetjs.com` 추가 → 저장 후 "SheetJS 업데이트해줘"
+  - 참고: https://code.claude.com/docs/en/claude-code-on-the-web
+
+- [ ] **4. 실제 폰으로 한 번 써 보기** (10분) — 자동 테스트로는 확인할 수 없는 것
+  - 근무표를 **폰 카메라로 직접 찍어** 사진 등록 → 결과를 알려 주거나 사진을 보내 주면 정확도 확인
+    (동료 실명이 있는 사진은 확인용으로만 쓰고 저장소에는 올리지 않습니다)
+  - 아이폰이 있으면: 사파리에서 열어 홈 화면에 추가 → 사진 등록(2400만 화소 사진), 화면 밀어서 뒤로가기
+  - 안드로이드: 홈 화면에 추가한 앱에서 날짜 창을 연 채 뒤로가기 → 창만 닫히는지
+
 ## 선택 (필요할 때)
 
-- [ ] **3. Google 로그인 마무리** (15분) — 하기 전에는 Google 버튼이 숨겨져 있어 문제없음
+- [ ] **5. Google 로그인 마무리** (15분) — 하기 전에는 Google 버튼이 숨겨져 있어 문제없음
   1. https://console.cloud.google.com → 프로젝트 만들기 (이름은 **영문**, 예: `nurse-shift`)
   2. API 및 서비스 → OAuth 동의 화면 → 외부 → 앱 이름·지원 이메일 입력 → 테스트 사용자에 본인 Gmail 추가
   3. 사용자 인증 정보 → OAuth 클라이언트 ID → 웹 애플리케이션
@@ -30,14 +42,14 @@
   - ⚠️ 클라이언트 보안 비밀번호는 채팅·코드에 붙여넣지 말고 Supabase 화면에만 입력하세요.
   - 자세한 내용: [`AUTH_SETUP.md`](./AUTH_SETUP.md)
 
-- [ ] **4. 메일 발송 한도 늘리기** — 사용자가 많아지면
+- [ ] **6. 메일 발송 한도 늘리기** — 사용자가 많아지면
   - Supabase 기본 메일은 시간당 발송 수가 매우 적습니다. Authentication → Emails → SMTP Settings 에 무료 SMTP(Resend, Brevo 등) 연결
 
-- [ ] **5. 웹 버전 푸시 알림** — 웹에서 브라우저를 닫아도 알림을 받게 하려면 (선택)
+- [ ] **7. 웹 버전 푸시 알림** — 웹에서 브라우저를 닫아도 알림을 받게 하려면 (선택)
   - 설치한 앱(Android/iOS)은 폰 안에서 알림을 예약하므로 **이 설정 없이도 앱을 꺼 둔 상태에서 알림이 옵니다.**
   - 웹까지 원할 때만 [`PUSH_SETUP.md`](./PUSH_SETUP.md) 순서대로 (Firebase → GitHub Secrets 3개 → 함수 배포 → 예약 실행 SQL)
 
-- [ ] **6. 스토어 등록 전**
+- [ ] **8. 스토어 등록 전**
   - 안드로이드 출시용 서명: GitHub → Settings → Secrets and variables → Actions 에 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` 등록 (지금은 테스트용 APK 만 만들어짐)
   - iOS 출시용 서명: Apple 개발자 계정 필요, Secrets 에 `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64` 등록
   - 구글 플레이 "데이터 보안": 계정 삭제 경로 = 프로필 → 계정 → 계정 삭제 (웹도 같은 경로)
@@ -48,3 +60,4 @@
 - 서버 1000행 제한: 앱이 1000개씩 나눠 받도록 되어 있어 **Supabase 설정 변경 불필요**
 - 그룹 색상: 이제 각자 폰에만 저장되어 서버 설정 불필요
 - 앱 근무 알림: 폰 안에서 예약 → Firebase·서버 설정 불필요
+- 공휴일: 2025~2030년 등록, 설날·추석은 자동 테스트로 음력과 대조. 2031년 이후·새 임시공휴일은 지정되면 "공휴일 추가해줘"
