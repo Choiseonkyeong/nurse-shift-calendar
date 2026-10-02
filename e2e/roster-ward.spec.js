@@ -225,3 +225,21 @@ test('엑셀 화면 캡처(브라우저·옆 목록이 함께 찍힘, 표가 화
   const right = Object.entries(me.codes).filter(([k, v]) => saved[k] === v).length;
   expect(right).toBeGreaterThanOrEqual(29);
 });
+
+test('모니터 화면을 폰으로 찍은 사진(어두운 테두리·1.5° 기울기·흐림): 기울기 보정·표 확대로 내 줄 등록', async ({ page }) => {
+  test.setTimeout(240000);
+  // 그린 설정: renderSpreadsheetScreenshot(makeRoster({ year: 2026, month: 11, seed: 31 }), { dpr: 2 }) 를
+  // 4032×3024 검은 배경에 폭 90%, -1.5° 회전, blur 1.2px, 밝기 0.9, JPEG 85% 로 찍은 것처럼
+  // 이전에는 어두운 테두리 때문에 기울기를 못 잡고 앞쪽 날짜(10/26~31) 칸을 놓쳐 많은 칸이 비었음
+  const roster = makeRoster({ year: 2026, month: 11, seed: 31 });
+  const me = roster.people.find((p) => p.name === '박지우');
+  await openApp(page, { name: '박지우' });
+  await tab(page, '등록').click();
+  await photoInput(page).setInputFiles(fixture('roster-monitor-photo.jpg'));
+  // 흐린 사진이라 맨 앞·뒤 날짜 칸 하나는 놓칠 수 있음 (그 칸은 비워 둠, 틀린 날짜로 넣지 않음)
+  await expect(page.getByText(/사진에서 10월 2\d일~11월 2\d일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
+  const saved = await readLocal(page, 'my_shift_data');
+  const right = Object.entries(me.codes).filter(([k, v]) => saved[k] === v).length;
+  expect(right).toBeGreaterThanOrEqual(28);
+  expect(Object.keys(saved).every((k) => k >= '2026-10-26' && k <= '2026-11-26')).toBe(true);
+});
