@@ -114,3 +114,40 @@ export async function renderRosterImage(browser, roster, file, { photo = false, 
   await page.close();
   return file;
 }
+
+/**
+ * 엑셀 뷰어 화면 캡처처럼 (브라우저 메뉴 + 왼쪽 목록 + 열 문자·행 번호 + 회색 격자 안에 근무표)
+ * 표가 화면 일부만 차지하고 옆 목록 글자가 표의 줄과 나란히 있어 이름에 섞이기 쉬운 경우
+ */
+export async function renderSpreadsheetScreenshot(browser, roster, file, { dpr = 1 } = {}) {
+  const page = rosterHtml(roster, { cellW: 26 });
+  const style = page.match(/<style>([\s\S]*?)<\/style>/)[1].replace(/body \{[^}]*\}/, '');
+  const inner = page.replace(/^[\s\S]*<body>/, '').replace(/<\/body>[\s\S]*$/, '');
+  const letters = Array.from({ length: 44 }, (_, i) => (i < 26 ? String.fromCharCode(65 + i) : 'A' + String.fromCharCode(65 + i - 26)));
+  const side = ['새로 생성', '프로젝트', 'Artifacts', '예약됨', '사용자 지정', '더보기', '오늘', '질문 개인', '11월 12월 근무일정', '개인9질문', '이사진 수정', '어제', '고향사랑기부제 연말정산 혜택', '9월 30일', '초보자 헬스 운동 커리큘럼', 'ASCII art drawing', '9월 28일', 'AI 개발 도구 선택 및 추천', '이전', '객체 간 관계 표시 방법', '코딩을 위한 개인 학습 로드맵'];
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    body{margin:0;font-family:'WenQuanYi Zen Hei',sans-serif;background:#1e1e1e;color:#ddd;width:1440px;height:900px;overflow:hidden}
+    .top{height:70px;background:#2b2b2b;font-size:13px;padding:8px 16px}
+    .side{position:absolute;left:0;top:70px;width:180px;bottom:0;background:#1f1f1f;font-size:12px;padding:10px}
+    .side div{height:26px}
+    .main{position:absolute;left:180px;top:70px;right:0;bottom:0;background:#fff;color:#000}
+    .cols{display:flex;margin-left:28px;font-size:10px;color:#666;border-bottom:1px solid #ddd}
+    .cols span{width:26px;text-align:center}
+    .rown{position:absolute;left:0;top:40px;width:26px;font-size:10px;color:#666}
+    .rown div{height:24px;text-align:right}
+    .sheet{font-size:10px;position:absolute;left:40px;top:40px;right:0;bottom:30px;padding:20px 0 0 30px;
+      background-image:linear-gradient(#e6e6e6 1px,transparent 1px),linear-gradient(90deg,#e6e6e6 1px,transparent 1px);background-size:26px 24px}
+    ${style}
+  </style></head><body>
+    <div class="top">Chrome 파일 수정 보기 방문 기록 북마크 프로필 탭 창 도움말<br>${roster.title} · XLSX</div>
+    <div class="side">${side.map((s) => `<div>${s}</div>`).join('')}</div>
+    <div class="main"><div class="cols">${letters.map((l) => `<span>${l}</span>`).join('')}</div>
+      <div class="rown">${Array.from({ length: 30 }, (_, i) => `<div>${i + 1}</div>`).join('')}</div>
+      <div class="sheet">${inner}</div></div>
+  </body></html>`;
+  const p = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: dpr });
+  await p.setContent(html);
+  await p.screenshot({ path: file });
+  await p.close();
+  return file;
+}

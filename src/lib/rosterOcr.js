@@ -5,6 +5,9 @@ import { parseRosterWords, cellToCode, extractName, nameQuality } from './roster
 import { resilientWorker } from './resilientWorker';
 
 const TARGET_WIDTH = 2400;
+const BIG_WIDTH = 3600; // 표를 못 찾았을 때 크게 다시 볼 폭
+/** preprocess·scaledCanvas 가 만드는 canvas 폭 */
+const preprocessWidth = (img, targetWidth = TARGET_WIDTH) => Math.round(widthOf(img) * Math.min(3, targetWidth / widthOf(img)));
 
 function loadImage(file) {
   return new Promise((resolve, reject) => {
@@ -78,12 +81,29 @@ export function deskew(img) {
   const sctx = small.getContext('2d', { willReadFrequently: true });
   sctx.drawImage(img, 0, 0, w, h);
   const d = sctx.getImageData(0, 0, w, h).data;
+  // 주변보다 어두운 점(글자·표 선)만: 모니터 테두리·어두운 책상처럼 넓게 어두운 곳은 빼야 기울기를 잡음
+  const lum = new Float32Array(w * h);
+  for (let k = 0; k < w * h; k++) lum[k] = 0.299 * d[k * 4] + 0.587 * d[k * 4 + 1] + 0.114 * d[k * 4 + 2];
+  const integral = new Float64Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let row = 0;
+    for (let x = 0; x < w; x++) {
+      row += lum[y * w + x];
+      integral[(y + 1) * (w + 1) + x + 1] = integral[y * (w + 1) + x + 1] + row;
+    }
+  }
+  const R = 8;
   const xs = [];
   const ys = [];
   for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - R);
+    const y1 = Math.min(h, y + R + 1);
     for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 150) {
+      const x0 = Math.max(0, x - R);
+      const x1 = Math.min(w, x + R + 1);
+      const mean = (integral[y1 * (w + 1) + x1] - integral[y0 * (w + 1) + x1] - integral[y1 * (w + 1) + x0] + integral[y0 * (w + 1) + x0]) / ((x1 - x0) * (y1 - y0));
+      const v = lum[y * w + x];
+      if (v < 170 && v < mean * 0.8) {
         xs.push(x);
         ys.push(y);
       }
@@ -140,8 +160,8 @@ export function deskew(img) {
 }
 
 /** 적응형 이진화 + 긴 가로/세로 선 제거 → canvas */
-export function preprocess(img) {
-  const scale = Math.min(3, TARGET_WIDTH / widthOf(img));
+export function preprocess(img, targetWidth = TARGET_WIDTH) {
+  const scale = Math.min(3, targetWidth / widthOf(img));
   const w = Math.round(widthOf(img) * scale);
   const h = Math.round(heightOf(img) * scale);
   const canvas = document.createElement('canvas');
@@ -257,8 +277,8 @@ export async function ocrWords(worker, canvas, psm = '11') {
 }
 
 /** 보정 없이 해상도만 맞춘 canvas */
-function scaledCanvas(img) {
-  const scale = Math.min(3, TARGET_WIDTH / widthOf(img));
+function scaledCanvas(img, targetWidth = TARGET_WIDTH) {
+  const scale = Math.min(3, targetWidth / widthOf(img));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(widthOf(img) * scale);
   canvas.height = Math.round(heightOf(img) * scale);
@@ -509,6 +529,45 @@ function looksLikeD(canvas) {
   return corner(x0, y0) > 0.5 && corner(x0, y1 - ch + 1) > 0.5;
 }
 
+/**
+ * 표가 있는 영역 (canvas 좌표): 날짜 열 기준으로 왼쪽 직급·이름 칸, 위쪽 제목 줄, 아래 마지막 사람 줄까지
+ * (이름 칸 왼쪽 끝은 같은 줄의 가장 왼쪽 글자로 잡혀 화면 캡처의 옆 메뉴 글자까지 들어갈 수 있어 쓰지 않음)
+ */
+export function tableBox(grid, W, H) {
+  const cols = grid?.cols || [];
+  if (!cols.length || !grid.rows?.length) return null;
+  const colW = median(cols.map((c) => c.w)) || 20;
+  // 날짜를 일부만 읽었으면(흐린 사진) 한 달(31일) 폭이 되도록 양쪽으로 넓힘
+  const missing = Math.max(0, 31 - cols.length) * colW;
+  // 왼쪽은 직급·이름 칸 + 앞쪽 지난달 날짜(26~31)를 못 읽었을 수 있어 넉넉히
+  const x0 = Math.max(0, cols[0].x - colW * 11 - missing);
+  const x1 = Math.min(W, cols[cols.length - 1].x + colW * 1.5 + missing);
+  const ys = grid.rows.flatMap((r) => [r.y0 + grid.slope * x0, r.y0 + grid.slope * x1]);
+  const tops = [grid.headerTop + grid.slope * x0, grid.headerTop + grid.slope * x1];
+  const y0 = Math.max(0, Math.min(...tops) - grid.pitch * 2);
+  const y1 = Math.min(H, Math.max(...ys) + grid.pitch * 1.2);
+  // 표 자체 폭(이름 칸 ~ 마지막 날짜): 사진에서 표가 차지하는 비율 판단용 (여유 폭 제외)
+  const core = Math.min(W, cols[cols.length - 1].x + colW) - Math.max(0, cols[0].x - colW * 5);
+  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, core };
+}
+
+const median = (a) => {
+  const s = [...a].sort((p, q) => p - q);
+  return s.length ? s[s.length >> 1] : 0;
+};
+
+/** 원본 이미지에서 canvas 좌표 영역 잘라내기 (scale: canvas 폭 / 원본 폭) */
+function cropImage(img, box, scale) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(box.w / scale));
+  c.height = Math.max(1, Math.round(box.h / scale));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, box.x0 / scale, box.y0 / scale, c.width, c.height, 0, 0, c.width, c.height);
+  return c;
+}
+
 /** 표 전체(줄 × 날짜 열) 중 확신 있게 읽은 칸 비율 */
 export function sureRatio(result) {
   const total = (result.names || []).length * (result.grid?.cols || []).length;
@@ -723,6 +782,10 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
       best = { ...best, confidence: Math.min(best.confidence, 59) };
     }
     if (best && tooWide(c, best)) best = { ...best, confidence: Math.min(best.confidence, 59) };
+    // 근거가 한글 한 글자('야' → N 등)뿐이면 오인식일 수 있음 → '확인 필요' (OFF 를 '야' 77% 로 읽은 경우)
+    if (best && /^[가-힣]$/.test(String(best.raw || '').trim()) && options.every((o) => o.code !== best.code || /^[가-힣]$/.test(String(o.raw || '').trim()))) {
+      best = { ...best, confidence: Math.min(best.confidence, 59) };
+    }
     if (best) people[c.name][c.key] = { code: best.code, raw: best.raw, confidence: best.confidence };
     // 글자는 있는데 근무로 못 읽은 칸 → 확인 화면에서 '?' 로 표시
     else unread[c.name] = [...(unread[c.name] || []), c.key];
@@ -777,6 +840,16 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
         source = raw;
       }
     }
+    // 그래도 못 찾으면 더 크게(폭 3600px) 한 번 더: 화면 캡처·멀리서 찍은 사진은 표가 작아 날짜 숫자를 못 읽음
+    if (result.error) {
+      stage = (p) => onProgress(0.1 + p * 0.3, `표 찾는 중 (크게 보기)... ${Math.round(p * 100)}%`);
+      const big = preprocess(img, BIG_WIDTH);
+      const r = parseRosterWords(await ocrWords(worker, big), { year, month, shiftTypes });
+      if (!r.error) {
+        result = r;
+        source = big;
+      }
+    }
     // 그래도 못 찾으면 옆으로·거꾸로 찍힌 사진일 수 있음 → 돌려서 다시
     if (result.error) {
       const turns = [90, 270, 180];
@@ -797,9 +870,38 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
       source = found.c;
       result = found.r;
     }
+    // 표가 사진 일부만 차지하면(브라우저·엑셀 화면 캡처, 멀리서 찍은 사진) 글자가 작고 옆 메뉴 글자가 이름에 섞임
+    // → 표 부분만 잘라 크게 다시 읽음 (같은 달·같은 줄 수로 읽힐 때만 바꿈)
+    let srcTarget = TARGET_WIDTH; // source(보정 이미지)를 만든 폭
+    let cropWidth = TARGET_WIDTH;
+    const box = tableBox(result.grid, source.width, source.height);
+    if (box && box.core < source.width * 0.75) {
+      stage = (p) => onProgress(0.1 + p * 0.3, `표 부분 확대해서 읽는 중... ${Math.round(p * 100)}%`);
+      const srcScale = source.width / widthOf(img);
+      const cropped = cropImage(img, box, srcScale);
+      // 글자 크기 기준으로 확대: 날짜 숫자 높이가 약 30px 이 되게 (고정 폭으로 키우면 글자가 너무 커져 오히려 못 읽음)
+      const digitH = (result.grid.textH || 12) / srcScale;
+      cropWidth = Math.round(Math.min(3000, Math.max(1200, (widthOf(cropped) * 30) / digitH)));
+      const c2 = preprocess(cropped, cropWidth);
+      const r2 = parseRosterWords(await ocrWords(worker, c2), { year, month, shiftTypes });
+      // 확대해서 제목(2026년 11월)을 읽었거나, 날짜 아래 요일 줄과 더 잘 맞으면(칸 날짜가 맞음) 그 결과를 믿음
+      const sameMonth = (r2.year === result.year && r2.month === result.month) || (r2.found && !result.found);
+      const wd = (r) => (r.grid?.weekdays?.total >= 8 ? r.grid.weekdays.match / r.grid.weekdays.total : null);
+      const betterDays = !r2.error && wd(r2) !== null && wd(r2) >= 0.8 && (wd(result) === null || wd(r2) > wd(result));
+      const bigEnough = !r2.error && r2.grid.cols.length >= result.grid.cols.length - 2 && r2.grid.rows.length >= result.grid.rows.length - 1;
+      if (!r2.error && ((sameMonth && bigEnough) || (betterDays && r2.grid.rows.length >= result.grid.rows.length - 1))) {
+        img = cropped;
+        canvas = c2;
+        source = c2;
+        result = r2;
+        srcTarget = cropWidth;
+      }
+    }
+    // 원본(보정 전) 이미지를 source 와 같은 배율로 (크게 보기로 찾았으면 배율이 달라 source 그대로)
+    const rawAtSource = () => (source.width === preprocessWidth(img, srcTarget) ? scaledCanvas(img, srcTarget) : source);
     // 제목(2026년 9월)을 못 읽었으면 날짜 줄 위쪽만 잘라 한 번 더 (표 전체를 읽을 때는 제목이 빠지기도 함)
     if (!result.found && result.grid) {
-      const titleText = await readTitle(worker, scaledCanvas(img), result.grid.headerTop);
+      const titleText = await readTitle(worker, rawAtSource(), result.grid.headerTop);
       if (titleText) {
         const again = parseRosterWords(await ocrWords(worker, source), { year, month, shiftTypes, titleText });
         if (!again.error && again.found) result = again;
@@ -813,7 +915,7 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
       worker,
       shiftTypes,
       (p) => onProgress(0.5 + p * 0.48, `칸별 정밀 인식 중... ${Math.round(p * 100)}%`),
-      source === canvas ? scaledCanvas(img) : null,
+      source === canvas ? rawAtSource() : null,
       // 이름 다시 읽기 단계도 진행률 표시 (멈춘 것처럼 보이지 않게)
       (i, n) => onProgress(0.4 + (i / n) * 0.1, `이름 확인 중... ${i + 1}/${n}`)
     );

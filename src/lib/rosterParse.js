@@ -214,8 +214,10 @@ function fitColumns(header, year, month, headerWords = [], allWords = []) {
   // 왼쪽: 다음 달까지 이어진 표면 한 달 전부터, 지난달 날짜가 붙은 표면 못 읽은 앞 칸 몇 개까지(머리글 글자에서 멈춤)
   const monthMin = maxIdx > lastDay ? maxIdx - lastDay + 1 : minIdx < 1 ? minIdx - 3 : 1;
   const monthMax = maxIdx > lastDay ? maxIdx : minIdx < 1 ? minIdx + prevDays - 1 : lastDay;
-  while (maxIdx < monthMax && maxIdx - Math.max(...samples.map((p) => p.idx)) < 3 && !headerHasLabel(model.a + model.b * (maxIdx + 1))) maxIdx++;
-  while (minIdx > monthMin && Math.min(...samples.map((p) => p.idx)) - minIdx < 3 && !headerHasLabel(model.a + model.b * (minIdx - 1))) minIdx--;
+  const sampleMin = Math.min(...samples.map((p) => p.idx));
+  const sampleMax = Math.max(...samples.map((p) => p.idx));
+  while (maxIdx < monthMax && maxIdx - sampleMax < 3 && !headerHasLabel(model.a + model.b * (maxIdx + 1))) maxIdx++;
+  while (minIdx > monthMin && sampleMin - minIdx < 3 && !headerHasLabel(model.a + model.b * (minIdx - 1))) minIdx--;
 
   // 칸 너비가 제각각인 표도 맞추도록: 인식된 헤더 위치는 그대로, 빠진 날짜만 직선 보간
   const known = new Map(samples.map((p) => [p.idx, p.x]));
@@ -250,11 +252,21 @@ function fitColumns(header, year, month, headerWords = [], allWords = []) {
     return Math.max((l && r ? (l + r) / 2 : l || r) || 0, Math.abs(model.b) * 0.7);
   };
 
-  return {
+  const model_ = {
     colW: Math.abs(model.b),
     minIdx,
     maxIdx,
     shiftMonth,
+    // 칸 위치는 그대로 두고 날짜만 n일 옮김 (요일 줄로 바로잡을 때)
+    shiftDays: (n) => {
+      centers.forEach((c) => {
+        c.idx += n;
+      });
+      minIdx += n;
+      maxIdx += n;
+      model_.minIdx = minIdx;
+      model_.maxIdx = maxIdx;
+    },
     idxToX: at,
     widthAt,
     // 가장 가까운 칸. 양 끝 칸 밖으로 한 칸 이상 벗어나면 표 밖(합계 열 등)으로 봄
@@ -268,6 +280,7 @@ function fitColumns(header, year, month, headerWords = [], allWords = []) {
     centers,
     inliers: samples.length
   };
+  return model_;
 }
 
 // 날짜가 정해진 공휴일 (표에 적힌 공휴일 이름의 칸 → 몇 월 근무표인지 확인)
@@ -282,6 +295,8 @@ const FIXED_HOLIDAYS = [
   [/성탄|크리스마스/, 12, 25]
 ];
 const WEEKDAY_CHARS = '일월화수목금토';
+// 날짜 줄에서 요일 줄까지 거리(글자 높이의 몇 배까지). 칸이 높은 표는 요일 줄이 글자 높이의 5배쯤 아래에 있음
+const WEEKDAY_ROW_REACH = 7;
 
 /**
  * 제목에서 읽은 연/월이 표와 맞는지 확인하고, 틀렸으면 바로잡음
@@ -290,7 +305,7 @@ const WEEKDAY_CHARS = '일월화수목금토';
  */
 function verifyYearMonth(ym, header, clean, headerWords, today) {
   const dy = (w) => center(w).y - header.yAt(center(w).x); // 기울어진 날짜 줄 기준 높이 차
-  const near = clean.filter((w) => Math.abs(dy(w)) <= header.h * 4);
+  const near = clean.filter((w) => Math.abs(dy(w)) <= header.h * WEEKDAY_ROW_REACH);
   const weekdays = near
     .filter((w) => w.text.length === 1 && WEEKDAY_CHARS.includes(w.text) && Math.abs(dy(w)) > header.h * 0.5)
     .map((w) => ({ x: center(w).x, wd: WEEKDAY_CHARS.indexOf(w.text) }));
@@ -373,6 +388,23 @@ export function parseRosterWords(words, { year, month, shiftTypes = [], today = 
     Object.assign(ym, checked);
     cols = fitColumns(header, ym.year, ym.month, headerWords, clean);
   }
+  // 날짜 숫자를 일부만 읽어 칸 날짜가 하루~사흘 밀렸으면, 날짜 아래 요일 줄(월 화 …)에 맞게 바로잡음
+  const wdBelow = clean
+    .filter((w) => {
+      const dy = center(w).y - headerYAt(center(w).x);
+      return w.text.length === 1 && WEEKDAY_CHARS.includes(w.text) && dy > header.h * 0.5 && dy < header.h * WEEKDAY_ROW_REACH;
+    })
+    .map((w) => ({ idx: cols.xToIdx(center(w).x), wd: WEEKDAY_CHARS.indexOf(w.text) }))
+    .filter((q) => q.idx !== -999);
+  if (wdBelow.length >= 5) {
+    const hits = (shift) => wdBelow.filter((q) => new Date(ym.year, ym.month - 1, q.idx + shift).getDay() === q.wd).length;
+    const now = hits(0);
+    let best = 0;
+    for (const sh of [-1, 1, -2, 2, -3, 3]) if (hits(sh) > hits(best)) best = sh;
+    if (best && now < wdBelow.length * 0.5 && hits(best) >= Math.max(4, wdBelow.length * 0.7)) {
+      cols.shiftDays(best);
+    }
+  }
   const firstColLeft = cols.idxToX(cols.minIdx) - cols.widthAt(cols.minIdx) * 0.6;
   const belowHeader = (w) => center(w).y > headerYAt(center(w).x) + header.h * 0.8;
 
@@ -409,7 +441,8 @@ export function parseRosterWords(words, { year, month, shiftTypes = [], today = 
 
   // 이름: 각 행 높이에서 첫 칸 왼쪽에 있는 한글
   const leftWords = clean
-    .filter((w) => belowHeader(w) && w.x1 <= firstColLeft + cols.colW * 0.3 && /[가-힣]/.test(w.text))
+    // 직급·이름 칸은 첫 날짜 칸 바로 왼쪽(날짜 칸 6개 폭 이내): 더 왼쪽 글자(화면 캡처의 옆 목록 등)는 이름이 아님
+    .filter((w) => belowHeader(w) && w.x1 <= firstColLeft + cols.colW * 0.3 && w.x0 >= firstColLeft - cols.colW * 6 && /[가-힣]/.test(w.text))
     .map((w) => ({ ...w, ...center(w), y0: deskewY(center(w).x, center(w).y) }));
   const nameX0 = Math.max(0, Math.min(firstColLeft - cols.colW * 4, ...leftWords.map((w) => w.x0)));
   const used = new Set();
@@ -485,7 +518,24 @@ export function parseRosterWords(words, { year, month, shiftTypes = [], today = 
     if (!Object.keys(people[n]).length) delete people[n];
   });
   const names = rows.map((r) => r.name).filter((n, i, arr) => people[n] && arr.indexOf(n) === i);
+  // 날짜 열이 제대로 맞았는지: 날짜 아래 요일 글자(월 화 …)가 그 칸 날짜의 실제 요일과 같은 비율
+  // (흐린 사진에서 날짜 숫자를 일부만 읽으면 칸이 하루씩 밀린 채로 맞춰질 수 있음)
+  const wdWords = clean.filter((w) => {
+    const dy = center(w).y - headerYAt(center(w).x);
+    return w.text.length === 1 && WEEKDAY_CHARS.includes(w.text) && dy > header.h * 0.5 && dy < header.h * WEEKDAY_ROW_REACH;
+  });
+  let wdMatch = 0;
+  let wdTotal = 0;
+  wdWords.forEach((w) => {
+    const idx = cols.xToIdx(center(w).x);
+    if (idx === -999) return;
+    const [y, m, d] = dateKeyOf(idx).split('-').map(Number);
+    wdTotal += 1;
+    if (new Date(y, m - 1, d).getDay() === WEEKDAY_CHARS.indexOf(w.text)) wdMatch += 1;
+  });
   const grid = {
+    weekdays: { match: wdMatch, total: wdTotal },
+    textH: header.h, // 날짜 숫자 높이 (표만 잘라 다시 읽을 때 확대 배율 기준)
     slope,
     pitch,
     headerTop: Math.min(...header.row.map((w) => w.y0)), // 이 위쪽이 제목 영역
