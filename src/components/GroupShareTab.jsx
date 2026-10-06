@@ -284,10 +284,10 @@ export default function GroupShareTab({
           {/* 참여 중인 그룹 (자주 쓰는 것을 맨 위에) */}
           <section className="space-y-2">
             <div className="flex justify-between items-center px-1">
-              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">내 그룹</h2>
+              <h2 className="text-[13px] font-medium text-slate-500">내 그룹</h2>
               <button
                 onClick={fetchMyGroupsFromDB}
-                className="text-xs font-bold text-slate-500 flex items-center gap-1 h-8 px-3 rounded-full bg-white cursor-pointer"
+                className="text-xs font-medium text-slate-500 flex items-center gap-1 h-8 px-2 rounded-full cursor-pointer active:bg-slate-100"
               >
                 <RotateCcw size={12} /> 새로고침
               </button>

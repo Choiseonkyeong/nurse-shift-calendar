@@ -16,13 +16,14 @@ const rgb = (hex) => {
 };
 const varColor = (name) => `rgb(var(--c-${name}) / <alpha-value>)`;
 
+// 바탕: 흰 화면 하나에 얇은 구분선 (카드를 회색 위에 띄우지 않음)
 const lightVars = {
   '--c-surface': rgb('#ffffff'),
-  '--c-page': rgb(colors.slate[100])
+  '--c-page': rgb('#ffffff')
 };
 const darkVars = {
   '--c-surface': rgb(colors.slate[900]),
-  '--c-page': rgb(colors.slate[950])
+  '--c-page': rgb(colors.slate[900])
 };
 PALETTES.forEach((p) => {
   const map = p === 'slate' ? SLATE_DARK : ACCENT_DARK;
@@ -36,7 +37,20 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   darkMode: 'class',
   theme: {
+    // 글씨 굵기를 한 단계씩 가볍게 (굵은 글씨가 너무 많아 복잡해 보이던 것)
+    fontWeight: {
+      light: '300',
+      normal: '400',
+      medium: '500',
+      semibold: '600',
+      bold: '500',
+      extrabold: '600',
+      black: '700'
+    },
     extend: {
+      fontFamily: {
+        sans: ['"Pretendard Variable"', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'sans-serif']
+      },
       colors: {
         page: varColor('page'),
         ...Object.fromEntries(PALETTES.map((p) => [p, Object.fromEntries(SHADES.map((s) => [s, varColor(`${p}-${s}`)]))]))

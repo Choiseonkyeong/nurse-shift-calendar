@@ -220,7 +220,7 @@ export default function AllowanceTab({
         </h3>
 
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="px-1 py-3 bg-rose-50 rounded-2xl flex flex-col items-center justify-center">
+          <div className="px-1 py-3 bg-slate-50 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-rose-400 block mb-1 whitespace-nowrap">총 부여 연차</span>
             <div className="flex items-center justify-center gap-0.5 w-full">
               <input
@@ -245,7 +245,7 @@ export default function AllowanceTab({
             <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap">달력 {calendarLeaveDays}일 포함</span>
           </div>
 
-          <div className="px-1 py-3 bg-indigo-50 rounded-2xl flex flex-col items-center justify-center">
+          <div className="px-1 py-3 bg-slate-50 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-indigo-400 block mb-1">잔여 연차</span>
             <div className="text-lg font-black text-indigo-950">
               {remainingVacation} <span className="text-xs font-bold">개</span>

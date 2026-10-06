@@ -205,3 +205,14 @@ test('반복 패턴으로 기존 근무를 덮어써도 알림의 되돌리기�
   await expect(page.getByText('반복 패턴 입력을 되돌렸어요.')).toBeVisible();
   expect(await readLocal(page, 'my_shift_data')).toEqual(before);
 });
+
+test('위쪽 큰 제목: 내 근무는 이름, 다른 화면은 화면 이름', async ({ page }) => {
+  await openApp(page);
+  await expect(page.getByRole('heading', { level: 1, name: '김간호 님의 근무표' })).toBeVisible();
+  for (const [t, title] of [['연차/수당', '연차 · 수당'], ['그룹', '그룹'], ['등록', '근무 등록 · 설정']]) {
+    await tab(page, t).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
+  }
+  // 글꼴: Pretendard
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/Pretendard/);
+});

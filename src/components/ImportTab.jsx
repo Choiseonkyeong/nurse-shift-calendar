@@ -522,7 +522,7 @@ export default function ImportTab({
         </div>
 
         {/* 다른 방법: 한 줄 목록 */}
-        <div className="rounded-2xl bg-slate-50 divide-y divide-slate-200/70 overflow-hidden">
+        <div className="-mx-1 divide-y divide-slate-100">
           <label className={rowCls}>
             <RowIcon className="bg-emerald-50 text-emerald-600">
               {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
@@ -569,7 +569,7 @@ export default function ImportTab({
           <ChevronRight size={16} className="text-slate-300 shrink-0" />
         </button>
 
-        <div className="rounded-2xl bg-slate-50 divide-y divide-slate-200/70 overflow-hidden">
+        <div className="-mx-1 divide-y divide-slate-100">
           <button type="button" onClick={handleBackupSave} className={rowCls}>
             <RowIcon className="bg-indigo-50 text-indigo-600">
               <Archive size={16} />

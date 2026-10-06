@@ -30,6 +30,7 @@
     "@tesseract.js-data/kor": "^1.0.0",
     "firebase": "^12.19.0",
     "lucide-react": "^0.263.1",
+    "pretendard": "^1.3.9",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tesseract.js": "^6.0.1",

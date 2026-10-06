@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { Calendar, DollarSign, Users, Upload, Shield, RotateCcw, Pencil, Cloud, CloudOff, Loader2, Sun, Moon, SunMoon } from 'lucide-react';
+import { Calendar, CalendarCheck, Wallet, Users, FolderInput, Shield, Pencil, Cloud, CloudOff, Loader2, Sun, Moon, SunMoon } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
 import { lazyImport, consumeResume, setResumeTab } from './lib/appUpdate';
 // 첫 화면(내 근무) 외 탭은 누를 때 불러옴 → 첫 실행 속도 개선
@@ -30,6 +30,9 @@ import { applyChanges, mergeWithRemote } from './lib/syncMerge';
 import { queueTypeOp, flushTypeQueue, applyTypeQueue } from './lib/typeSync';
 import { SETTINGS_TS_KEY, decideSettingsSync, fetchMySettings, saveMySettings } from './lib/settingsSync';
 import { ROSTER_NAME_KEY } from './lib/rosterName';
+
+// 위쪽 큰 제목 (내 근무 화면은 이름이 들어간 제목)
+const TAB_TITLES = { allowance: '연차 · 수당', groupShare: '그룹', import: '근무 등록 · 설정' };
 import { RESTORE_REPLACE_KEY } from './lib/backup';
 
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
@@ -773,99 +776,99 @@ export default function App() {
     <div className="min-h-screen bg-page flex justify-center items-start sm:py-6 font-sans">
       <div className="w-full max-w-md bg-page h-[100dvh] sm:h-[min(840px,calc(100dvh-3rem))] sm:rounded-[2rem] sm:shadow-2xl flex flex-col justify-between overflow-hidden relative sm:border sm:border-slate-200/80">
         
-        {/* 1. 상단 프로필 헤더 */}
+        {/* 1. 상단 헤더: 화면 이름을 크게 (내 근무 화면은 '○○ 님의 근무표') */}
         <div
-          className={`bg-page px-4 pb-2.5 flex justify-between items-center z-10 shrink-0 transition-shadow ${
-            scrolled ? 'shadow-[0_1px_0_rgb(var(--c-slate-200))]' : ''
+          className={`bg-page pl-5 pr-3 pb-3 flex justify-between items-end gap-2 z-10 shrink-0 transition-shadow ${
+            scrolled ? 'shadow-[0_1px_0_rgb(var(--c-slate-100))]' : ''
           }`}
-          style={{ paddingTop: 'calc(0.75rem + var(--safe-top))' }}
+          style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
         >
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => setAccountModal('link')}
-              aria-label={accountStatus === 'linked' ? '계정' : '계정 (연결 필요)'}
-              className="relative w-9 h-9 shrink-0 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-sm cursor-pointer"
-            >
-              {userName.substring(0, 1)}
-              {accountStatus && accountStatus !== 'linked' && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white" />
-              )}
-            </button>
-            <div className="min-w-0">
-              {isEditingName ? (
-                <div className="flex items-center gap-1 min-w-0">
-                  <input
-                    type="text"
-                    value={tempUserName}
-                    autoFocus
-                    maxLength={30}
-                    aria-label="이름"
-                    placeholder="이름"
-                    onChange={(e) => setTempUserName(e.target.value)}
-                    className="min-w-0 flex-1 max-w-[8rem] px-2 py-1 text-xs text-slate-800 font-bold rounded-lg border border-slate-300 outline-none focus:border-indigo-400"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveName();
-                      if (e.key === 'Escape') setIsEditingName(false);
-                    }}
-                  />
-                  <button onClick={handleSaveName} className="shrink-0 whitespace-nowrap text-[11px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-bold cursor-pointer">저장</button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="flex items-center gap-1 cursor-pointer group max-w-full"
-                  onClick={() => {
-                    // 이름 없이 시작한 경우 기본 이름('나')을 지우고 빈 칸으로
-                    setTempUserName(nameSkipped ? '' : userName);
-                    setIsEditingName(true);
+          <div className="min-w-0 flex-1">
+            {activeTab !== 'myShift' ? (
+              <h1 className="text-[26px] font-bold text-slate-900 tracking-tight leading-tight truncate">{TAB_TITLES[activeTab]}</h1>
+            ) : isEditingName ? (
+              <div className="flex items-center gap-1.5 min-w-0 h-[33px]">
+                <input
+                  type="text"
+                  value={tempUserName}
+                  autoFocus
+                  maxLength={30}
+                  aria-label="이름"
+                  placeholder="이름"
+                  onChange={(e) => setTempUserName(e.target.value)}
+                  className="min-w-0 flex-1 max-w-[10rem] px-3 py-1.5 text-base text-slate-800 font-medium rounded-xl bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-200"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveName();
+                    if (e.key === 'Escape') setIsEditingName(false);
                   }}
-                  aria-label="이름 수정"
-                >
-                  <h1 className="font-extrabold text-[17px] text-slate-900 leading-tight truncate tracking-tight">
-                    {nameSkipped ? (
-                      '내 근무표'
-                    ) : (
-                      <>
-                        {userName}
-                        <span className="sr-only min-[380px]:not-sr-only"> 님의</span> 근무표
-                      </>
-                    )}
-                  </h1>
-                  <Pencil size={12} className="shrink-0 text-slate-300 group-hover:text-indigo-500" />
-                </button>
-              )}
-              <SyncBadge status={syncStatus} />
-            </div>
+                />
+                <button onClick={handleSaveName} className="shrink-0 whitespace-nowrap text-sm bg-indigo-600 text-white px-3 py-1.5 rounded-xl font-semibold cursor-pointer">저장</button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="flex items-center gap-1.5 cursor-pointer group max-w-full"
+                onClick={() => {
+                  // 이름 없이 시작한 경우 기본 이름('나')을 지우고 빈 칸으로
+                  setTempUserName(nameSkipped ? '' : userName);
+                  setIsEditingName(true);
+                }}
+                aria-label="이름 수정"
+              >
+                <h1 className="text-[22px] font-bold text-slate-900 tracking-tight leading-tight truncate">
+                  {nameSkipped ? (
+                    '내 근무표'
+                  ) : (
+                    <>
+                      {userName}
+                      <span className="sr-only min-[380px]:not-sr-only font-medium text-slate-500"> 님의</span> 근무표
+                    </>
+                  )}
+                </h1>
+                <Pencil size={14} className="shrink-0 text-slate-300" />
+              </button>
+            )}
+            <SyncBadge status={syncStatus} />
           </div>
 
-          <div className="flex items-center gap-1 shrink-0 ml-1.5">
+          <div className="flex items-center shrink-0 text-slate-600">
             <button
               onClick={handleGoToday}
-              className="flex items-center gap-1 h-9 px-3 whitespace-nowrap bg-white text-slate-700 rounded-full text-[13px] font-bold cursor-pointer"
+              aria-label="오늘"
+              className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100"
             >
-              <RotateCcw size={13} />
-              <span>오늘</span>
+              <CalendarCheck size={22} />
             </button>
             <button
               type="button"
               onClick={cycleTheme}
               aria-label={`화면 테마: ${{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]} (눌러서 변경)`}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-slate-600 cursor-pointer"
+              className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100"
             >
-              {themePref === 'dark' ? <Moon size={14} /> : themePref === 'light' ? <Sun size={14} /> : <SunMoon size={14} />}
+              {themePref === 'dark' ? <Moon size={21} /> : themePref === 'light' ? <Sun size={21} /> : <SunMoon size={21} />}
             </button>
             <button
               onClick={() => setPrivacyBlur(!privacyBlur)}
               aria-label={privacyBlur ? '보안 모드 끄기 (근무 보이기)' : '보안 모드 (남에게 근무 가리기)'}
               aria-pressed={privacyBlur}
               title="보안 모드: 화면의 근무를 가려요"
-              className={`h-9 min-w-9 px-2.5 whitespace-nowrap rounded-full text-xs font-bold flex items-center justify-center gap-1 cursor-pointer ${
-                privacyBlur ? 'bg-amber-400 text-slate-900' : 'bg-white text-slate-600'
+              className={`h-10 min-w-10 px-2 flex items-center justify-center gap-1 rounded-full text-xs font-semibold cursor-pointer ${
+                privacyBlur ? 'bg-amber-100 text-amber-700' : 'active:bg-slate-100'
               }`}
             >
-              <Shield size={14} />
+              <Shield size={21} />
               {privacyBlur && <span>ON</span>}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountModal('link')}
+              aria-label={accountStatus === 'linked' ? '계정' : '계정 (연결 필요)'}
+              className="relative ml-1 w-9 h-9 shrink-0 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-semibold text-sm cursor-pointer"
+            >
+              {userName.substring(0, 1)}
+              {accountStatus && accountStatus !== 'linked' && (
+                <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-white" />
+              )}
             </button>
           </div>
         </div>
@@ -978,7 +981,7 @@ export default function App() {
 
         {/* 3. 프레임 바닥에 완벽 밀착시킨 하단 네비게이션 탭 */}
         <div
-          className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md shadow-[0_-1px_0_rgb(var(--c-slate-200))] px-2 pt-1.5 grid grid-cols-4 z-50"
+          className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-1px_0_rgb(var(--c-slate-100))] px-2 pt-2 grid grid-cols-4 z-50"
           style={{ paddingBottom: 'calc(0.375rem + var(--safe-bottom))' }}
         >
           <button
@@ -989,7 +992,7 @@ export default function App() {
             }`}
           >
             <Calendar size={22} className={activeTab === 'myShift' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[11px] font-bold">내 근무</span>
+            <span className="text-[10.5px] font-medium">내 근무</span>
           </button>
 
           <button
@@ -999,8 +1002,8 @@ export default function App() {
               activeTab === 'allowance' ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
-            <DollarSign size={22} className={activeTab === 'allowance' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[11px] font-bold">연차/수당</span>
+            <Wallet size={22} className={activeTab === 'allowance' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+            <span className="text-[10.5px] font-medium">연차/수당</span>
           </button>
 
           <button
@@ -1011,7 +1014,7 @@ export default function App() {
             }`}
           >
             <Users size={22} className={activeTab === 'groupShare' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[11px] font-bold">그룹</span>
+            <span className="text-[10.5px] font-medium">그룹</span>
           </button>
 
           <button
@@ -1021,8 +1024,8 @@ export default function App() {
               activeTab === 'import' ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
-            <Upload size={22} className={activeTab === 'import' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[11px] font-bold">등록</span>
+            <FolderInput size={22} className={activeTab === 'import' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+            <span className="text-[10.5px] font-medium">등록</span>
           </button>
         </div>
 
@@ -1039,12 +1042,12 @@ function SyncBadge({ status }) {
   const map = {
     connecting: { icon: <Loader2 size={11} className="animate-spin" />, text: '서버 연결 중', cls: 'text-slate-400' },
     saving: { icon: <Loader2 size={11} className="animate-spin" />, text: '저장 중', cls: 'text-slate-400' },
-    saved: { icon: <Cloud size={11} />, text: '서버에 저장됨', cls: 'text-emerald-500' },
+    saved: { icon: <Cloud size={11} />, text: '서버에 저장됨', cls: 'text-slate-400' },
     offline: { icon: <CloudOff size={11} />, text: '오프라인 · 기기 저장', cls: 'text-amber-500' }
   };
   const { icon, text, cls } = map[status] || map.connecting;
   return (
-    <p className={`text-[11px] font-bold flex items-center gap-1 whitespace-nowrap ${cls}`}>
+    <p className={`mt-0.5 text-[11px] font-normal flex items-center gap-1 whitespace-nowrap ${cls}`}>
       {icon} {text}
     </p>
   );

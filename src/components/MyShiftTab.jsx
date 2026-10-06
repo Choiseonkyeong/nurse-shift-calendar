@@ -474,13 +474,11 @@ export default function MyShiftTab({
           style={{ gridTemplateColumns: `repeat(${Math.min(Object.keys(shiftCounts).length, 6)}, minmax(0, 1fr))` }}
         >
           {Object.entries(shiftCounts).map(([code, count]) => (
-            <div
-              key={code}
-              style={getBadgeStyle(code)}
-              className={`py-2 rounded-2xl flex flex-col items-center gap-0.5 transition ${count === 0 ? 'opacity-40' : ''}`}
-            >
-              <span className="text-[11px] font-black leading-none truncate max-w-full px-0.5">{code}</span>
-              <span className="text-base font-black leading-tight">{count}</span>
+            <div key={code} className={`flex flex-col items-center gap-1 min-w-0 ${count === 0 ? 'opacity-40' : ''}`}>
+              <span style={getBadgeStyle(code)} className="px-2 py-0.5 rounded-md text-[11px] font-semibold leading-tight truncate max-w-full">
+                {code}
+              </span>
+              <span className="text-lg font-semibold text-slate-800 leading-none">{count}</span>
             </div>
           ))}
         </div>
