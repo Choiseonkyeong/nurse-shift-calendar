@@ -33,7 +33,7 @@ async function copyAddress() {
 export function KakaoOpenExternal({ strong = false }) {
   const env = currentInstallEnv();
   if (!isInAppEnv(env)) return null;
-  const cls = `flex items-center justify-center gap-1.5 w-full py-2.5 rounded-2xl text-xs font-black ${strong ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-900'}`;
+  const cls = `flex items-center justify-center gap-1.5 w-full h-11 rounded-xl text-[14px] font-semibold ${strong ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700'}`;
   const href = externalOpenUrl(env, window.location.href);
   if (!href) {
     return (
@@ -76,20 +76,20 @@ export default function InstallHint({ accountLinked, hasData, onLinkAccount }) {
   const browser = isIos(env) ? '사파리' : '크롬';
   const app = kakao ? appNameOf() : '';
   return (
-    <div className="mb-4 p-4 rounded-3xl bg-amber-50 border border-amber-100 space-y-2" role="region" aria-label="홈 화면에 추가 안내">
+    <div className="mb-4 p-4 rounded-2xl bg-slate-50 space-y-3" role="region" aria-label="홈 화면에 추가 안내">
       <div className="flex items-start gap-2">
-        <Smartphone size={16} className="text-amber-600 shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0 text-xs font-bold text-amber-900 space-y-1">
+        <Smartphone size={20} className="text-blue-600 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0 text-[13px] text-slate-500 space-y-1">
           {kakao ? (
             <>
-              <p className="font-black">{app} 안에서 열렸어요</p>
-              <p className="text-amber-800/80">
+              <p className="text-[15px] font-semibold text-slate-900">{app} 안에서 열렸어요</p>
+              <p>
                 {app}에서는 홈 화면에 추가할 수 없어요. {isIos(env) ? '사파리로' : '크롬으로'} 열어서 홈 화면에 추가하면 앱처럼 쓸 수 있어요.
               </p>
               {hasData && !accountLinked && (
-                <p className="text-amber-800/80">
+                <p>
                   {browser}에서는 새로 시작돼요. 지금 근무를 그대로 옮기려면 먼저{' '}
-                  <button type="button" onClick={onLinkAccount} className="underline font-black text-amber-900 cursor-pointer">
+                  <button type="button" onClick={onLinkAccount} className="underline font-semibold text-blue-700 cursor-pointer">
                     계정을 연결
                   </button>
                   하고 {browser}에서 로그인하세요.
@@ -98,23 +98,23 @@ export default function InstallHint({ accountLinked, hasData, onLinkAccount }) {
             </>
           ) : env === 'ios' ? (
             <>
-              <p className="font-black">홈 화면에 추가하면 앱처럼 쓸 수 있어요</p>
-              <p className="text-amber-800/80 flex items-center gap-1 flex-wrap">
+              <p className="text-[15px] font-semibold text-slate-900">홈 화면에 추가하면 앱처럼 쓸 수 있어요</p>
+              <p className="flex items-center gap-1 flex-wrap">
                 아래 공유 버튼 <Share size={12} className="inline" /> → &apos;홈 화면에 추가&apos;를 눌러 주세요.
               </p>
             </>
           ) : (
-            <p className="font-black">홈 화면에 설치하면 앱처럼 바로 열 수 있어요</p>
+            <p className="text-[15px] font-semibold text-slate-900">홈 화면에 설치하면 앱처럼 바로 열 수 있어요</p>
           )}
         </div>
-        <button type="button" onClick={dismiss} className="text-amber-400 hover:text-amber-600 cursor-pointer shrink-0" aria-label="안내 닫기">
-          <X size={16} />
+        <button type="button" onClick={dismiss} className="w-8 h-8 -mr-1 -mt-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer shrink-0" aria-label="안내 닫기">
+          <X size={18} />
         </button>
       </div>
       {kakao && (
         <>
           <KakaoOpenExternal strong />
-          <p className="text-[10px] font-bold text-amber-700/70 text-center">
+          <p className="text-[12px] text-slate-400 text-center">
             {env === 'inapp-ios'
               ? `${app} 화면의 ··· 메뉴 → 'Safari로 열기'가 있으면 그걸 눌러도 돼요`
               : `안 열리면 ${app} 화면의 ⋮ 또는 ··· 메뉴 → '다른 브라우저로 열기'`}
@@ -127,7 +127,7 @@ export default function InstallHint({ accountLinked, hasData, onLinkAccount }) {
           onClick={async () => {
             if (await promptInstall()) dismiss();
           }}
-          className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-2xl bg-amber-500 text-white text-xs font-black cursor-pointer"
+          className="flex items-center justify-center gap-1.5 w-full h-11 rounded-xl bg-blue-600 text-white text-[14px] font-semibold cursor-pointer"
         >
           <Download size={14} /> 홈 화면에 설치
         </button>
