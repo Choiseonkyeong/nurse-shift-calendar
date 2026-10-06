@@ -165,3 +165,14 @@ button {
     transition: none !important;
   }
 }
+
+/* 숫자 칸의 작은 위아래 화살표 숨김 (폰 앱처럼 숫자만) */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
