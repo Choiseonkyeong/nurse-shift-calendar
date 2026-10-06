@@ -88,7 +88,7 @@ test('모든 팝업이 하단 탭바 위에 표시', async ({ page }) => {
     });
   for (const open of [
     () => page.getByRole('button', { name: /종류/ }).click(),
-    () => page.getByRole('button', { name: '패턴', exact: true }).click(),
+    () => page.getByRole('button', { name: '반복 패턴', exact: true }).click(),
     () => day(page, '9월 5일').click(),
     () => page.getByRole('button', { name: /^알림$/ }).click()
   ]) {
@@ -119,13 +119,15 @@ test('달력 날짜는 버튼(스크린리더로 날짜·근무를 읽음)', asy
 
 test('다크 모드 전환', async ({ page }) => {
   await openApp(page);
+  await tab(page, '설정').click(); // 테마는 설정 탭에
   const theme = page.getByRole('button', { name: /화면 테마/ });
   await theme.click(); // 기기 설정 → 다크
   await expect(page.locator('html')).toHaveClass(/dark/);
-  // 카드 배경 (버튼은 색이 부드럽게 바뀌므로 전환이 끝날 때까지 기다림)
-  await expect.poll(() => page.locator('.card').first().evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(15, 23, 42)');
+  // 바탕 (버튼은 색이 부드럽게 바뀌므로 전환이 끝날 때까지 기다림)
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(15, 23, 42)');
   await page.reload();
   await expect(page.locator('html')).toHaveClass(/dark/); // 설정 유지
+  await tab(page, '설정').click();
   await theme.click(); // 다크 → 라이트
   await expect(page.locator('html')).not.toHaveClass(/dark/);
 });
@@ -143,7 +145,7 @@ test('수당 탭: 휴일·야간 가산, 입사일 기준 연차, 통계', async
     }
   });
   await page.getByRole('button', { name: '다음 달' }).first().click();
-  await tab(page, '연차/수당').click();
+  await tab(page, '수당').click();
   await expect(page.getByText(/휴일 근무:/).locator('..')).toContainText('2 회 (16시간)');
   await expect(page.getByText('휴일 가산수당').locator('..')).toContainText('80,000 원');
   await expect(page.getByText('야간 가산수당').locator('..')).toContainText('120,000 원');
@@ -192,7 +194,7 @@ test('반복 패턴으로 기존 근무를 덮어써도 알림의 되돌리기�
   // 사진·엑셀로 등록해 둔 근무가 있는 상태
   const before = { '2026-09-10': 'E', '2026-09-28': 'N', '2026-09-30': '연차' };
   await openApp(page, { local: { my_shift_data: before } });
-  await page.getByRole('button', { name: '패턴', exact: true }).click();
+  await page.getByRole('button', { name: '반복 패턴', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '반복 패턴 입력' });
   await expect(dialog.getByText(/일 겹침/)).toBeVisible(); // 덮어쓰기 기본 체크
   await dialog.getByRole('button', { name: /일에 적용하기/ }).click();
@@ -206,10 +208,10 @@ test('반복 패턴으로 기존 근무를 덮어써도 알림의 되돌리기�
   expect(await readLocal(page, 'my_shift_data')).toEqual(before);
 });
 
-test('위쪽 큰 제목: 내 근무는 이름, 다른 화면은 화면 이름', async ({ page }) => {
+test('위쪽 제목: 내 근무는 이름, 다른 화면은 화면 이름', async ({ page }) => {
   await openApp(page);
   await expect(page.getByRole('heading', { level: 1, name: '김간호 님의 근무표' })).toBeVisible();
-  for (const [t, title] of [['연차/수당', '연차 · 수당'], ['그룹', '그룹'], ['등록', '근무 등록 · 설정']]) {
+  for (const [t, title] of [['수당', '연차 · 수당'], ['그룹', '그룹'], ['설정', '설정']]) {
     await tab(page, t).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
   }

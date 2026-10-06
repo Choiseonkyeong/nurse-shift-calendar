@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { Calendar, CalendarCheck, Wallet, Users, FolderInput, Shield, Pencil, Cloud, CloudOff, Loader2, Sun, Moon, SunMoon } from 'lucide-react';
+import { Calendar, CalendarCheck, Wallet, Users, Settings, Shield, Pencil, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import MyShiftTab from './components/MyShiftTab';
 import { lazyImport, consumeResume, setResumeTab } from './lib/appUpdate';
 // 첫 화면(내 근무) 외 탭은 누를 때 불러옴 → 첫 실행 속도 개선
@@ -32,7 +32,7 @@ import { SETTINGS_TS_KEY, decideSettingsSync, fetchMySettings, saveMySettings } 
 import { ROSTER_NAME_KEY } from './lib/rosterName';
 
 // 위쪽 큰 제목 (내 근무 화면은 이름이 들어간 제목)
-const TAB_TITLES = { allowance: '연차 · 수당', groupShare: '그룹', import: '근무 등록 · 설정' };
+const TAB_TITLES = { allowance: '연차 · 수당', groupShare: '그룹', import: '설정' };
 import { RESTORE_REPLACE_KEY } from './lib/backup';
 
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
@@ -778,7 +778,7 @@ export default function App() {
         
         {/* 1. 상단 헤더: 화면 이름을 크게 (내 근무 화면은 '○○ 님의 근무표') */}
         <div
-          className={`bg-page pl-5 pr-3 pb-3 flex justify-between items-end gap-2 z-10 shrink-0 transition-shadow ${
+          className={`bg-page pl-5 pr-3 pb-2 flex justify-between items-center gap-2 z-10 shrink-0 transition-shadow ${
             scrolled ? 'shadow-[0_1px_0_rgb(var(--c-slate-100))]' : ''
           }`}
           style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
@@ -815,13 +815,13 @@ export default function App() {
                 }}
                 aria-label="이름 수정"
               >
-                <h1 className="text-[22px] font-bold text-slate-900 tracking-tight leading-tight truncate">
+                <h1 className="text-[15px] font-medium text-slate-500 leading-tight truncate">
                   {nameSkipped ? (
                     '내 근무표'
                   ) : (
                     <>
                       {userName}
-                      <span className="sr-only min-[380px]:not-sr-only font-medium text-slate-500"> 님의</span> 근무표
+                      <span> 님의</span> 근무표
                     </>
                   )}
                 </h1>
@@ -839,26 +839,16 @@ export default function App() {
             >
               <CalendarCheck size={22} />
             </button>
-            <button
-              type="button"
-              onClick={cycleTheme}
-              aria-label={`화면 테마: ${{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]} (눌러서 변경)`}
-              className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100"
-            >
-              {themePref === 'dark' ? <Moon size={21} /> : themePref === 'light' ? <Sun size={21} /> : <SunMoon size={21} />}
-            </button>
-            <button
-              onClick={() => setPrivacyBlur(!privacyBlur)}
-              aria-label={privacyBlur ? '보안 모드 끄기 (근무 보이기)' : '보안 모드 (남에게 근무 가리기)'}
-              aria-pressed={privacyBlur}
-              title="보안 모드: 화면의 근무를 가려요"
-              className={`h-10 min-w-10 px-2 flex items-center justify-center gap-1 rounded-full text-xs font-semibold cursor-pointer ${
-                privacyBlur ? 'bg-amber-100 text-amber-700' : 'active:bg-slate-100'
-              }`}
-            >
-              <Shield size={21} />
-              {privacyBlur && <span>ON</span>}
-            </button>
+            {/* 보안 모드가 켜져 있으면 표시 (눌러서 끄기). 켜기는 설정 탭 */}
+            {privacyBlur && (
+              <button
+                onClick={() => setPrivacyBlur(false)}
+                aria-label="보안 모드 끄기 (근무 보이기)"
+                className="h-8 px-2.5 mr-1 flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold cursor-pointer"
+              >
+                <Shield size={15} /> 보안
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setAccountModal('link')}
@@ -974,6 +964,10 @@ export default function App() {
               onRepickShown={clearRepick}
               accountStatus={accountStatus}
               onOpenAccount={() => setAccountModal('link')}
+              themePref={themePref}
+              onCycleTheme={cycleTheme}
+              privacyBlur={privacyBlur}
+              onTogglePrivacy={() => setPrivacyBlur(!privacyBlur)}
             />
           )}
           </Suspense>
@@ -1003,7 +997,7 @@ export default function App() {
             }`}
           >
             <Wallet size={22} className={activeTab === 'allowance' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[10.5px] font-medium">연차/수당</span>
+            <span className="text-[10.5px] font-medium">수당</span>
           </button>
 
           <button
@@ -1024,8 +1018,8 @@ export default function App() {
               activeTab === 'import' ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
-            <FolderInput size={22} className={activeTab === 'import' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[10.5px] font-medium">등록</span>
+            <Settings size={22} className={activeTab === 'import' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+            <span className="text-[10.5px] font-medium">설정</span>
           </button>
         </div>
 

@@ -19,7 +19,7 @@ test('근무·메모 전체 삭제: 첫 화면으로 가지 않고, 서버에서
   await expect.poll(() => Object.keys(state.shifts[pid] || {}).length).toBe(2);
   await expect.poll(() => Object.keys(state.notes[pid] || {}).length).toBe(1);
 
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: '근무·메모 전체 삭제' }).click();
   await expect(page.getByRole('dialog', { name: '근무·메모를 모두 지울까요?' })).toContainText('이름·계정·그룹');
   await confirmOk(page);

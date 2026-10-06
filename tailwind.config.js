@@ -4,7 +4,7 @@ import plugin from 'tailwindcss/plugin';
 
 // 다크 모드: 앱에서 쓰는 색 팔레트를 CSS 변수로 바꿔 <html class="dark"> 일 때 한 번에 전환
 // (컴포넌트마다 dark: 클래스를 달지 않아도 전체 화면이 따라감)
-const PALETTES = ['slate', 'indigo', 'amber', 'rose', 'emerald', 'sky', 'violet'];
+const PALETTES = ['slate', 'indigo', 'blue', 'amber', 'rose', 'emerald', 'sky', 'violet'];
 const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 // slate: 밝기 반전 / 강조색: 옅은 배경(50~200) ↔ 진한 글자(700~950) 교환, 중간(300~600)은 유지
 const SLATE_DARK = { 50: 800, 100: 800, 200: 700, 300: 600, 400: 400, 500: 400, 600: 300, 700: 200, 800: 100, 900: 50, 950: 50 };
@@ -25,11 +25,13 @@ const darkVars = {
   '--c-surface': rgb(colors.slate[900]),
   '--c-page': rgb(colors.slate[900])
 };
+// 포인트 색은 블루 한 가지: 코드에서 쓰던 indigo 도 블루로 (화면 전체 색 통일)
+const source = (p) => (p === 'indigo' ? colors.blue : colors[p]);
 PALETTES.forEach((p) => {
   const map = p === 'slate' ? SLATE_DARK : ACCENT_DARK;
   SHADES.forEach((s) => {
-    lightVars[`--c-${p}-${s}`] = rgb(colors[p][s]);
-    darkVars[`--c-${p}-${s}`] = rgb(colors[p][map[s]]);
+    lightVars[`--c-${p}-${s}`] = rgb(source(p)[s]);
+    darkVars[`--c-${p}-${s}`] = rgb(source(p)[map[s]]);
   });
 });
 

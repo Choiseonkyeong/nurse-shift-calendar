@@ -22,7 +22,7 @@ test('병동 양식 사진(10월 = 9/26~10/25): 5월을 보고 있어도 10월�
   const me = roster.people.find((p) => p.name === '한소희'); // 사진에선 '한소회'로 읽힘 → 한 글자 차이로 자동 선택
   await openApp(page, { name: '한소희' });
   await viewMonth(page, 4); // 5월
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-oct-photo.jpg'));
   await expect(page.getByText('사진에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible({ timeout: 200000 });
   const saved = await readLocal(page, 'my_shift_data');
@@ -36,7 +36,7 @@ test('기울고 흐린 사진(-1.2°)도 표를 바로 세워 읽음: 8/26~9/25,
   const me = roster.people.find((p) => p.name === '박지우');
   await openApp(page, { name: '박지우' });
   await viewMonth(page, 4);
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-sep-tilt.jpg'));
   await expect(page.getByText(/사진에서 8월 26일~9월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
   const saved = await readLocal(page, 'my_shift_data');
@@ -79,7 +79,7 @@ test('병동 양식 엑셀: 이름 목록에 메모 열(DD·N/)이 섞이지 않
   await openApp(page, { name: '최간호' }); // 근무표에 없는 이름 → 이름 선택 창
   const picker = page.getByRole('dialog', { name: '본인 이름 선택' });
   const upload = async () => {
-    await tab(page, '등록').click();
+    await tab(page, '설정').click();
     await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(file);
   };
 
@@ -114,7 +114,7 @@ test('작은 사진(가로 약 900px): 이름 확인 진행률이 보이고, 확
   test.setTimeout(240000);
   // 그린 설정: makeRoster({ year: 2027, month: 3, seed: 10 }), renderRosterImage(…, { scale: 0.7, photo: { rotate: 0.4, blur: 0.3, quality: 75 } })
   await openApp(page, { name: '김하늘' });
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-small.jpg'));
   await expect(page.getByText(/이름 확인 중\.\.\. \d+\/\d+/)).toBeVisible({ timeout: 120000 }); // 멈춘 것처럼 보이지 않게
   await expect(page.getByText(/사진에서 2월 26일~3월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
@@ -127,7 +127,7 @@ test('옆으로 누운 사진(폰을 돌려 찍었는데 자동 회전 꺼짐)�
   const roster = makeRoster({ year: 2026, month: 10, seed: 3 });
   const me = roster.people.find((p) => p.name === '한소희');
   await openApp(page, { name: '한소희' });
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-oct-sideways.jpg'));
   await expect(page.getByText(/사진 방향 바꿔 읽는 중/)).toBeVisible({ timeout: 120000 });
   await expect(page.getByText('사진에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible({ timeout: 200000 });
@@ -173,7 +173,7 @@ test('아주 큰 사진(약 4800만 화소): 아이폰 캔버스 한도(1670만 
   const roster = makeRoster({ year: 2026, month: 10, seed: 3 });
   const me = roster.people.find((p) => p.name === '한소희');
   await openApp(page, { name: '한소희' });
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(file);
   await expect(page.getByText(/사진에서 9월 26일~10월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
   const saved = await readLocal(page, 'my_shift_data');
@@ -190,7 +190,7 @@ test('인식 엔진이 어떤 칸에서 죽어도(Tesseract Assert → Aborted) 
   const roster = makeRoster({ year: 2026, month: 10, seed: 3 });
   const me = roster.people.find((p) => p.name === '한소희');
   await openApp(page, { name: '한소희' });
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-oct-crash.jpg'));
   await expect(page.getByText(/사진에서 9월 26일~10월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
   const saved = await readLocal(page, 'my_shift_data');
@@ -202,7 +202,7 @@ test('아주 흐리고 작은 사진: 엉뚱한 근무를 넣지 않고 다시 �
   test.setTimeout(240000);
   // 그린 설정: makeRoster({ year: 2027, month: 1, seed: 24 }), renderRosterImage(…, { photo: { rotate: -0.8, blur: 0.8, quality: 45 } })
   await openApp(page, { name: '김하늘', local: { my_shift_data: { '2027-01-10': 'E' } } });
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-blurry.jpg'));
   await expect(page.getByText(/사진이 흐려서 근무를 거의 읽지 못했어요/)).toBeVisible({ timeout: 200000 });
   await expect(page.getByRole('alert')).toContainText('사진이 흐려서'); // 실패는 체크 표시가 아닌 경고로
@@ -217,7 +217,7 @@ test('엑셀 화면 캡처(브라우저·옆 목록이 함께 찍힘, 표가 화
   const roster = makeRoster({ year: 2026, month: 11, seed: 31 });
   const me = roster.people.find((p) => p.name === '정민서');
   await openApp(page, { name: '정민서' });
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-screenshot.png'));
   await expect(page.getByText(/사진에서 10월 26일~11월 25일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
   await expect(page.getByRole('dialog', { name: '본인 이름 선택' })).toHaveCount(0);
@@ -234,7 +234,7 @@ test('모니터 화면을 폰으로 찍은 사진(어두운 테두리·1.5° 기
   const roster = makeRoster({ year: 2026, month: 11, seed: 31 });
   const me = roster.people.find((p) => p.name === '박지우');
   await openApp(page, { name: '박지우' });
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-monitor-photo.jpg'));
   // 흐린 사진이라 맨 앞·뒤 날짜 칸 하나는 놓칠 수 있음 (그 칸은 비워 둠, 틀린 날짜로 넣지 않음)
   await expect(page.getByText(/사진에서 10월 2\d일~11월 2\d일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
@@ -248,7 +248,7 @@ test('사진 인식 중 [취소]: 바로 멈추고 근무는 그대로, 다시 �
   test.setTimeout(240000);
   const before = { '2026-10-01': 'N' };
   await openApp(page, { name: '한소희', local: { my_shift_data: before } });
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-oct-photo.jpg'));
   await expect(page.getByText(/표 구조 분석 중|인식 엔진 준비 중/)).toBeVisible({ timeout: 60000 });
   await page.getByRole('button', { name: '취소', exact: true }).click();
@@ -298,7 +298,7 @@ function multiSheetWorkbook({ withCover = true, months = [10, 11], activeTab } =
 test('엑셀 탭이 여러 개: 근무표 탭을 고르는 창(마지막으로 본 탭이 위), 고른 달로 등록 / 표지+근무표 1개면 바로 등록', async ({ page }) => {
   const { file, rosters } = multiSheetWorkbook({ activeTab: 2 }); // 11월 탭을 보던 파일
   await openApp(page, { name: '김하늘' });
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(file);
   const dialog = page.getByRole('dialog', { name: '엑셀 탭 선택' });
   await expect(dialog.getByText('근무표 탭이 2개')).toBeVisible();
@@ -314,7 +314,7 @@ test('엑셀 탭이 여러 개: 근무표 탭을 고르는 창(마지막으로 �
   // 표지 + 근무표 1개: 묻지 않고 근무표 탭으로 (예전에는 첫 탭(표지)만 읽어 '날짜 행을 찾지 못했습니다')
   const one = multiSheetWorkbook({ months: [11] });
   await page.getByRole('button', { name: '되돌리기' }).click();
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(one.file);
   await expect(page.getByText('엑셀에서 10월 26일~11월 25일 근무 31일을 등록했어요')).toBeVisible();
   await expect(page.getByRole('dialog', { name: '엑셀 탭 선택' })).toHaveCount(0);
