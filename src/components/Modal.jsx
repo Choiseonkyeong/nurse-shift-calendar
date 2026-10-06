@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { shouldDismissSheet } from '../lib/swipe';
 
 // 열린 팝업 순서 (안드로이드 뒤로가기: 맨 위 팝업부터 닫기)
 const openModals = [];
@@ -94,6 +95,68 @@ export default function Modal({ onClose, label, children, align = 'sheet', zInde
       if (previous && typeof previous.focus === 'function' && document.contains(previous)) previous.focus({ preventScroll: true });
     };
   }, []);
+
+  // 폰의 아래 시트: 손잡이·제목 부분을 아래로 끌어내리면 닫힘
+  useEffect(() => {
+    if (align !== 'sheet') return undefined;
+    const overlay = overlayRef.current;
+    let drag = null;
+    const panel = () => overlay.firstElementChild;
+    const onStart = (e) => {
+      const el = panel();
+      if (!el || !onCloseRef.current || e.touches.length !== 1) return;
+      if (!window.matchMedia?.('(max-width: 639px)').matches) return;
+      if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+      const t = e.touches[0];
+      // 위쪽 손잡이·제목 영역에서만 (창 안 내용 스크롤과 겹치지 않게)
+      if (t.clientY - el.getBoundingClientRect().top > 64) return;
+      drag = { y: t.clientY, at: Date.now(), dy: 0 };
+    };
+    const onMove = (e) => {
+      if (!drag) return;
+      drag.dy = Math.max(0, e.touches[0].clientY - drag.y);
+      if (drag.dy > 0) {
+        e.preventDefault();
+        const el = panel();
+        el.style.transition = 'none';
+        el.style.transform = `translateY(${drag.dy}px)`;
+      }
+    };
+    const onEnd = () => {
+      if (!drag) return;
+      const { dy, at } = drag;
+      drag = null;
+      const el = panel();
+      if (!el) return;
+      el.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
+      if (shouldDismissSheet(dy, Date.now() - at)) {
+        el.style.transform = 'translateY(100%)';
+        setTimeout(() => onCloseRef.current?.(), 180);
+      } else {
+        el.style.transform = '';
+      }
+    };
+    // 입력칸을 누르면 키보드가 올라온 뒤(창이 줄어든 뒤) 그 칸이 보이도록 창 안에서 스크롤
+    let focusTimer;
+    const onFocusIn = (e) => {
+      if (!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+      clearTimeout(focusTimer);
+      focusTimer = setTimeout(() => e.target.scrollIntoView?.({ block: 'center' }), 300);
+    };
+    overlay.addEventListener('focusin', onFocusIn);
+    overlay.addEventListener('touchstart', onStart, { passive: true });
+    overlay.addEventListener('touchmove', onMove, { passive: false });
+    overlay.addEventListener('touchend', onEnd);
+    overlay.addEventListener('touchcancel', onEnd);
+    return () => {
+      clearTimeout(focusTimer);
+      overlay.removeEventListener('focusin', onFocusIn);
+      overlay.removeEventListener('touchstart', onStart);
+      overlay.removeEventListener('touchmove', onMove);
+      overlay.removeEventListener('touchend', onEnd);
+      overlay.removeEventListener('touchcancel', onEnd);
+    };
+  }, [align]);
 
   return createPortal(
     <div

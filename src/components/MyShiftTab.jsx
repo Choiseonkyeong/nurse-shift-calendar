@@ -4,6 +4,7 @@ import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
 import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
+import { useSwipe } from '../lib/swipe';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
@@ -263,6 +264,8 @@ export default function MyShiftTab({
 
   // 이전/다음 달 이동
   const goMonth = (delta) => setSelectedDate(addMonthsKey(selectedDate, delta));
+  // 달력을 왼쪽으로 밀면 다음 달, 오른쪽으로 밀면 이전 달
+  const monthSwipe = useSwipe({ onLeft: () => goMonth(1), onRight: () => goMonth(-1) });
 
   // 날짜 클릭 시 수정 모달 오픈
   const handleDayClick = (dateKey) => {
@@ -559,7 +562,7 @@ export default function MyShiftTab({
         </div>
 
         {/* 날짜 그리드 */}
-        <div className="grid grid-cols-7 gap-x-0.5 gap-y-1">
+        <div className="grid grid-cols-7 gap-x-0.5 gap-y-1" {...monthSwipe}>
           {calendarDays.map((item, idx) => {
             if (!item) return <div key={`empty_${idx}`} className="min-h-[62px]"></div>;
 

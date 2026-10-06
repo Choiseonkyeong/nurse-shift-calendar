@@ -3,6 +3,7 @@ import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import { toast, formatDateKo } from '../lib/toast';
 import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Share2, RotateCcw, Palette } from 'lucide-react';
+import { useSwipe } from '../lib/swipe';
 import { shareText, webOrigin } from '../lib/shareCalendar';
 import { addMonthsKey, getTodayDateObj } from '../utils/dateUtils';
 import { hasUnread } from '../lib/groupActivity';
@@ -66,6 +67,8 @@ export default function GroupShareTab({
     setSelectedDate(next);
     setSelectedDayKey(next);
   };
+  // 달력을 왼쪽으로 밀면 다음 달, 오른쪽으로 밀면 이전 달
+  const monthSwipe = useSwipe({ onLeft: () => goMonth(1), onRight: () => goMonth(-1) });
 
   // 현재 그룹의 해당 월 근무표 { [profileId]: { 'YYYY-MM-DD': code } }
   const [groupSchedule, setGroupSchedule] = useState({ shifts: {}, styles: {} });
@@ -507,7 +510,7 @@ export default function GroupShareTab({
               <span className="text-sky-500">토</span>
             </div>
 
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1" {...monthSwipe}>
               {calendarDays.map((item, idx) => {
                 if (!item) return <div key={`empty_${idx}`} className="min-h-[70px]"></div>;
                 const isSelected = selectedDayKey === item.dateKey;
@@ -559,8 +562,8 @@ export default function GroupShareTab({
           </div>
 
           <div className="card p-5 space-y-3">
-            <h4 className="font-black text-xs text-slate-800 flex items-center gap-1">
-              📌 <span style={{ color: currentThemeBg }}>{formatDateKo(selectedDayKey)}</span> 근무
+            <h4 className="font-bold text-[15px] text-slate-900 flex items-center gap-1">
+              <span style={{ color: currentThemeBg }}>{formatDateKo(selectedDayKey)}</span> 근무
             </h4>
 
             <div className="grid grid-cols-2 gap-2">
@@ -571,12 +574,12 @@ export default function GroupShareTab({
                 return (
                   <div
                     key={member.id}
-                    className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center gap-1 min-w-0"
+                    className="p-3 bg-slate-50 rounded-2xl flex justify-between items-center gap-1 min-w-0"
                   >
                     <span className={`min-w-0 truncate font-extrabold text-xs text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
                     <span
                       style={memberStyle}
-                      className={`shrink-0 whitespace-nowrap px-2 min-[380px]:px-3 py-1 rounded-xl font-black text-xs ${shift ? '' : 'bg-slate-50 text-slate-300'}`}
+                      className={`shrink-0 whitespace-nowrap px-2 min-[380px]:px-3 py-1 rounded-xl font-black text-xs ${shift ? '' : 'bg-slate-100 text-slate-400'}`}
                     >
                       {shift || '없음'}
                     </span>

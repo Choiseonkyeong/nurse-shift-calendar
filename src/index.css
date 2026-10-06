@@ -101,12 +101,13 @@ button {
 @media (max-width: 639px) {
   .modal-sheet {
     align-items: flex-end !important;
-    padding: 0 !important;
+    padding: 0 0 var(--kb, 0px) !important; /* 키보드가 올라오면 그만큼 위로 */
   }
   .modal-sheet > * {
+    will-change: transform;
     width: 100% !important;
     max-width: none !important;
-    max-height: 88dvh;
+    max-height: calc(88dvh - var(--kb, 0px));
     overflow-y: auto;
     border: 0 !important;
     border-radius: 24px 24px 0 0 !important;

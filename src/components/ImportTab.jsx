@@ -28,7 +28,7 @@ const ENGLISH_HEADER_WORDS = new Set([
 ]);
 
 // 목록 한 줄 (설정 화면처럼): 아이콘 · 제목/설명 · (화살표)
-const rowCls = 'w-full px-3 py-3 flex items-center gap-3 text-left bg-white hover:bg-slate-50 cursor-pointer';
+const rowCls = 'w-full px-3 py-3 flex items-center gap-3 text-left hover:bg-slate-100 active:bg-slate-100 cursor-pointer';
 const RowIcon = ({ className, children }) => (
   <span className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${className}`}>{children}</span>
 );
@@ -467,12 +467,12 @@ export default function ImportTab({
         {statusMessage &&
           (statusMessage.startsWith('❌') ? (
             // 실패: 체크 표시 대신 경고 (성공처럼 보이지 않게)
-            <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-center text-xs font-bold text-rose-900 flex items-center justify-center gap-2">
+            <div role="alert" className="p-3 bg-rose-50 rounded-2xl text-center text-xs font-bold text-rose-900 flex items-center justify-center gap-2">
               <AlertTriangle size={16} className="text-rose-600 shrink-0" />
               <span>{statusMessage.replace(/^❌\s*/, '')}</span>
             </div>
           ) : (
-            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
+            <div className="p-3 bg-indigo-50 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
               <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
               <span>{statusMessage}</span>
             </div>
@@ -522,7 +522,7 @@ export default function ImportTab({
         </div>
 
         {/* 다른 방법: 한 줄 목록 */}
-        <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+        <div className="rounded-2xl bg-slate-50 divide-y divide-slate-200/70 overflow-hidden">
           <label className={rowCls}>
             <RowIcon className="bg-emerald-50 text-emerald-600">
               {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
@@ -551,8 +551,8 @@ export default function ImportTab({
         <button
           type="button"
           onClick={onOpenAccount}
-          className={`w-full p-3 rounded-2xl border flex items-center gap-3 text-left cursor-pointer ${
-            accountStatus === 'linked' ? 'bg-emerald-50/60 border-emerald-100' : 'bg-amber-50/70 border-amber-100'
+          className={`w-full p-3 rounded-2xl flex items-center gap-3 text-left cursor-pointer ${
+            accountStatus === 'linked' ? 'bg-emerald-50' : 'bg-amber-50'
           }`}
         >
           <RowIcon className={accountStatus === 'linked' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}>
@@ -569,7 +569,7 @@ export default function ImportTab({
           <ChevronRight size={16} className="text-slate-300 shrink-0" />
         </button>
 
-        <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+        <div className="rounded-2xl bg-slate-50 divide-y divide-slate-200/70 overflow-hidden">
           <button type="button" onClick={handleBackupSave} className={rowCls}>
             <RowIcon className="bg-indigo-50 text-indigo-600">
               <Archive size={16} />
@@ -699,7 +699,7 @@ export default function ImportTab({
                     setIsProcessing(true);
                     importMatrix(sheet.matrix, sheet.dateCells);
                   }}
-                  className="w-full py-2.5 px-3 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 font-extrabold text-xs rounded-2xl transition cursor-pointer text-left flex items-center justify-between"
+                  className="w-full py-2.5 px-3 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-bold text-xs rounded-2xl transition cursor-pointer text-left flex items-center justify-between"
                 >
                   <span>{sheet.name || `${sheet.index + 1}번째 탭`}</span>
                   {sheet.active && <span className="text-[10px] font-bold text-indigo-500">마지막으로 본 탭</span>}
@@ -730,7 +730,7 @@ export default function ImportTab({
                 <button
                   key={name}
                   onClick={() => registerImport(pendingImport, name, true)}
-                  className="py-2.5 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 font-extrabold text-xs rounded-2xl transition cursor-pointer"
+                  className="py-2.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-bold text-xs rounded-2xl transition cursor-pointer"
                 >
                   {name}
                 </button>
