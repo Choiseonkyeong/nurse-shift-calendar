@@ -93,7 +93,7 @@ test('계정 삭제: 확인 문구 입력 후 서버·기기 데이터 모두 �
 
 test('개인정보처리방침 페이지', async ({ page }) => {
   await openApp(page);
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   const [popup] = await Promise.all([page.waitForEvent('popup'), page.getByRole('link', { name: '개인정보처리방침' }).click()]);
   await expect(popup.getByRole('heading', { name: '개인정보처리방침' })).toBeVisible();
   await expect(popup.getByText(/기기 안에서만/)).toBeVisible();

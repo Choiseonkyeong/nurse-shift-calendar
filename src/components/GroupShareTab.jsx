@@ -284,32 +284,32 @@ export default function GroupShareTab({
           {/* 참여 중인 그룹 (자주 쓰는 것을 맨 위에) */}
           <section className="space-y-2">
             <div className="flex justify-between items-center px-1">
-              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">내 그룹</h2>
+              <h2 className="text-[13px] font-medium text-slate-500">내 그룹</h2>
               <button
                 onClick={fetchMyGroupsFromDB}
-                className="text-xs font-bold text-slate-500 flex items-center gap-1 h-8 px-3 rounded-full bg-white cursor-pointer"
+                className="text-xs font-medium text-slate-500 flex items-center gap-1 h-8 px-2 rounded-full cursor-pointer active:bg-slate-100"
               >
                 <RotateCcw size={12} /> 새로고침
               </button>
             </div>
             {groups && groups.length > 0 ? (
-              <div className="card divide-y divide-slate-100 overflow-hidden">
+              <div className="divide-y divide-slate-100 border-y border-slate-100">
                 {groups.map((g) => (
                   <button
                     type="button"
                     key={g.id}
                     onClick={() => setActiveGroupId(g.id)}
-                    className="w-full px-4 py-3.5 flex items-center gap-3 text-left cursor-pointer active:bg-slate-50"
+                    className="w-full px-1 py-3.5 flex items-center gap-3 text-left cursor-pointer active:bg-slate-50"
                   >
                     <span
                       style={{ backgroundColor: colorOf(g) }}
-                      className="w-10 h-10 shrink-0 rounded-2xl text-white flex items-center justify-center font-extrabold"
+                      className="w-11 h-11 shrink-0 rounded-full text-white flex items-center justify-center text-[17px] font-semibold"
                       aria-hidden="true"
                     >
                       {[...(g.name || '?')][0]}
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block font-bold text-[15px] text-slate-900 truncate">{g.name} ({g.members?.length || 1}명)</span>
+                      <span className="block font-medium text-[16px] text-slate-900 truncate">{g.name} ({g.members?.length || 1}명)</span>
                       {(activity[g.id]?.pendingSwaps > 0 || hasUnread(g.id, activity[g.id]?.lastPostAt)) && (
                         <span className="flex items-center gap-1.5 mt-0.5">
                           {activity[g.id]?.pendingSwaps > 0 && (
@@ -328,7 +328,7 @@ export default function GroupShareTab({
                 ))}
               </div>
             ) : (
-              <div className="card p-6 text-center space-y-1">
+              <div className="py-8 text-center space-y-1">
                 <Users size={28} className="mx-auto text-indigo-300" />
                 <p className="text-sm font-bold text-slate-700">아직 참여 중인 공유 그룹이 없습니다.</p>
                 <p className="text-xs font-medium text-slate-400">새 그룹을 만들거나, 동료에게 받은 코드로 참여하세요.</p>
@@ -337,9 +337,9 @@ export default function GroupShareTab({
           </section>
 
           {/* 새 그룹 만들기 */}
-          <section className="card p-5 space-y-3">
-            <h3 className="font-bold text-[15px] text-slate-900 flex items-center gap-1.5">
-              <Plus size={16} className="text-indigo-600" /> 새 그룹 생성
+          <section className="border-t border-slate-100 pt-4 space-y-3">
+            <h3 className="text-[13px] font-medium text-slate-400 flex items-center gap-1">
+              <Plus size={14} /> 새 그룹 생성
             </h3>
             <input
               type="text"
@@ -387,9 +387,9 @@ export default function GroupShareTab({
           </section>
 
           {/* 코드로 참여 */}
-          <section className="card p-5 space-y-3">
-            <h3 className="font-bold text-[15px] text-slate-900 flex items-center gap-1.5">
-              <LogIn size={16} className="text-slate-600" /> 코드 입장
+          <section className="border-t border-slate-100 pt-4 space-y-3">
+            <h3 className="text-[13px] font-medium text-slate-400 flex items-center gap-1">
+              <LogIn size={14} /> 코드 입장
             </h3>
             <input
               type="text"
@@ -423,11 +423,11 @@ export default function GroupShareTab({
           </button>
 
           {/* 그룹 상세 헤더 (무한 팔레트 색상 동적 스위치) */}
-          <div className="card p-5 space-y-3">
+          <div className="pb-4 space-y-3">
             <div className="flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-black text-slate-900">{currentGroup.name}</h2>
+                  <h2 className="text-[26px] font-bold text-slate-900 tracking-tight">{currentGroup.name}</h2>
                   
                   {/* 무한 팔레트 커스텀 스위치 */}
                   <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-slate-200 shadow-2xs cursor-pointer hover:scale-110 transition" style={{ backgroundColor: currentThemeBg }}>
@@ -472,8 +472,8 @@ export default function GroupShareTab({
             </button>
           </div>
 
-          <div className="card p-4 space-y-3">
-            <div className="flex justify-between items-center px-1">
+          <div className="border-t border-slate-100 pt-3 space-y-2">
+            <div className="flex justify-between items-center">
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -483,7 +483,7 @@ export default function GroupShareTab({
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <h3 className="font-black text-base text-slate-900 text-center whitespace-nowrap">
+                <h3 className="text-[17px] font-semibold text-slate-900 text-center whitespace-nowrap">
                   {year}년 {month}월
                 </h3>
                 <button
@@ -500,17 +500,17 @@ export default function GroupShareTab({
               </button>
             </div>
 
-            <div className="grid grid-cols-7 text-center font-bold text-xs border-b border-slate-100 pb-2">
+            <div className="grid grid-cols-7 text-center text-[12px] font-medium">
               <span className="text-rose-500">일</span>
               <span className="text-slate-400">월</span>
               <span className="text-slate-400">화</span>
               <span className="text-slate-400">수</span>
               <span className="text-slate-400">목</span>
               <span className="text-slate-400">금</span>
-              <span className="text-sky-500">토</span>
+              <span className="text-blue-500">토</span>
             </div>
 
-            <div className="grid grid-cols-7 gap-1" {...monthSwipe}>
+            <div className="grid grid-cols-7 gap-0.5" {...monthSwipe}>
               {calendarDays.map((item, idx) => {
                 if (!item) return <div key={`empty_${idx}`} className="min-h-[70px]"></div>;
                 const isSelected = selectedDayKey === item.dateKey;
@@ -522,17 +522,17 @@ export default function GroupShareTab({
                     onClick={() => setSelectedDayKey(item.dateKey)}
                     aria-label={`${item.dateKey}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}`}
                     aria-pressed={isSelected}
-                    style={isSelected ? { backgroundColor: `${currentThemeBg}1A`, boxShadow: `inset 0 0 0 1.5px ${currentThemeBg}` } : {}}
-                    className="min-h-[70px] w-full min-w-0 text-left p-1 rounded-2xl transition-colors flex flex-col justify-start cursor-pointer active:bg-slate-100"
+                    style={isSelected ? { backgroundColor: `${currentThemeBg}14` } : {}}
+                    className="min-h-[64px] w-full min-w-0 p-1 rounded-xl transition-colors flex flex-col items-center justify-start cursor-pointer active:bg-slate-50"
                   >
                     <span
                       title={getHoliday(item.dateKey) || undefined}
-                      className={`text-[12px] font-bold px-1 ${dayNumberClass(item.dateKey)}`}
+                      className={`text-[13px] font-medium ${dayNumberClass(item.dateKey)}`}
                     >
                       {item.day}
                     </span>
 
-                    <div className="space-y-0.5 mt-1">
+                    <div className="w-full space-y-px mt-1">
                       {currentGroup.members?.map((member) => {
                         const shift = getMemberShifts(member)[item.dateKey] || '';
                         if (!shift) return null; // 미입력 날짜는 표시하지 않음 (OFF 와 구분)
@@ -542,15 +542,14 @@ export default function GroupShareTab({
                         return (
                           <div
                             key={member.id}
-                            style={memberStyle}
-                            className="flex justify-between items-center gap-px overflow-hidden whitespace-nowrap tracking-tighter px-0.5 min-[380px]:px-1.5 py-0.5 rounded-lg text-[9px] font-black"
+                            className="flex justify-center items-center gap-1 overflow-hidden whitespace-nowrap tracking-tight text-[10px] leading-tight"
                           >
                             {/* 좁은 화면: 이름 첫 글자만 (칸이 좁아 근무 코드가 잘리지 않게) */}
-                            <span className={`min-w-0 truncate ${blurCls}`}>
+                            <span className={`min-w-0 truncate text-slate-400 ${blurCls}`}>
                               <span className="min-[380px]:hidden">{[...(member.name || '')][0]}</span>
                               <span className="hidden min-[380px]:inline">{displayName}</span>
                             </span>
-                            <span className="shrink-0 font-bold">{shift}</span>
+                            <span style={{ color: memberStyle?.color }} className="shrink-0 font-bold">{shift}</span>
                           </div>
                         );
                       })}
@@ -561,12 +560,12 @@ export default function GroupShareTab({
             </div>
           </div>
 
-          <div className="card p-5 space-y-3">
-            <h4 className="font-bold text-[15px] text-slate-900 flex items-center gap-1">
+          <div className="border-t border-slate-100 pt-4 space-y-2">
+            <h4 className="font-semibold text-[15px] text-slate-900 flex items-center gap-1">
               <span style={{ color: currentThemeBg }}>{formatDateKo(selectedDayKey)}</span> 근무
             </h4>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="divide-y divide-slate-100">
               {currentGroup.members?.map((member) => {
                 const shift = getMemberShifts(member)[selectedDayKey] || '';
                 const memberStyle = shift ? getMemberBadgeStyle(member, shift) : undefined;
@@ -574,12 +573,12 @@ export default function GroupShareTab({
                 return (
                   <div
                     key={member.id}
-                    className="p-3 bg-slate-50 rounded-2xl flex justify-between items-center gap-1 min-w-0"
+                    className="py-3 flex justify-between items-center gap-1 min-w-0"
                   >
-                    <span className={`min-w-0 truncate font-extrabold text-xs text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
+                    <span className={`min-w-0 truncate text-[15px] text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
                     <span
-                      style={memberStyle}
-                      className={`shrink-0 whitespace-nowrap px-2 min-[380px]:px-3 py-1 rounded-xl font-black text-xs ${shift ? '' : 'bg-slate-100 text-slate-400'}`}
+                      style={shift ? { color: memberStyle?.color } : undefined}
+                      className={`shrink-0 whitespace-nowrap text-[15px] font-bold ${shift ? '' : 'text-slate-300 font-normal'}`}
                     >
                       {shift || '없음'}
                     </span>

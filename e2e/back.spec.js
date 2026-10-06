@@ -43,7 +43,7 @@ test('다른 탭에서 뒤로가기 → 내 근무 탭, 등록 탭의 계정 창
   await expect(page.getByRole('heading', { name: /김간호/ })).toBeVisible();
   await expect(page.getByText('내 그룹')).toHaveCount(0);
 
-  await tab(page, '등록').click();
+  await tab(page, '설정').click();
   await page.getByText('계정 연결하기').click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await back(page);

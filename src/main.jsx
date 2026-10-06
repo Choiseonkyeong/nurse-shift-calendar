@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx' // 👈 main.jsx와 App.jsx가 둘 다 src 폴더 안에 있을 때
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import './index.css'
 import { applyTheme, watchSystemTheme } from './lib/theme'
 import { handleWebOAuthReturn, listenNativeOAuth } from './lib/socialAuth'

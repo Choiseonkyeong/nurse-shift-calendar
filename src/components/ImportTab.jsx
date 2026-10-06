@@ -6,7 +6,7 @@ import { rosterSheets } from '../lib/sheetPick';
 import { toast } from '../lib/toast';
 import Modal from './Modal';
 import { confirmDialog } from '../lib/confirm';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive, ChevronRight } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon } from 'lucide-react';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
@@ -28,16 +28,16 @@ const ENGLISH_HEADER_WORDS = new Set([
 ]);
 
 // 목록 한 줄 (설정 화면처럼): 아이콘 · 제목/설명 · (화살표)
-const rowCls = 'w-full px-3 py-3 flex items-center gap-3 text-left hover:bg-slate-100 active:bg-slate-100 cursor-pointer';
-const RowIcon = ({ className, children }) => (
-  <span className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${className}`}>{children}</span>
-);
+const rowCls = 'w-full px-1 py-3.5 flex items-center gap-3 text-left active:bg-slate-50 cursor-pointer';
+// 설정 목록 한 줄: 회색 선 아이콘 + 제목/설명 (+ 오른쪽 값·화살표)
+const RowIcon = ({ children }) => <span className="w-7 flex items-center justify-center shrink-0 text-slate-500">{children}</span>;
 const RowText = ({ title, sub }) => (
   <span className="flex-1 min-w-0">
-    <span className="block text-sm font-black text-slate-800">{title}</span>
-    <span className="block text-[11px] font-bold text-slate-400 mt-0.5">{sub}</span>
+    <span className="block text-[15px] font-medium text-slate-900">{title}</span>
+    {sub && <span className="block text-[12px] text-slate-400 mt-0.5">{sub}</span>}
   </span>
 );
+const SectionTitle = ({ children }) => <h2 className="px-1 pt-2 pb-1 text-[13px] font-medium text-slate-400">{children}</h2>;
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
 const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
@@ -58,7 +58,11 @@ export default function ImportTab({
   onRepickShown,
   onClearedAll,
   accountStatus,
-  onOpenAccount
+  onOpenAccount,
+  themePref = 'system',
+  onCycleTheme,
+  privacyBlur = false,
+  onTogglePrivacy
 }) {
   const shiftTypes = useShiftTypes();
   const [ocrProgress, setOcrProgress] = useState(null); // { p, msg }
@@ -457,51 +461,65 @@ export default function ImportTab({
   };
 
   return (
-    <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
-      <div className="card p-5 space-y-4">
-        <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-          <Upload size={18} className="text-indigo-600" /> 근무표 가져오기
-        </h2>
+    <div className="max-w-md mx-auto pb-10">
+      {/* 상태 메시지 */}
+      {statusMessage &&
+        (statusMessage.startsWith('❌') ? (
+          // 실패: 체크 표시 대신 경고 (성공처럼 보이지 않게)
+          <div role="alert" className="mb-3 p-3 bg-rose-50 rounded-xl text-[13px] text-rose-800 flex items-center gap-2">
+            <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+            <span>{statusMessage.replace(/^❌\s*/, '')}</span>
+          </div>
+        ) : (
+          <div className="mb-3 p-3 bg-blue-50 rounded-xl text-[13px] text-blue-900 flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-blue-600 shrink-0" />
+            <span>{statusMessage}</span>
+          </div>
+        ))}
 
-        {/* 상태 메시지 */}
-        {statusMessage &&
-          (statusMessage.startsWith('❌') ? (
-            // 실패: 체크 표시 대신 경고 (성공처럼 보이지 않게)
-            <div role="alert" className="p-3 bg-rose-50 rounded-2xl text-center text-xs font-bold text-rose-900 flex items-center justify-center gap-2">
-              <AlertTriangle size={16} className="text-rose-600 shrink-0" />
-              <span>{statusMessage.replace(/^❌\s*/, '')}</span>
-            </div>
-          ) : (
-            <div className="p-3 bg-indigo-50 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
-              <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
-              <span>{statusMessage}</span>
-            </div>
-          ))}
+      {/* 계정 */}
+      <button type="button" onClick={onOpenAccount} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
+        <span className="relative w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-lg font-semibold shrink-0">
+          {(userName || '나').substring(0, 1)}
+          {accountStatus !== 'linked' && <span className="absolute top-0 right-0 w-3 h-3 rounded-full bg-amber-400 ring-2 ring-white" />}
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-[17px] font-semibold text-slate-900 truncate">{userName || '나'}</span>
+          <span className={`block text-[13px] mt-0.5 ${accountStatus === 'linked' ? 'text-slate-400' : 'text-amber-600'}`}>
+            {accountStatus === 'linked' ? '계정 연결됨 · 폰을 바꿔도 그대로예요' : '계정 연결하기 · 연결하지 않으면 데이터를 잃을 수 있어요'}
+          </span>
+        </span>
+        <ChevronRight size={18} className="text-slate-300 shrink-0" />
+      </button>
 
-        {/* 2. 근무표 사진 인식 */}
-        <div className="p-4 rounded-3xl space-y-3 bg-violet-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-violet-100 text-violet-600">
-              <Camera size={20} />
-            </div>
+      {/* 근무표 가져오기 */}
+      <div className="border-t border-slate-100 mt-2">
+        <SectionTitle>
+          <span className="flex items-center gap-1">
+            <Upload size={13} /> 근무표 가져오기
+          </span>
+        </SectionTitle>
+        <div className="mt-1 p-4 rounded-2xl bg-slate-50 space-y-3">
+          <div className="flex items-start gap-3">
+            <Camera size={22} className="text-blue-600 shrink-0 mt-0.5" />
             <div className="flex-1 text-left">
-              <h3 className="font-black text-sm text-slate-800">근무표 사진으로 등록</h3>
-              <p className="text-xs text-slate-500 mt-0.5">표 전체가 반듯하게 나오게 찍어 주세요. 사진은 폰 밖으로 보내지 않아요.</p>
+              <h3 className="text-[15px] font-semibold text-slate-900">근무표 사진으로 등록</h3>
+              <p className="text-[12px] text-slate-500 mt-0.5">표 전체가 반듯하게 나오게 찍어 주세요. 사진은 폰 밖으로 보내지 않아요.</p>
             </div>
           </div>
           {ocrProgress ? (
             <div className="space-y-1.5">
-              <div className="h-2 bg-white rounded-full overflow-hidden">
-                <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-violet-600" />
+              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-blue-600" />
               </div>
               <div className="flex items-center gap-2">
-                <p className="flex-1 text-[11px] font-bold text-violet-700 flex items-center gap-1.5">
+                <p className="flex-1 text-[12px] text-blue-700 flex items-center gap-1.5">
                   <Loader2 size={12} className="animate-spin shrink-0" /> {ocrProgress.msg}
                 </p>
                 <button
                   type="button"
                   onClick={() => ocrAbortRef.current?.abort()}
-                  className="shrink-0 px-3 py-1 rounded-xl bg-white border border-violet-200 text-[11px] font-black text-violet-700 cursor-pointer"
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-white text-[12px] font-medium text-slate-700 cursor-pointer"
                 >
                   취소
                 </button>
@@ -509,95 +527,100 @@ export default function ImportTab({
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              <label className="flex items-center justify-center gap-1.5 py-2.5 bg-violet-600 text-white font-extrabold text-xs rounded-2xl cursor-pointer hover:opacity-90">
-                <Camera size={14} /> 촬영하기
+              <label className="flex items-center justify-center gap-1.5 h-11 bg-blue-600 text-white font-semibold text-sm rounded-xl cursor-pointer">
+                <Camera size={16} /> 촬영하기
                 <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
               </label>
-              <label className="flex items-center justify-center gap-1.5 py-2.5 bg-white text-violet-700 border border-violet-200 font-extrabold text-xs rounded-2xl cursor-pointer hover:bg-violet-50">
-                <ImageIcon size={14} /> 앨범에서 선택
+              <label className="flex items-center justify-center gap-1.5 h-11 bg-white text-slate-800 font-semibold text-sm rounded-xl cursor-pointer">
+                <ImageIcon size={16} /> 앨범에서 선택
                 <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
               </label>
             </div>
           )}
         </div>
-
-        {/* 다른 방법: 한 줄 목록 */}
-        <div className="rounded-2xl bg-slate-50 divide-y divide-slate-200/70 overflow-hidden">
+        <div className="divide-y divide-slate-100 mt-1">
           <label className={rowCls}>
-            <RowIcon className="bg-emerald-50 text-emerald-600">
-              {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-            </RowIcon>
+            <RowIcon>{isProcessing ? <Loader2 size={20} className="animate-spin" /> : <FileSpreadsheet size={20} />}</RowIcon>
             <RowText title="엑셀 근무표" sub="공유받은 .xlsx · .csv 파일" />
-            <ChevronRight size={16} className="text-slate-300 shrink-0" />
+            <ChevronRight size={18} className="text-slate-300 shrink-0" />
             <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelUpload} disabled={isProcessing} className="hidden" />
           </label>
           <label className={rowCls}>
-            <RowIcon className="bg-sky-50 text-sky-600">
-              <Smartphone size={16} />
+            <RowIcon>
+              <Smartphone size={20} />
             </RowIcon>
             <RowText title="휴대폰 캘린더 (.ics)" sub="구글·아이폰 캘린더에서 내보낸 파일" />
-            <ChevronRight size={16} className="text-slate-300 shrink-0" />
+            <ChevronRight size={18} className="text-slate-300 shrink-0" />
             <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
           </label>
         </div>
       </div>
 
-      {/* 내 데이터: 계정 · 백업 · 내보내기 */}
-      <div className="card p-5 space-y-3">
-        <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-          <Archive size={18} className="text-indigo-600" /> 내 데이터
-        </h2>
+      {/* 화면 */}
+      <div className="border-t border-slate-100 mt-2">
+        <SectionTitle>화면</SectionTitle>
+        <div className="divide-y divide-slate-100">
+          <button
+            type="button"
+            onClick={onCycleTheme}
+            aria-label={`화면 테마: ${{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]} (눌러서 변경)`}
+            className={rowCls}
+          >
+            <RowIcon>{themePref === 'dark' ? <Moon size={20} /> : themePref === 'light' ? <Sun size={20} /> : <SunMoon size={20} />}</RowIcon>
+            <RowText title="화면 테마" />
+            <span className="text-[14px] text-slate-400">{{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]}</span>
+            <ChevronRight size={18} className="text-slate-300 shrink-0" />
+          </button>
+          <button
+            type="button"
+            onClick={onTogglePrivacy}
+            aria-label={privacyBlur ? '보안 모드 끄기 (근무 보이기)' : '보안 모드 (남에게 근무 가리기)'}
+            aria-pressed={privacyBlur}
+            className={rowCls}
+          >
+            <RowIcon>
+              <Shield size={20} />
+            </RowIcon>
+            <RowText title="보안 모드" sub="화면의 동료 이름·수당을 흐리게 가려요" />
+            <span className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${privacyBlur ? 'bg-blue-600' : 'bg-slate-200'}`}>
+              <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${privacyBlur ? 'translate-x-5' : ''}`} />
+            </span>
+          </button>
+        </div>
+      </div>
 
-        <button
-          type="button"
-          onClick={onOpenAccount}
-          className={`w-full p-3 rounded-2xl flex items-center gap-3 text-left cursor-pointer ${
-            accountStatus === 'linked' ? 'bg-emerald-50' : 'bg-amber-50'
-          }`}
-        >
-          <RowIcon className={accountStatus === 'linked' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}>
-            {accountStatus === 'linked' ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
-          </RowIcon>
-          <RowText
-            title={accountStatus === 'linked' ? '계정 연결됨' : '계정 연결하기'}
-            sub={
-              accountStatus === 'linked'
-                ? '폰을 바꿔도 로그인하면 그대로예요.'
-                : '연결하지 않으면 폰을 바꾸거나 앱을 지울 때 데이터를 잃을 수 있어요.'
-            }
-          />
-          <ChevronRight size={16} className="text-slate-300 shrink-0" />
-        </button>
-
-        <div className="rounded-2xl bg-slate-50 divide-y divide-slate-200/70 overflow-hidden">
+      {/* 내 데이터 */}
+      <div className="border-t border-slate-100 mt-2">
+        <SectionTitle>데이터</SectionTitle>
+        <div className="divide-y divide-slate-100">
           <button type="button" onClick={handleBackupSave} className={rowCls}>
-            <RowIcon className="bg-indigo-50 text-indigo-600">
-              <Archive size={16} />
+            <RowIcon>
+              <Archive size={20} />
             </RowIcon>
             <RowText title="백업 저장" sub="근무·메모·설정 전체를 파일로" />
           </button>
           <label className={rowCls}>
-            <RowIcon className="bg-indigo-50 text-indigo-600">
-              <Upload size={16} />
+            <RowIcon>
+              <Upload size={20} />
             </RowIcon>
             <RowText title="백업 복원" sub="저장해 둔 백업 파일 불러오기" />
             <input type="file" accept=".json,application/json" onChange={handleBackupRestore} className="hidden" />
           </label>
           <button type="button" onClick={() => handleExport('csv')} className={rowCls}>
-            <RowIcon className="bg-emerald-50 text-emerald-600">
-              <Download size={16} />
+            <RowIcon>
+              <Download size={20} />
             </RowIcon>
             <RowText title="엑셀(CSV)로 내보내기" sub="근무·메모를 표로 보관" />
           </button>
           <button type="button" onClick={() => handleExport('ics')} className={rowCls}>
-            <RowIcon className="bg-sky-50 text-sky-600">
-              <Download size={16} />
+            <RowIcon>
+              <CalendarDays size={20} />
             </RowIcon>
             <RowText title="캘린더(.ics)로 내보내기" sub="구글·아이폰 캘린더로 옮기기" />
           </button>
         </div>
 
-        <div className="pt-1 text-center">
+        <div className="pt-6 text-center">
           {/* 근무·메모만 지움 (이 폰 + 서버). 이름·계정·그룹·근무 종류·설정은 그대로, 첫 화면으로 가지 않음 */}
           <button
             onClick={async () => {
@@ -623,7 +646,7 @@ export default function ImportTab({
                 toast('근무·메모를 모두 지웠어요.', 'success');
               }
             }}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-500 hover:text-rose-700 hover:underline cursor-pointer"
+            className="inline-flex items-center gap-1.5 text-[13px] text-rose-500 cursor-pointer"
           >
             <Trash2 size={14} />
             <span>근무·메모 전체 삭제</span>
@@ -632,7 +655,7 @@ export default function ImportTab({
             href="/privacy.html"
             target="_blank"
             rel="noopener"
-            className="block mt-2 text-[11px] font-bold text-slate-400 underline"
+            className="block mt-3 text-[12px] text-slate-400 underline"
           >
             개인정보처리방침
           </a>
@@ -683,7 +706,7 @@ export default function ImportTab({
       {sheetChoice && (
         <Modal onClose={() => setSheetChoice(null)} label="엑셀 탭 선택">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center border-b pb-2 border-slate-100">
+            <div className="flex justify-between items-center">
               <h3 className="font-extrabold text-sm text-slate-900">어느 달을 가져올까요?</h3>
               <button onClick={() => setSheetChoice(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
                 <X size={16} />
@@ -713,7 +736,7 @@ export default function ImportTab({
       {pendingImport && (
         <Modal onClose={() => setPendingImport(null)} label="본인 이름 선택">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center border-b pb-2 border-slate-100">
+            <div className="flex justify-between items-center">
               <h3 className="font-extrabold text-sm text-slate-900">본인 이름 선택</h3>
               <button onClick={() => setPendingImport(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
                 <X size={16} />

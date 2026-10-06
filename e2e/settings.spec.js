@@ -71,7 +71,7 @@ test('설정(시급·연차)이 서버에 저장되고 새 폰 로그인 시 복
   await page.getByPlaceholder('비밀번호').fill('secret12');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
   await waitSaved(page);
-  await tab(page, '연차/수당').click();
+  await tab(page, '수당').click();
   await page.getByPlaceholder('시급 입력').fill('15000');
   await expect.poll(() => state.settings[profile.id]?.settings?.shift_configs?.hourlyWage).toBe(15000);
 
@@ -83,7 +83,7 @@ test('설정(시급·연차)이 서버에 저장되고 새 폰 로그인 시 복
   await other.getByPlaceholder('비밀번호').fill('secret12');
   await other.getByRole('button', { name: '로그인', exact: true }).click();
   await waitSaved(other);
-  await tab(other, '연차/수당').click();
+  await tab(other, '수당').click();
   await expect(other.getByPlaceholder('시급 입력')).toHaveValue('15000');
   await other.close();
 });

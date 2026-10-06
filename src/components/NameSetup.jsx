@@ -4,7 +4,6 @@ import Modal from './Modal';
 import SocialButtons from './SocialButtons';
 import { KakaoOpenExternal } from './InstallHint';
 import { currentInstallEnv, inAppName, isInAppEnv } from '../lib/installHint';
-import { CalendarHeart } from 'lucide-react';
 
 /**
  * 첫 실행: 이름 입력 (그룹 멤버에게 보이는 이름) — 비워 두고 바로 시작할 수 있음
@@ -24,15 +23,12 @@ export default function NameSetup({ onSubmit, onLogin, onCancel, initialName = '
 
   return (
     <Modal align="center" label="이름 입력" zIndex={110} onClose={groupMode ? onCancel : undefined}>
-      <form onSubmit={submit} className="bg-white w-full max-w-xs rounded-3xl p-6 space-y-4 shadow-xl text-center">
-        <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-          <CalendarHeart size={24} />
-        </div>
+      <form onSubmit={submit} className="bg-white w-full max-w-[20rem] rounded-2xl p-6 space-y-4 shadow-xl text-left">
         <div className="space-y-1">
-          <h2 className="font-black text-lg text-slate-900">
+          <h2 className="text-[22px] font-bold text-slate-900">
             {confirmMode ? '이름을 확인해 주세요' : groupMode ? '그룹에서 쓸 이름' : '환영합니다!'}
           </h2>
-          <p className="text-xs font-bold text-slate-500">
+          <p className="text-[14px] text-slate-500 leading-relaxed">
             {confirmMode
               ? '예전 버전의 기본 이름이 설정되어 있어요. 본인 이름이 맞는지 확인해 주세요.'
               : groupMode
@@ -56,12 +52,12 @@ export default function NameSetup({ onSubmit, onLogin, onCancel, initialName = '
           onChange={(e) => setName(e.target.value)}
           maxLength={30}
           placeholder={required ? '예: 김간호' : '예: 김간호 (선택)'}
-          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-center outline-none focus:border-indigo-400"
+          className="w-full h-12 px-4 bg-slate-100 rounded-xl text-[16px] outline-none focus:ring-2 focus:ring-blue-200"
         />
         <button
           type="submit"
           disabled={required && !trimmed}
-          className="w-full py-3 rounded-2xl bg-indigo-600 text-white text-sm font-black disabled:opacity-40 cursor-pointer"
+          className="w-full h-12 rounded-xl bg-blue-600 text-white text-[16px] font-semibold disabled:opacity-40 cursor-pointer"
         >
           {confirmMode || groupMode ? '확인' : trimmed ? '시작하기' : '이름 없이 시작하기'}
         </button>
@@ -72,7 +68,7 @@ export default function NameSetup({ onSubmit, onLogin, onCancel, initialName = '
           </>
         )}
         {!required && onLogin && (
-          <button type="button" onClick={onLogin} className="w-full text-xs font-bold text-slate-400 underline cursor-pointer">
+          <button type="button" onClick={onLogin} className="w-full text-[13px] text-slate-500 cursor-pointer">
             이미 계정이 있어요 (다른 폰에서 쓰던 데이터 불러오기)
           </button>
         )}

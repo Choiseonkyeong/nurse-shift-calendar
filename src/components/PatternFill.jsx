@@ -64,8 +64,8 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
   return (
     <Modal onClose={onClose} label="반복 패턴 입력">
       <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100 max-h-[85dvh] overflow-y-auto">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-          <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
+        <div className="flex justify-between items-center">
+          <h3 className="text-[18px] font-bold text-slate-900 flex items-center gap-1.5">
             <Repeat size={16} className="text-indigo-600" /> 반복 패턴 입력
           </h3>
           <button onClick={onClose} className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">

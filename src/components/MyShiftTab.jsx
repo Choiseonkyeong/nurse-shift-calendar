@@ -3,7 +3,7 @@ import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
-import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
+import { Bell, BellOff, Camera, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useSwipe } from '../lib/swipe';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
@@ -315,7 +315,7 @@ export default function MyShiftTab({
   const getBadgeStyle = (code) => badgeStyle(shiftTypes, code);
 
   return (
-    <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
+    <div className="space-y-4 max-w-md mx-auto pb-12 text-slate-800">
       
       {/* 사진/엑셀 가져오기 결과 */}
       {importBanner && (
@@ -386,153 +386,72 @@ export default function MyShiftTab({
       {/* 처음 쓰는 사용자: 근무 등록 방법 안내 (근무가 하나라도 생기면 사라짐)
           서버에서 근무를 불러오는 동안은 숨김 → 새 폰 로그인 직후 안내가 잠깐 떴다 사라지지 않게 */}
       {!importBanner && !loadingFromServer && Object.keys(myShifts || {}).length === 0 && (
-        <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-3xl space-y-3">
-          <div>
-            <p className="text-sm font-black text-indigo-900">근무를 등록해 볼까요?</p>
-            <p className="text-[11px] font-bold text-indigo-700/70 mt-0.5">한 번 등록하면 수당·연차 계산, 그룹 공유, 근무 알림이 모두 자동이에요.</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={onOpenImport}
-              className="p-3 rounded-2xl bg-white border border-indigo-100 text-left cursor-pointer hover:border-indigo-300"
-            >
-              <span className="block text-lg">📷</span>
-              <span className="block text-xs font-black text-slate-800 mt-1">근무표 사진·엑셀로</span>
-              <span className="block text-[10px] font-bold text-slate-400">한 달을 한 번에</span>
+        <section className="rounded-2xl bg-slate-50 px-4 pt-4 pb-2">
+          <p className="text-[17px] font-semibold text-slate-900">근무를 등록해 볼까요?</p>
+          <p className="text-[13px] text-slate-500 mt-1">한 번 등록하면 수당·연차 계산, 그룹 공유, 근무 알림이 모두 자동이에요.</p>
+          <div className="mt-2 divide-y divide-slate-200/70">
+            <button type="button" onClick={onOpenImport} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
+              <Camera size={20} className="text-blue-600 shrink-0" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-medium text-slate-900">근무표 사진·엑셀로</span>
+                <span className="block text-[12px] text-slate-400">한 달을 한 번에</span>
+              </span>
+              <ChevronRight size={18} className="text-slate-300 shrink-0" />
             </button>
-            <button
-              type="button"
-              onClick={() => setIsPatternOpen('first')}
-              className="p-3 rounded-2xl bg-white border border-indigo-100 text-left cursor-pointer hover:border-indigo-300"
-            >
-              <span className="block text-lg">🔁</span>
-              <span className="block text-xs font-black text-slate-800 mt-1">반복 패턴으로</span>
-              <span className="block text-[10px] font-bold text-slate-400">3교대·주5일 등</span>
+            <button type="button" onClick={() => setIsPatternOpen('first')} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
+              <Repeat size={20} className="text-blue-600 shrink-0" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-medium text-slate-900">반복 패턴으로</span>
+                <span className="block text-[12px] text-slate-400">3교대·주5일 등</span>
+              </span>
+              <ChevronRight size={18} className="text-slate-300 shrink-0" />
             </button>
           </div>
-          <p className="text-[11px] font-bold text-indigo-700/70">또는 아래 달력에서 날짜를 눌러 하나씩 입력할 수 있어요.</p>
-        </div>
+          <p className="text-[12px] text-slate-400 pb-2">또는 아래 달력에서 날짜를 눌러 하나씩 입력할 수 있어요.</p>
+        </section>
       )}
 
-      {/* 1. 월간 요약 카드 & 알림 버튼 */}
-      <div className="card p-5 space-y-3">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="이전 달"
-              onClick={() => goMonth(-1)}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-            >
-              <ChevronLeft size={18} />
+      {/* 1. 달 제목 · 이번 달 요약 */}
+      <section className="pt-1">
+        <div className="flex items-end justify-between">
+          <h2 className="text-slate-900 leading-none">
+            <span className="block text-[13px] font-medium text-slate-400 mb-1.5">{year}년 </span>
+            <span className="text-[34px] font-bold tracking-tight">{month}월</span>
+          </h2>
+          <div className="flex items-center -mr-2 text-slate-700">
+            <button type="button" aria-label="이전 달" onClick={() => goMonth(-1)} className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100">
+              <ChevronLeft size={24} />
             </button>
-            <h2 className="text-lg font-black text-slate-900 min-w-[6.5rem] text-center whitespace-nowrap">{year}년 {month}월</h2>
-            <button
-              type="button"
-              aria-label="다음 달"
-              onClick={() => goMonth(1)}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-            >
-              <ChevronRight size={18} />
+            <button type="button" aria-label="다음 달" onClick={() => goMonth(1)} className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100">
+              <ChevronRight size={24} />
             </button>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={handleShareImage}
-            disabled={isSharing}
-            aria-label="근무표 이미지 공유"
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 cursor-pointer"
-          >
-            {isSharing ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
-          </button>
-          {/* 알람 설정 버튼 (켜져 있어도 이 기기에 알림 권한이 없으면 '권한 필요') */}
-          <button
-            onClick={() => setIsAlarmModalOpen(true)}
-            className={`flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold cursor-pointer whitespace-nowrap ${
-              alarmBlocked ? 'bg-rose-50 text-rose-600' : alarmSettings.enabled ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-500'
-            }`}
-          >
-            {alarmBlocked ? (
-              <AlertTriangle size={13} />
-            ) : alarmSettings.enabled ? (
-              <Bell size={13} className="fill-amber-500" />
-            ) : (
-              <BellOff size={13} />
-            )}
-            <span>{alarmBlocked ? '권한 필요' : alarmSettings.enabled ? `${formatLead(alarmSettings.minutesBefore)} 전` : '알림'}</span>
-          </button>
           </div>
         </div>
-
-        {/* 근무 요약 칩 */}
-        {/* 달력 근무 칩과 동일한 색상 사용, 0건은 흐리게 */}
-        <div
-          className="grid gap-1.5 pt-1 text-center"
-          style={{ gridTemplateColumns: `repeat(${Math.min(Object.keys(shiftCounts).length, 6)}, minmax(0, 1fr))` }}
-        >
+        {/* 이번 달 근무 수: 근무 색 글자 + 숫자 (0건은 흐리게) */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[13px] text-slate-500">
           {Object.entries(shiftCounts).map(([code, count]) => (
-            <div
-              key={code}
-              style={getBadgeStyle(code)}
-              className={`py-2 rounded-2xl flex flex-col items-center gap-0.5 transition ${count === 0 ? 'opacity-40' : ''}`}
-            >
-              <span className="text-[11px] font-black leading-none truncate max-w-full px-0.5">{code}</span>
-              <span className="text-base font-black leading-tight">{count}</span>
-            </div>
+            <span key={code} className={count === 0 ? 'opacity-40' : ''}>
+              <b style={{ color: getBadgeStyle(code).color }} className="font-bold">{code}</b> {count}
+            </span>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* 2. 메인 근무 달력 */}
-      <div className="card p-4 space-y-3">
-        {/* 빠른 입력: 근무를 고르고 날짜를 연속으로 터치 */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-400 min-w-0 truncate">
-              {quickMode ? (quickCode === '' ? '지울 날짜 터치' : `터치 → ${quickCode}`) : ''}
-            </span>
-            <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsTypeManagerOpen(true)}
-              className="flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold bg-slate-100 text-slate-600 cursor-pointer whitespace-nowrap"
-            >
-              <Palette size={13} /> 종류
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsPatternOpen(true)}
-              className="flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold bg-slate-100 text-slate-600 cursor-pointer whitespace-nowrap"
-            >
-              <Repeat size={13} /> 패턴
-            </button>
-            <button
-              type="button"
-              onClick={() => setQuickCode(quickMode ? null : (shiftTypes[0]?.code || ''))}
-              className={`flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold cursor-pointer whitespace-nowrap ${
-                quickMode ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              <Zap size={13} className={quickMode ? 'fill-white' : ''} />
-              {quickMode ? '입력 끝' : '빠른 입력'}
-            </button>
-            </div>
-          </div>
-
-          {quickMode && (
-            <div className="flex flex-wrap gap-1.5 p-0.5">
+      {/* 2. 달력 */}
+      <section className="border-t border-slate-100 pt-3 space-y-2">
+        {quickMode && (
+          <div className="space-y-2 pb-1">
+            <p className="text-[13px] text-blue-600 font-medium">
+              {quickCode === '' ? '지울 날짜를 누르세요' : `날짜를 누르면 ${quickCode} 입력`}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
               {shiftTypes.map((t) => (
                 <button
                   key={t.code}
                   type="button"
                   onClick={() => setQuickCode(t.code)}
-                  style={{ backgroundColor: t.bg, color: t.fg }}
-                  className={`shrink-0 px-3.5 py-2 rounded-full text-xs font-black transition cursor-pointer ${
-                    quickCode === t.code ? 'ring-2 ring-offset-1 ring-indigo-500 scale-105' : 'opacity-80'
-                  }`}
+                  style={quickCode === t.code ? { backgroundColor: t.fg, color: '#fff' } : { color: t.fg }}
+                  className={`shrink-0 min-w-[44px] px-3 h-9 rounded-full text-sm font-bold cursor-pointer ${quickCode === t.code ? '' : 'bg-slate-100'}`}
                 >
                   {t.code}
                 </button>
@@ -540,36 +459,35 @@ export default function MyShiftTab({
               <button
                 type="button"
                 onClick={() => setQuickCode('')}
-                className={`shrink-0 px-3 py-2 rounded-full text-xs font-black bg-slate-100 text-slate-500 flex items-center gap-1 transition cursor-pointer ${
-                  quickCode === '' ? 'ring-2 ring-offset-1 ring-indigo-500' : ''
+                className={`shrink-0 px-3 h-9 rounded-full text-sm font-medium flex items-center gap-1 cursor-pointer ${
+                  quickCode === '' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500'
                 }`}
               >
-                <Eraser size={12} /> 지우기
+                <Eraser size={14} /> 지우기
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* 요일 헤더 */}
-        <div className="grid grid-cols-7 text-center font-semibold text-[11px] pb-1">
+        {/* 요일 */}
+        <div className="grid grid-cols-7 text-center text-[12px] font-medium">
           <span className="text-rose-500">일</span>
           <span className="text-slate-400">월</span>
           <span className="text-slate-400">화</span>
           <span className="text-slate-400">수</span>
           <span className="text-slate-400">목</span>
           <span className="text-slate-400">금</span>
-          <span className="text-sky-500">토</span>
+          <span className="text-blue-500">토</span>
         </div>
 
-        {/* 날짜 그리드 */}
-        <div className="grid grid-cols-7 gap-x-0.5 gap-y-1" {...monthSwipe}>
+        {/* 날짜: 숫자 + 근무 코드(근무 색 글자) */}
+        <div className="grid grid-cols-7 gap-y-0.5" {...monthSwipe}>
           {calendarDays.map((item, idx) => {
-            if (!item) return <div key={`empty_${idx}`} className="min-h-[62px]"></div>;
+            if (!item) return <div key={`empty_${idx}`} className="h-[58px]"></div>;
 
             const shift = myShifts[item.dateKey] || '';
             const isSelected = selectedDate === item.dateKey;
             const isToday = item.dateKey === todayKey;
-            const badgeStyle = getBadgeStyle(shift);
             const holidayShort = getHoliday(item.dateKey) ? getHolidayShort(item.dateKey) : '';
 
             return (
@@ -579,121 +497,171 @@ export default function MyShiftTab({
                 onClick={() => handleDayClick(item.dateKey)}
                 aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${dayNotes[item.dateKey] ? ' 메모 있음' : ''}`}
                 aria-pressed={isSelected}
-                className={`relative min-h-[62px] w-full min-w-0 px-0.5 pt-1 pb-1 rounded-2xl transition-colors flex flex-col items-center gap-0.5 cursor-pointer active:bg-slate-100 ${
-                  isSelected
-                    ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-300'
-                    : uncertainSet.has(item.dateKey)
-                      ? 'bg-amber-50 ring-2 ring-inset ring-amber-400'
-                      : ''
+                className={`relative h-[58px] w-full min-w-0 pt-1 rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-colors ${
+                  isSelected ? 'bg-slate-100' : uncertainSet.has(item.dateKey) ? 'bg-amber-50 ring-2 ring-inset ring-amber-400' : 'active:bg-slate-50'
                 }`}
               >
                 <span
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-bold leading-none ${
-                    isToday ? 'bg-indigo-600 !text-white' : dayNumberClass(item.dateKey)
+                  className={`w-[26px] h-[26px] rounded-full flex items-center justify-center text-[14px] leading-none ${
+                    isToday ? 'bg-blue-600 !text-white font-semibold' : `font-medium ${dayNumberClass(item.dateKey)}`
                   }`}
                 >
                   {item.day}
                 </span>
-                {dayNotes[item.dateKey] && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400" title="메모 있음" />}
-
                 {shift ? (
                   <span
-                    style={badgeStyle}
-                    className={`w-full max-w-[2.75rem] py-[3px] text-center rounded-lg font-extrabold whitespace-nowrap overflow-hidden tracking-tighter ${
-                      [...shift].length >= 3 ? 'text-[9px] min-[360px]:text-[10px]' : 'text-[11px] min-[360px]:text-xs'
+                    style={{ color: getBadgeStyle(shift).color }}
+                    className={`max-w-full px-0.5 font-bold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
+                      [...shift].length >= 3 ? 'text-[10px]' : 'text-[13px]'
                     }`}
                   >
                     {shift}
                   </span>
                 ) : (
-                  <span className="h-[22px]" aria-hidden="true" />
+                  holidayShort && <span className="text-[9px] text-rose-400 leading-none whitespace-nowrap overflow-hidden max-w-full">{holidayShort}</span>
                 )}
-                {holidayShort && (
-                  <span className="text-[8px] font-bold text-rose-400 leading-none whitespace-nowrap overflow-hidden max-w-full tracking-tighter">{holidayShort}</span>
-                )}
+                {dayNotes[item.dateKey] && <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-amber-400" title="메모 있음" />}
               </button>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      {/* 3. 근무 직접 수정 모달 (팝업) */}
+      {/* 3. 고른 날짜: 근무 · 시간 · 메모 */}
+      {!quickMode && (() => {
+        const code = myShifts[selectedDate] || '';
+        const t = code ? shiftTypes.find((x) => x.code === code) : null;
+        const note = dayNotes[selectedDate];
+        return (
+          <button
+            type="button"
+            onClick={() => { setEditingDateKey(selectedDate); setIsEditModalOpen(true); }}
+            className="w-full text-left border-t border-slate-100 pt-4 flex items-start justify-between gap-3 cursor-pointer"
+          >
+            <div className="min-w-0">
+              <p className="text-[13px] text-slate-400">
+                {formatDateKo(selectedDate)} 메모
+                {getHoliday(selectedDate) && <span className="ml-1.5 text-rose-400">· {getHoliday(selectedDate)}</span>}
+              </p>
+              <p className="text-[17px] font-semibold text-slate-900 mt-1">
+                {code ? (
+                  <>
+                    <span style={{ color: getBadgeStyle(code).color }}>{code}</span>
+                    {t?.label && t.label !== code && <span> {t.label}</span>}
+                    {t?.start && t?.end && <span className="font-normal text-slate-500"> · {t.start}–{t.end}</span>}
+                  </>
+                ) : (
+                  <span className="text-slate-400 font-normal">근무 없음</span>
+                )}
+              </p>
+              <p className={`text-sm mt-1 whitespace-pre-wrap break-words ${note ? 'text-slate-600' : 'text-slate-300'}`}>
+                {note || '메모가 없습니다. 눌러서 추가하세요.'}
+              </p>
+            </div>
+            <span className="shrink-0 text-sm font-medium text-blue-600 pt-0.5">{note ? '수정' : '메모 추가'}</span>
+          </button>
+        );
+      })()}
+
+      {/* 4. 도구: 아이콘 + 이름 */}
+      <section className="border-t border-slate-100 pt-3 grid grid-cols-5 text-slate-600">
+        {[
+          { key: 'type', icon: <Palette size={22} />, label: '근무 종류', onClick: () => setIsTypeManagerOpen(true) },
+          { key: 'pattern', icon: <Repeat size={22} />, label: '반복 패턴', onClick: () => setIsPatternOpen(true) },
+          {
+            key: 'quick',
+            icon: <Zap size={22} className={quickMode ? 'text-blue-600' : ''} />,
+            label: quickMode ? '입력 끝' : '빠른 입력',
+            onClick: () => setQuickCode(quickMode ? null : (shiftTypes[0]?.code || '')),
+            active: quickMode
+          }
+        ].map((b) => (
+          <button key={b.key} type="button" onClick={b.onClick} className={`flex flex-col items-center gap-1 py-2 rounded-xl cursor-pointer active:bg-slate-50 ${b.active ? 'text-blue-600' : ''}`}>
+            {b.icon}
+            <span className="text-[11px] font-medium">{b.label}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={handleShareImage}
+          disabled={isSharing}
+          aria-label="근무표 이미지 공유"
+          className="flex flex-col items-center gap-1 py-2 rounded-xl cursor-pointer active:bg-slate-50"
+        >
+          {isSharing ? <Loader2 size={22} className="animate-spin" /> : <Share2 size={22} />}
+          <span className="text-[11px] font-medium">공유</span>
+        </button>
+        {/* 알림 (켜져 있어도 이 기기에 알림 권한이 없으면 '권한 필요') */}
+        <button
+          onClick={() => setIsAlarmModalOpen(true)}
+          className={`flex flex-col items-center gap-1 py-2 rounded-xl cursor-pointer active:bg-slate-50 ${
+            alarmBlocked ? 'text-rose-600' : alarmSettings.enabled ? 'text-blue-600' : ''
+          }`}
+        >
+          {alarmBlocked ? <AlertTriangle size={22} /> : alarmSettings.enabled ? <Bell size={22} /> : <BellOff size={22} />}
+          <span className="text-[11px] font-medium whitespace-nowrap">{alarmBlocked ? '권한 필요' : alarmSettings.enabled ? `${formatLead(alarmSettings.minutesBefore)} 전` : '알림'}</span>
+        </button>
+      </section>
+
       {isEditModalOpen && (
         <Modal onClose={() => setIsEditModalOpen(false)} label="근무 직접 수정">
-          <div className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
+            <div className="flex justify-between items-start">
               <div>
-                <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
-                  <Edit3 size={16} className="text-indigo-600" /> 근무 직접 수정
-                </h3>
-                <p className="text-xs font-bold text-slate-400 mt-0.5">{formatDateKo(editingDateKey)}</p>
+                <p className="text-[13px] text-slate-400">근무 직접 수정</p>
+                <h3 className="text-[20px] font-bold text-slate-900 mt-0.5">{formatDateKo(editingDateKey)}</h3>
               </div>
               <button
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer"
                 aria-label="닫기"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            {/* 근무 선택 버튼 그리드 */}
-            <div className="grid grid-cols-2 gap-2">
-              {shiftTypes.map((item) => (
-                <button
-                  key={item.code}
-                  onClick={() => handleSelectShiftCode(item.code)}
-                  style={{ backgroundColor: item.bg, color: item.fg }}
-                  className="py-3 px-3 rounded-2xl font-black text-xs flex items-center justify-between shadow-2xs hover:scale-[1.02] transition cursor-pointer"
-                >
-                  <span>{item.label}</span>
-                  {myShifts[editingDateKey] === item.code && <Check size={14} />}
-                </button>
-              ))}
+            {/* 근무 고르기: 근무 색 글자 + 이름 */}
+            <div className="grid grid-cols-3 gap-2">
+              {shiftTypes.map((item) => {
+                const on = myShifts[editingDateKey] === item.code;
+                return (
+                  <button
+                    key={item.code}
+                    onClick={() => handleSelectShiftCode(item.code)}
+                    className={`relative h-[68px] px-1 rounded-xl flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                      on ? 'bg-blue-50 ring-2 ring-inset ring-blue-500' : 'bg-slate-50 active:bg-slate-100'
+                    }`}
+                  >
+                    <span aria-hidden="true" style={{ color: item.fg }} className="text-[18px] font-bold leading-none truncate max-w-full">
+                      {item.code}
+                    </span>
+                    <span className="text-[11px] text-slate-500 leading-tight truncate max-w-full">{item.label}</span>
+                    {on && <Check size={14} className="absolute top-1.5 right-1.5 text-blue-600" />}
+                  </button>
+                );
+              })}
             </div>
 
             <button
               onClick={() => handleSelectShiftCode('')}
-              className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold text-xs rounded-2xl transition cursor-pointer"
+              className="w-full h-11 text-slate-500 text-[14px] rounded-xl bg-slate-50 active:bg-slate-100 cursor-pointer"
             >
               근무 삭제 (빈 칸으로 설정)
             </button>
 
-            <label className="block space-y-1 pt-1 border-t border-slate-100">
-              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                <StickyNote size={12} className="text-amber-500" /> 메모 (나만 보기)
-              </span>
+            <label className="block space-y-1.5">
+              <span className="text-[13px] text-slate-400">메모 (나만 보기)</span>
               <textarea
                 value={dayNotes[editingDateKey] || ''}
                 onChange={(e) => setNote(editingDateKey, e.target.value)}
                 rows={2}
                 maxLength={500}
                 placeholder="예: 교육 준비물, 인계 사항, 약속"
-                className="w-full px-3 py-2 bg-amber-50/50 border border-amber-100 rounded-2xl text-xs font-bold text-slate-700 outline-none focus:border-amber-300 resize-none"
+                className="w-full px-3 py-2.5 bg-slate-100 rounded-xl text-[15px] text-slate-800 outline-none focus:ring-2 focus:ring-blue-200 resize-none"
               />
             </label>
           </div>
         </Modal>
-      )}
-
-      {/* 선택한 날짜 메모 */}
-      {!quickMode && (
-        <button
-          type="button"
-          onClick={() => { setEditingDateKey(selectedDate); setIsEditModalOpen(true); }}
-          className="w-full text-left card p-4 flex items-start gap-2 cursor-pointer hover:bg-slate-50 transition"
-        >
-          <StickyNote size={15} className="text-amber-500 mt-0.5 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-[11px] font-black text-slate-400">
-              {formatDateKo(selectedDate)} 메모
-              {getHoliday(selectedDate) && <span className="ml-1.5 text-rose-400">· {getHoliday(selectedDate)}</span>}
-            </p>
-            <p className={`text-xs font-bold whitespace-pre-wrap break-words ${dayNotes[selectedDate] ? 'text-slate-700' : 'text-slate-300'}`}>
-              {dayNotes[selectedDate] || '메모가 없습니다. 눌러서 추가하세요.'}
-            </p>
-          </div>
-        </button>
       )}
 
       {isTypeManagerOpen && (
@@ -743,8 +711,8 @@ export default function MyShiftTab({
       {isAlarmModalOpen && (
         <Modal onClose={() => setIsAlarmModalOpen(false)} label="근무 시작 알림 설정">
           <div className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
+            <div className="flex justify-between items-center">
+              <h3 className="text-[18px] font-bold text-slate-900 flex items-center gap-1.5">
                 <Bell size={16} className="text-amber-500" /> 근무 시작 알림 설정
               </h3>
               <button
