@@ -7,10 +7,15 @@ import { applyTheme, watchSystemTheme } from './lib/theme'
 import { handleWebOAuthReturn, listenNativeOAuth } from './lib/socialAuth'
 import { installUpdateGuard } from './lib/appUpdate'
 import { captureInstallPrompt } from './lib/installHint'
+import { installKeyboardInset, preventIosInputZoom } from './lib/viewport'
 
 // 첫 화면 전에 테마 적용 (깜빡임 방지)
 applyTheme()
 watchSystemTheme()
+
+// 폰: 키보드가 아래 창을 가리지 않게, 아이폰 입력칸 자동 확대 방지
+installKeyboardInset()
+preventIosInputZoom()
 
 const render = () =>
   ReactDOM.createRoot(document.getElementById('root')).render(

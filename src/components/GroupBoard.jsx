@@ -165,8 +165,8 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
               <button
                 type="button"
                 onClick={() => setSwapFormOpen((v) => !v)}
-                style={{ color: themeColor, borderColor: `${themeColor}40`, backgroundColor: `${themeColor}10` }}
-                className="w-full py-2 rounded-2xl border text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                style={{ color: themeColor, backgroundColor: `${themeColor}1A` }}
+                className="w-full py-3 rounded-2xl text-sm font-bold flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Repeat size={13} /> {swapFormOpen ? '교환 요청 닫기' : '근무 교환 요청하기'}
               </button>
@@ -220,7 +220,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
                             <button
                               onClick={() => handleRespond(s, 'decline')}
                               disabled={loading}
-                              className="flex-1 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-[11px] font-black flex items-center justify-center gap-1 cursor-pointer"
+                              className="flex-1 py-1.5 rounded-xl bg-white text-slate-600 text-[11px] font-black flex items-center justify-center gap-1 cursor-pointer"
                             >
                               <X size={12} /> 거절
                             </button>
@@ -230,7 +230,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
                           <button
                             onClick={() => handleRespond(s, 'cancel')}
                             disabled={loading}
-                            className="flex-1 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-500 text-[11px] font-black cursor-pointer"
+                            className="flex-1 py-1.5 rounded-xl bg-white text-slate-500 text-[11px] font-black cursor-pointer"
                           >
                             요청 취소
                           </button>
@@ -338,7 +338,7 @@ function SwapForm({ group, profile, defaultDate, getCode, loadDayCodes, chip, bl
   };
 
   return (
-    <div className="p-3 rounded-2xl border border-slate-200 space-y-2 text-xs font-bold text-slate-600">
+    <div className="p-3 rounded-2xl bg-slate-50 space-y-2 text-xs font-bold text-slate-600">
       <label className="flex items-center justify-between gap-2">
         <span className="shrink-0">교환할 사람</span>
         <select

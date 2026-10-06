@@ -152,7 +152,7 @@ export default function AllowanceTab({
       
       {/* 1. 상단 근무시간 입력 세션 */}
       <div className="card p-4 space-y-2">
-        <h3 className="font-black text-sm text-slate-800 px-1">근무 시간 설정</h3>
+        <h3 className="font-bold text-[15px] text-slate-900">근무 시간 설정</h3>
         <div className="flex items-center gap-2 px-1 text-[10px] font-bold text-slate-400">
           <span className="w-8" />
           <span className="flex-1 text-center">근무 시간</span>
@@ -203,7 +203,7 @@ export default function AllowanceTab({
                   aria-label={`${code} 야간 인정 시간`}
                   value={shiftTimes[code]?.nightHours ?? 0}
                   onChange={(e) => updateShiftTimes(code, 'nightHours', Number(e.target.value) || 0)}
-                  className="shrink-0 w-12 py-2 text-center font-black text-xs bg-slate-100 rounded-2xl outline-none text-indigo-600 focus:border-indigo-400"
+                  className="shrink-0 w-12 py-2 text-center font-black text-xs bg-slate-100 rounded-2xl outline-none text-indigo-600 focus:ring-2 focus:ring-indigo-200"
                 />
               ) : (
                 <span className="shrink-0 w-12 text-center text-xs font-bold text-slate-300">-</span>
@@ -215,12 +215,12 @@ export default function AllowanceTab({
 
       {/* 2. 연차(휴가) 현황 세션 */}
       <div className="card p-5 space-y-3">
-        <h3 className="font-black text-sm text-rose-500 flex items-center gap-1.5">
-          <span>🌴</span> 연차(휴가) 현황
+        <h3 className="font-bold text-[15px] text-slate-900">
+          연차(휴가) 현황
         </h3>
 
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="px-1 py-3 bg-rose-50/50 border border-rose-100 rounded-2xl flex flex-col items-center justify-center">
+          <div className="px-1 py-3 bg-rose-50 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-rose-400 block mb-1 whitespace-nowrap">총 부여 연차</span>
             <div className="flex items-center justify-center gap-0.5 w-full">
               <input
@@ -245,7 +245,7 @@ export default function AllowanceTab({
             <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap">달력 {calendarLeaveDays}일 포함</span>
           </div>
 
-          <div className="px-1 py-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-col items-center justify-center">
+          <div className="px-1 py-3 bg-indigo-50 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-indigo-400 block mb-1">잔여 연차</span>
             <div className="text-lg font-black text-indigo-950">
               {remainingVacation} <span className="text-xs font-bold">개</span>
@@ -327,10 +327,10 @@ export default function AllowanceTab({
         {/* 헤더 및 정산 기준일 선택 드롭다운 */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <h3 className="font-black text-sm text-indigo-900 flex items-center gap-1.5">
-              <span>🧮</span> {month}월 수당 계산기
+            <h3 className="font-bold text-[15px] text-slate-900">
+              {month}월 수당 계산기
             </h3>
-            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 whitespace-nowrap">
+            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg whitespace-nowrap">
               {startDateStr.slice(5)} ~ {endDateStr.slice(5)}
             </span>
           </div>
@@ -356,7 +356,7 @@ export default function AllowanceTab({
         </div>
 
         {/* 수당 산출 내역 */}
-        <div className="p-4 bg-indigo-50/30 rounded-3xl border border-indigo-100 space-y-3 text-xs">
+        <div className="p-4 bg-slate-50 rounded-2xl space-y-3 text-xs">
           {/* 야간 인정 시간이 있는 근무만 표시 (기본 E/N + 사용자 정의 근무) */}
           {workTypes.filter((t) => nightHoursOf(t.code) > 0 || t.code === 'N' || t.code === 'E').map((t) => (
             <div key={t.code} className="flex justify-between items-center font-bold text-slate-600">
@@ -367,7 +367,7 @@ export default function AllowanceTab({
             </div>
           ))}
 
-          <div className="pt-2 border-t border-indigo-100/60 flex justify-between items-center">
+          <div className="pt-2 border-t border-slate-200/70 flex justify-between items-center">
             <span className="font-extrabold text-slate-700">통상 시급 (원):</span>
             <input
               type="number"
@@ -382,7 +382,7 @@ export default function AllowanceTab({
             />
           </div>
 
-          <div className="pt-2 border-t border-indigo-100/60 space-y-2">
+          <div className="pt-2 border-t border-slate-200/70 space-y-2">
             <div className="flex justify-between items-center font-bold text-slate-600">
               <span>휴일 근무:</span>
               <span className="font-black text-indigo-950 text-sm">
@@ -414,7 +414,7 @@ export default function AllowanceTab({
             </div>
           </div>
 
-          <div className="pt-3 border-t border-indigo-100/80 space-y-1.5">
+          <div className="pt-3 border-t border-slate-200/70 space-y-1.5">
             <div className="flex justify-between items-center text-xs font-bold text-slate-600">
               <span>야간 가산수당</span>
               <span className={blurCls}>{totalNightPay.toLocaleString()} 원</span>

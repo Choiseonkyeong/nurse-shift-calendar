@@ -13,8 +13,8 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
   return (
     <div className="card p-5 space-y-3">
       <div className="flex justify-between items-center">
-        <h3 className="font-black text-sm text-slate-800 flex items-center gap-1.5">
-          <span>📊</span> 근무 통계
+        <h3 className="font-bold text-[15px] text-slate-900">
+          근무 통계
         </h3>
         <div className="flex items-center gap-1">
           <button onClick={() => setYear((y) => y - 1)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer" aria-label="이전 해">
