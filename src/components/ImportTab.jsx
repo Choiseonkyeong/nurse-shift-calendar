@@ -27,17 +27,9 @@ const ENGLISH_HEADER_WORDS = new Set([
   'staff', 'nurse', 'nurses', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun', 'duty', 'shift', 'schedule', 'id'
 ]);
 
-// 목록 한 줄 (설정 화면처럼): 아이콘 · 제목/설명 · (화살표)
-const rowCls = 'w-full px-1 py-3.5 flex items-center gap-3 text-left active:bg-slate-50 cursor-pointer';
-// 설정 목록 한 줄: 회색 선 아이콘 + 제목/설명 (+ 오른쪽 값·화살표)
-const RowIcon = ({ children }) => <span className="w-7 flex items-center justify-center shrink-0 text-slate-500">{children}</span>;
-const RowText = ({ title, sub }) => (
-  <span className="flex-1 min-w-0">
-    <span className="block text-[15px] font-medium text-slate-900">{title}</span>
-    {sub && <span className="block text-[12px] text-slate-400 mt-0.5">{sub}</span>}
-  </span>
-);
-const SectionTitle = ({ children }) => <h2 className="px-1 pt-2 pb-1 text-[13px] font-medium text-slate-400">{children}</h2>;
+// 설정 화면 아이콘 칸 (아이콘 + 짧은 이름)
+const tileCls = 'h-24 rounded-2xl flex flex-col items-center justify-center gap-2 px-1 text-center cursor-pointer active:bg-white hover:bg-white';
+const tileLabel = 'text-[12px] font-medium text-slate-700 leading-tight';
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
 const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
@@ -486,140 +478,97 @@ export default function ImportTab({
         <span className="flex-1 min-w-0">
           <span className="block text-[17px] font-semibold text-slate-900 truncate">{userName || '나'}</span>
           <span className={`block text-[13px] mt-0.5 ${accountStatus === 'linked' ? 'text-slate-400' : 'text-amber-600'}`}>
-            {accountStatus === 'linked' ? '계정 연결됨 · 폰을 바꿔도 그대로예요' : '계정 연결하기 · 연결하지 않으면 데이터를 잃을 수 있어요'}
+            {accountStatus === 'linked' ? '계정 연결됨' : '계정 연결하기 (폰 바꿀 때 필요)'}
           </span>
         </span>
         <ChevronRight size={18} className="text-slate-300 shrink-0" />
       </button>
 
-      {/* 근무표 가져오기 */}
-      <div className="border-t border-slate-100 mt-2">
-        <SectionTitle>
-          <span className="flex items-center gap-1">
-            <Upload size={13} /> 근무표 가져오기
-          </span>
-        </SectionTitle>
-        <div className="mt-1 p-4 rounded-2xl bg-slate-50 space-y-3">
-          <div className="flex items-start gap-3">
-            <Camera size={22} className="text-blue-600 shrink-0 mt-0.5" />
-            <div className="flex-1 text-left">
-              <h3 className="text-[15px] font-semibold text-slate-900">근무표 사진으로 등록</h3>
-              <p className="text-[12px] text-slate-500 mt-0.5">표 전체가 반듯하게 나오게 찍어 주세요. 사진은 폰 밖으로 보내지 않아요.</p>
+      {/* 근무표 사진으로 등록 (가장 많이 쓰는 것) */}
+      <section className="mt-2 rounded-3xl bg-blue-600 text-white p-5">
+        <div className="flex items-center gap-2">
+          <Camera size={22} />
+          <h3 className="text-[17px] font-semibold">근무표 사진으로 등록</h3>
+        </div>
+        {ocrProgress ? (
+          <div className="space-y-2 mt-4">
+            <div className="h-2 bg-white/25 rounded-full overflow-hidden">
+              <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-white" />
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="flex-1 text-[13px] text-blue-100 flex items-center gap-1.5">
+                <Loader2 size={13} className="animate-spin shrink-0" /> {ocrProgress.msg}
+              </p>
+              <button type="button" onClick={() => ocrAbortRef.current?.abort()} className="shrink-0 px-3 py-1.5 rounded-lg bg-white/20 text-[13px] font-medium cursor-pointer">
+                취소
+              </button>
             </div>
           </div>
-          {ocrProgress ? (
-            <div className="space-y-1.5">
-              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-blue-600" />
-              </div>
-              <div className="flex items-center gap-2">
-                <p className="flex-1 text-[12px] text-blue-700 flex items-center gap-1.5">
-                  <Loader2 size={12} className="animate-spin shrink-0" /> {ocrProgress.msg}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => ocrAbortRef.current?.abort()}
-                  className="shrink-0 px-3 py-1.5 rounded-lg bg-white text-[12px] font-medium text-slate-700 cursor-pointer"
-                >
-                  취소
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex items-center justify-center gap-1.5 h-11 bg-blue-600 text-white font-semibold text-sm rounded-xl cursor-pointer">
-                <Camera size={16} /> 촬영하기
-                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
-              </label>
-              <label className="flex items-center justify-center gap-1.5 h-11 bg-white text-slate-800 font-semibold text-sm rounded-xl cursor-pointer">
-                <ImageIcon size={16} /> 앨범에서 선택
-                <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
-              </label>
-            </div>
-          )}
-        </div>
-        <div className="divide-y divide-slate-100 mt-1">
-          <label className={rowCls}>
-            <RowIcon>{isProcessing ? <Loader2 size={20} className="animate-spin" /> : <FileSpreadsheet size={20} />}</RowIcon>
-            <RowText title="엑셀 근무표" sub="공유받은 .xlsx · .csv 파일" />
-            <ChevronRight size={18} className="text-slate-300 shrink-0" />
-            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelUpload} disabled={isProcessing} className="hidden" />
-          </label>
-          <label className={rowCls}>
-            <RowIcon>
-              <Smartphone size={20} />
-            </RowIcon>
-            <RowText title="휴대폰 캘린더 (.ics)" sub="구글·아이폰 캘린더에서 내보낸 파일" />
-            <ChevronRight size={18} className="text-slate-300 shrink-0" />
-            <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
-          </label>
-        </div>
-      </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <label className="flex items-center justify-center gap-1.5 h-12 bg-white text-blue-700 font-semibold text-[15px] rounded-xl cursor-pointer">
+              <Camera size={17} /> 촬영하기
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
+            </label>
+            <label className="flex items-center justify-center gap-1.5 h-12 bg-white/20 text-white font-semibold text-[15px] rounded-xl cursor-pointer">
+              <ImageIcon size={17} /> 앨범에서 선택
+              <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
+            </label>
+          </div>
+        )}
+      </section>
 
-      {/* 화면 */}
-      <div className="border-t border-slate-100 mt-2">
-        <SectionTitle>화면</SectionTitle>
-        <div className="divide-y divide-slate-100">
-          <button
-            type="button"
-            onClick={onCycleTheme}
-            aria-label={`화면 테마: ${{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]} (눌러서 변경)`}
-            className={rowCls}
-          >
-            <RowIcon>{themePref === 'dark' ? <Moon size={20} /> : themePref === 'light' ? <Sun size={20} /> : <SunMoon size={20} />}</RowIcon>
-            <RowText title="화면 테마" />
-            <span className="text-[14px] text-slate-400">{{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]}</span>
-            <ChevronRight size={18} className="text-slate-300 shrink-0" />
-          </button>
-          <button
-            type="button"
-            onClick={onTogglePrivacy}
-            aria-label={privacyBlur ? '보안 모드 끄기 (근무 보이기)' : '보안 모드 (남에게 근무 가리기)'}
-            aria-pressed={privacyBlur}
-            className={rowCls}
-          >
-            <RowIcon>
-              <Shield size={20} />
-            </RowIcon>
-            <RowText title="보안 모드" sub="화면의 동료 이름·수당을 흐리게 가려요" />
-            <span className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${privacyBlur ? 'bg-blue-600' : 'bg-slate-200'}`}>
-              <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${privacyBlur ? 'translate-x-5' : ''}`} />
-            </span>
-          </button>
-        </div>
-      </div>
+      {/* 나머지 기능: 아이콘 격자 */}
+      <section className="mt-3 rounded-3xl bg-slate-50 p-2 grid grid-cols-3 gap-1">
+        <label className={tileCls}>
+          {isProcessing ? <Loader2 size={24} className="animate-spin text-emerald-600" /> : <FileSpreadsheet size={24} className="text-emerald-600" />}
+          <span className={tileLabel}>엑셀 근무표</span>
+          <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelUpload} disabled={isProcessing} className="hidden" />
+        </label>
+        <label className={tileCls}>
+          <Smartphone size={24} className="text-sky-600" />
+          <span className={tileLabel}>캘린더 파일</span>
+          <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
+        </label>
+        <button
+          type="button"
+          onClick={onCycleTheme}
+          aria-label={`화면 테마: ${{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]} (눌러서 변경)`}
+          className={tileCls}
+        >
+          {themePref === 'dark' ? <Moon size={24} className="text-violet-600" /> : themePref === 'light' ? <Sun size={24} className="text-amber-500" /> : <SunMoon size={24} className="text-slate-600" />}
+          <span className={tileLabel}>{{ system: '테마: 자동', dark: '테마: 다크', light: '테마: 밝게' }[themePref]}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onTogglePrivacy}
+          aria-label={privacyBlur ? '보안 모드 끄기 (근무 보이기)' : '보안 모드 (남에게 근무 가리기)'}
+          aria-pressed={privacyBlur}
+          className={`${tileCls} ${privacyBlur ? '!bg-amber-100' : ''}`}
+        >
+          <Shield size={24} className={privacyBlur ? 'text-amber-600' : 'text-slate-600'} />
+          <span className={tileLabel}>보안 모드 {privacyBlur ? 'ON' : ''}</span>
+        </button>
+        <button type="button" onClick={handleBackupSave} className={tileCls}>
+          <Archive size={24} className="text-blue-600" />
+          <span className={tileLabel}>백업 저장</span>
+        </button>
+        <label className={tileCls}>
+          <Upload size={24} className="text-blue-600" />
+          <span className={tileLabel}>백업 복원</span>
+          <input type="file" accept=".json,application/json" onChange={handleBackupRestore} className="hidden" />
+        </label>
+        <button type="button" onClick={() => handleExport('csv')} className={tileCls}>
+          <Download size={24} className="text-emerald-600" />
+          <span className={tileLabel}>엑셀(CSV) 내보내기</span>
+        </button>
+        <button type="button" onClick={() => handleExport('ics')} className={tileCls}>
+          <CalendarDays size={24} className="text-sky-600" />
+          <span className={tileLabel}>캘린더(.ics) 내보내기</span>
+        </button>
+      </section>
 
-      {/* 내 데이터 */}
-      <div className="border-t border-slate-100 mt-2">
-        <SectionTitle>데이터</SectionTitle>
-        <div className="divide-y divide-slate-100">
-          <button type="button" onClick={handleBackupSave} className={rowCls}>
-            <RowIcon>
-              <Archive size={20} />
-            </RowIcon>
-            <RowText title="백업 저장" sub="근무·메모·설정 전체를 파일로" />
-          </button>
-          <label className={rowCls}>
-            <RowIcon>
-              <Upload size={20} />
-            </RowIcon>
-            <RowText title="백업 복원" sub="저장해 둔 백업 파일 불러오기" />
-            <input type="file" accept=".json,application/json" onChange={handleBackupRestore} className="hidden" />
-          </label>
-          <button type="button" onClick={() => handleExport('csv')} className={rowCls}>
-            <RowIcon>
-              <Download size={20} />
-            </RowIcon>
-            <RowText title="엑셀(CSV)로 내보내기" sub="근무·메모를 표로 보관" />
-          </button>
-          <button type="button" onClick={() => handleExport('ics')} className={rowCls}>
-            <RowIcon>
-              <CalendarDays size={20} />
-            </RowIcon>
-            <RowText title="캘린더(.ics)로 내보내기" sub="구글·아이폰 캘린더로 옮기기" />
-          </button>
-        </div>
-
+      <div>
         <div className="pt-6 text-center">
           {/* 근무·메모만 지움 (이 폰 + 서버). 이름·계정·그룹·근무 종류·설정은 그대로, 첫 화면으로 가지 않음 */}
           <button
