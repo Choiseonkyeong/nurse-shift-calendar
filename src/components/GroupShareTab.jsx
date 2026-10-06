@@ -574,7 +574,7 @@ export default function GroupShareTab({
                               <span className="min-[380px]:hidden">{[...(member.name || '')][0]}</span>
                               <span className="hidden min-[380px]:inline">{displayName}</span>
                             </span>
-                            <span style={{ color: memberStyle?.color }} className="shrink-0 font-bold">{shift}</span>
+                            <span style={{ '--fg': memberStyle?.color, '--bg': memberStyle?.backgroundColor }} className="shift-text shrink-0 font-bold">{shift}</span>
                           </div>
                         );
                       })}
@@ -602,8 +602,8 @@ export default function GroupShareTab({
                   >
                     <span className={`min-w-0 truncate text-[15px] text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
                     <span
-                      style={shift ? { color: memberStyle?.color } : undefined}
-                      className={`shrink-0 whitespace-nowrap text-[15px] font-bold ${shift ? '' : 'text-slate-300 font-normal'}`}
+                      style={shift ? { '--fg': memberStyle?.color, '--bg': memberStyle?.backgroundColor } : undefined}
+                      className={`shrink-0 whitespace-nowrap text-[15px] font-bold ${shift ? 'shift-text' : 'text-slate-300 font-normal'}`}
                     >
                       {shift || '없음'}
                     </span>

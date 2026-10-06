@@ -220,3 +220,20 @@ test('위쪽 제목: 내 근무는 이름, 다른 화면은 화면 이름', asyn
   // 글꼴: Pretendard
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/Pretendard/);
 });
+
+test('다크 모드에서도 달력 근무 글자가 잘 보임 (밝은 색으로 바뀜)', async ({ page }) => {
+  await openApp(page, { local: { my_shift_data: { '2026-09-10': 'D' } } });
+  const code = page.getByRole('button', { name: /^9월 10일 D 근무/ }).locator('.shift-text');
+  const light = await code.evaluate((el) => getComputedStyle(el).color);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  const dark = await code.evaluate((el) => getComputedStyle(el).color);
+  expect(dark).not.toBe(light);
+  // 어두운 바탕(slate-900) 위에서 밝기 차이가 충분한지: 글자 밝기 > 0.5
+  const lum = (rgb) => {
+    const [r, g, b] = rgb.match(/\d+/g).map(Number);
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  };
+  expect(lum(dark)).toBeGreaterThan(0.5);
+  expect(lum(light)).toBeLessThan(0.5);
+});

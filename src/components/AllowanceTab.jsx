@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useShiftTypes } from '../lib/shiftTypes';
+import { useShiftTypes, shiftTextVars } from '../lib/shiftTypes';
 import { getHoliday } from '../utils/holidays';
 import { getTodayDateObj } from '../utils/dateUtils';
 import { leaveYearRange } from '../lib/allowance';
@@ -221,7 +221,7 @@ export default function AllowanceTab({
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[13px] text-slate-500">
             {leaveTypes.map((t) => (
               <span key={t.code} className={leaveUsage[t.code] ? '' : 'opacity-40'}>
-                <b style={{ color: t.fg }} className="font-bold">{t.code}</b> {leaveUsage[t.code]}회
+                <b style={shiftTextVars(t)} className="shift-text font-bold">{t.code}</b> {leaveUsage[t.code]}회
                 {(t.leaveDays ?? 1) !== 1 && ` · ${leaveUsage[t.code] * (t.leaveDays ?? 1)}일`}
               </span>
             ))}
@@ -344,7 +344,7 @@ export default function AllowanceTab({
         <div className="divide-y divide-slate-100">
           {workTypes.map(({ code }) => (
             <div key={code} className="flex items-center gap-2 py-2.5">
-              <span className="w-9 text-[15px] font-bold truncate" style={{ color: workTypes.find((t) => t.code === code)?.fg }}>
+              <span className="shift-text w-9 text-[15px] font-bold truncate" style={shiftTextVars(workTypes.find((t) => t.code === code))}>
                 {code}
               </span>
               <div className="flex-1 min-w-0 flex items-center gap-1 bg-slate-100 rounded-lg px-2 h-9">
