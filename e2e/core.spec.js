@@ -237,3 +237,35 @@ test('다크 모드에서도 달력 근무 글자가 잘 보임 (밝은 색으�
   expect(lum(dark)).toBeGreaterThan(0.5);
   expect(lum(light)).toBeLessThan(0.5);
 });
+
+test('년·월 바로 고르기: 제목을 눌러 다른 해·달로 한 번에 이동, 이번 달로 돌아오기', async ({ page }) => {
+  await openApp(page);
+  await page.getByRole('button', { name: '년·월 선택' }).click();
+  const picker = page.getByRole('dialog', { name: '년·월 선택' });
+  await expect(picker.getByRole('button', { name: '2026년 9월' })).toHaveAttribute('aria-pressed', 'true');
+  await picker.getByRole('button', { name: '이전 해' }).click();
+  await picker.getByRole('button', { name: '2025년 3월' }).click();
+  await expect(picker).toBeHidden();
+  await expect(page.getByRole('heading', { name: '2025년 3월' })).toBeVisible();
+  await page.getByRole('button', { name: '년·월 선택' }).click();
+  await page.getByRole('button', { name: '이번 달로' }).click();
+  await expect(page.getByRole('heading', { name: '2026년 9월' })).toBeVisible();
+  // 이번 달로 오면 오늘 날짜가 선택됨
+  await expect(page.getByRole('button', { name: /^9월 28일 근무/ })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('수당 화면에서도 달 바꾸기: ‹ › 와 년·월 선택', async ({ page }) => {
+  await openApp(page);
+  await tab(page, '수당').click();
+  await expect(page.getByText(/^9월 가산수당/)).toBeVisible();
+  await page.getByRole('button', { name: '다음 달' }).click();
+  await expect(page.getByText(/^10월 가산수당/)).toBeVisible();
+  await page.getByRole('button', { name: '년·월 선택' }).click();
+  const picker = page.getByRole('dialog', { name: '년·월 선택' });
+  await picker.getByRole('button', { name: '이전 해' }).click();
+  await picker.getByRole('button', { name: '2025년 12월' }).click();
+  await expect(page.getByText(/^2025년 12월 가산수당/)).toBeVisible();
+  // 내 근무 화면도 같은 달로
+  await tab(page, '내 근무').click();
+  await expect(page.getByRole('heading', { name: '2025년 12월' })).toBeVisible();
+});

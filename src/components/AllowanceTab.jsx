@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useShiftTypes, shiftTextVars } from '../lib/shiftTypes';
 import { getHoliday } from '../utils/holidays';
-import { getTodayDateObj } from '../utils/dateUtils';
+import { getTodayDateObj, addMonthsKey } from '../utils/dateUtils';
 import { leaveYearRange } from '../lib/allowance';
 import ShiftStats from './ShiftStats';
-import { Moon, PartyPopper, SlidersHorizontal, ChevronRight, X } from 'lucide-react';
+import { Moon, PartyPopper, SlidersHorizontal, ChevronLeft, ChevronRight, ChevronDown, X } from 'lucide-react';
+import MonthPicker, { monthPickKey } from './MonthPicker';
 import Modal from './Modal';
 
 // 설정 목록 한 줄 (왼쪽 이름, 오른쪽 값/입력). 화면 함수 밖에 둬야 입력 중 칸이 다시 만들어지지 않음
@@ -32,6 +33,7 @@ const SettingGroup = ({ title, right, children }) => (
 export default function AllowanceTab({
   myShifts = {},
   selectedDate,
+  setSelectedDate,
   shiftConfigs = {},
   setShiftConfigs,
   privacyBlur = false
@@ -95,6 +97,7 @@ export default function AllowanceTab({
   // 4. 통상 시급 상태
   const [hourlyWage, setHourlyWage] = useState(shiftConfigs.hourlyWage || 0);
   const [openSettings, setOpenSettings] = useState(false); // 계산 설정 창
+  const [pickerOpen, setPickerOpen] = useState(false); // 년·월 선택 창
 
   // 시작일 변경 및 상위 상태 저장 헬퍼
   const handleStartDayChange = (day) => {
@@ -187,9 +190,20 @@ export default function AllowanceTab({
     <div className="max-w-md mx-auto pb-12 text-slate-800 space-y-3">
       {/* 1. 이번 달 가산수당: 숫자만 크게 */}
       <section className="rounded-3xl bg-blue-600 text-white p-5">
-        <p className="text-[13px] text-blue-100">
-          {month}월 가산수당 · {startDateStr.slice(5).replace('-', '.')}~{endDateStr.slice(5).replace('-', '.')}
-        </p>
+        {/* 달 바꾸기: ‹ › 또는 제목을 눌러 년·월 선택 */}
+        <div className="flex items-center justify-between -mt-1 -mx-2">
+          <button type="button" aria-label="이전 달" onClick={() => setSelectedDate?.(addMonthsKey(selectedDate, -1))} className="w-9 h-9 flex items-center justify-center rounded-full text-blue-100 active:bg-white/15 cursor-pointer">
+            <ChevronLeft size={20} />
+          </button>
+          <button type="button" aria-label="년·월 선택" onClick={() => setPickerOpen(true)} className="flex items-center gap-0.5 text-[13px] text-blue-100 cursor-pointer">
+            {year !== getTodayDateObj().year && `${year}년 `}
+            {month}월 가산수당 · {startDateStr.slice(5).replace('-', '.')}~{endDateStr.slice(5).replace('-', '.')}
+            <ChevronDown size={14} aria-hidden="true" />
+          </button>
+          <button type="button" aria-label="다음 달" onClick={() => setSelectedDate?.(addMonthsKey(selectedDate, 1))} className="w-9 h-9 flex items-center justify-center rounded-full text-blue-100 active:bg-white/15 cursor-pointer">
+            <ChevronRight size={20} />
+          </button>
+        </div>
         <p className={`mt-1 text-[36px] font-bold tracking-tight leading-tight ${blurCls}`}>
           {(totalNightPay + totalHolidayPay).toLocaleString()}
           <span className="text-[22px] font-semibold ml-0.5">원</span>
@@ -252,6 +266,18 @@ export default function AllowanceTab({
         <span className={`text-[13px] text-slate-400 ${blurCls}`}>시급 {hourlyWage ? hourlyWage.toLocaleString() : '-'}원</span>
         <ChevronRight size={18} className="text-slate-300" />
       </button>
+
+      {pickerOpen && (
+        <MonthPicker
+          year={year}
+          month={month}
+          onClose={() => setPickerOpen(false)}
+          onPick={(y, m) => {
+            setSelectedDate?.(monthPickKey(y, m));
+            setPickerOpen(false);
+          }}
+        />
+      )}
 
       {openSettings && (
         <Modal onClose={() => setOpenSettings(false)} label="계산 설정">
