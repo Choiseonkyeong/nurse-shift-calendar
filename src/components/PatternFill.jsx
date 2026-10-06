@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import Modal from './Modal';
-import { X, Delete, Repeat } from 'lucide-react';
-import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
+import { X, Delete } from 'lucide-react';
+import { useShiftTypes, shiftTextVars, findShiftType } from '../lib/shiftTypes';
 import { toDateKey } from '../utils/dateUtils';
 
 const PRESETS = [
@@ -63,26 +63,26 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
   // 하단 탭바보다 위에 뜨도록 body 에 렌더링
   return (
     <Modal onClose={onClose} label="반복 패턴 입력">
-      <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100 max-h-[85dvh] overflow-y-auto">
+      <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-5 shadow-xl max-h-[85dvh] overflow-y-auto">
         <div className="flex justify-between items-center">
-          <h3 className="text-[18px] font-bold text-slate-900 flex items-center gap-1.5">
-            <Repeat size={16} className="text-indigo-600" /> 반복 패턴 입력
+          <h3 className="text-[20px] font-bold text-slate-900">
+            반복 패턴 입력
           </h3>
-          <button onClick={onClose} className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
-            <X size={18} />
+          <button onClick={onClose} className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer" aria-label="닫기">
+            <X size={20} />
           </button>
         </div>
 
         <div className="space-y-1.5">
-          <span className="text-[11px] font-bold text-slate-500">자주 쓰는 패턴</span>
+          <span className="text-[13px] text-slate-400">자주 쓰는 패턴</span>
           <div className="flex flex-wrap gap-1.5">
             {PRESETS.map((p) => (
               <button
                 key={p.name}
                 type="button"
                 onClick={() => { setCycle(p.cycle); setWeekdayAligned(!!p.weekdayAligned); }}
-                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black border transition cursor-pointer ${
-                  cycle.join() === p.cycle.join() ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'
+                className={`h-9 px-3 rounded-full text-[13px] font-medium cursor-pointer ${
+                  cycle.join() === p.cycle.join() ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
                 }`}
               >
                 {p.name}
@@ -93,20 +93,20 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500">순서 ({cycle.length}일 반복)</span>
+            <span className="text-[13px] text-slate-400">순서 ({cycle.length}일 반복)</span>
             <div className="flex gap-1">
               <button type="button" onClick={() => setCycle((c) => c.slice(0, -1))} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer" aria-label="마지막 삭제">
                 <Delete size={15} />
               </button>
-              <button type="button" onClick={() => setCycle([])} className="px-2 py-0.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-slate-700 cursor-pointer">
+              <button type="button" onClick={() => setCycle([])} className="px-2 py-0.5 rounded-lg text-[13px] text-slate-500 cursor-pointer">
                 비우기
               </button>
             </div>
           </div>
-          <div className="min-h-[2.5rem] p-2 rounded-2xl bg-slate-50 border border-slate-100 flex flex-wrap gap-1">
-            {cycle.length === 0 && <span className="text-[11px] font-bold text-slate-300 self-center">아래 근무를 순서대로 눌러 패턴을 만드세요</span>}
+          <div className="min-h-[3rem] px-3 py-2.5 rounded-2xl bg-slate-50 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {cycle.length === 0 && <span className="text-[13px] text-slate-400">아래 근무를 순서대로 눌러 패턴을 만드세요</span>}
             {cycle.map((code, i) => (
-              <span key={i} style={badgeStyle(shiftTypes, code)} className="px-2 py-1 rounded-lg text-[11px] font-black">
+              <span key={i} style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text text-[17px] font-bold">
                 {code}
               </span>
             ))}
@@ -117,8 +117,8 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
                 key={t.code}
                 type="button"
                 onClick={() => { setCycle((c) => [...c, t.code]); setWeekdayAligned(false); }}
-                style={{ backgroundColor: t.bg, color: t.fg }}
-                className="px-3 py-1.5 rounded-full text-xs font-black cursor-pointer hover:brightness-95"
+                style={shiftTextVars(t)}
+                className="shift-text h-10 min-w-[48px] px-3 rounded-xl bg-white ring-1 ring-inset ring-slate-200 text-[15px] font-bold cursor-pointer active:bg-slate-50"
               >
                 + {t.code}
               </button>
@@ -128,39 +128,39 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
 
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1">
-            <span className="text-[11px] font-bold text-slate-500">시작일</span>
+            <span className="text-[13px] text-slate-400">시작일</span>
             <input
               type="date"
               value={start}
               onChange={(e) => setStart(e.target.value)}
-              className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"
+              className="w-full px-3 h-11 bg-slate-100 rounded-xl text-[14px] outline-none"
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[11px] font-bold text-slate-500">기간</span>
+            <span className="text-[13px] text-slate-400">기간</span>
             <select
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"
+              className="w-full px-3 h-11 bg-slate-100 rounded-xl text-[14px] outline-none"
             >
               {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </label>
         </div>
 
-        <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-          <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} className="accent-indigo-600" />
+        <label className="flex items-center gap-2 text-[14px] text-slate-700">
+          <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} className="w-5 h-5 accent-blue-600" />
           이미 입력된 근무 덮어쓰기 {conflicts > 0 && <span className="text-rose-500">({conflicts}일 겹침)</span>}
         </label>
 
         {entries.length > 0 && (
           <div className="space-y-1">
-            <span className="text-[11px] font-bold text-slate-500">미리보기 (처음 14일)</span>
+            <span className="text-[13px] text-slate-400">미리보기 (처음 14일)</span>
             <div className="grid grid-cols-7 gap-1">
               {entries.slice(0, 14).map(([k, code]) => (
                 <div key={k} className="flex flex-col items-center gap-0.5">
-                  <span className="text-[9px] font-bold text-slate-400">{Number(k.slice(8))}</span>
-                  <span style={badgeStyle(shiftTypes, code)} className="w-full py-0.5 rounded-md text-[10px] font-black text-center truncate">
+                  <span className="text-[11px] text-slate-400">{Number(k.slice(8))}</span>
+                  <span style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text w-full text-[13px] font-bold text-center truncate">
                     {code}
                   </span>
                 </div>
@@ -173,7 +173,7 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
           type="button"
           disabled={entries.length === 0}
           onClick={handleApply}
-          className="w-full py-2.5 rounded-2xl bg-indigo-600 text-white text-xs font-black hover:bg-indigo-700 transition cursor-pointer disabled:opacity-50"
+          className="w-full h-12 rounded-xl bg-blue-600 text-white text-[15px] font-semibold cursor-pointer disabled:opacity-50"
         >
           {overwrite ? entries.length : entries.length - conflicts}일에 적용하기
         </button>
