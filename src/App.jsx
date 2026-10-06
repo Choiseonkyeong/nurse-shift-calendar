@@ -919,6 +919,7 @@ export default function App() {
               shiftConfigs={shiftConfigs}
               setShiftConfigs={setShiftConfigs}
               selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
               privacyBlur={privacyBlur}
             />
           )}
