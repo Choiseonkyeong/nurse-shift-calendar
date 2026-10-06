@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, HelpCircle } from 'lucide-react';
 import Modal from './Modal';
 import { setConfirmHost } from '../lib/confirm';
 
@@ -23,27 +22,19 @@ export default function ConfirmHost() {
     req.resolve(ok);
     setReq(null);
   };
-  const Icon = req.danger ? AlertTriangle : HelpCircle;
 
   return (
     <Modal onClose={() => done(false)} label={req.title || '확인'} align="center" zIndex={300}>
-      <div data-confirm-dialog className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100 text-center">
-        <div
-          className={`w-11 h-11 mx-auto rounded-2xl flex items-center justify-center ${
-            req.danger ? 'bg-rose-50 text-rose-500' : 'bg-indigo-50 text-indigo-600'
-          }`}
-        >
-          <Icon size={22} />
-        </div>
+      <div data-confirm-dialog className="bg-white w-full max-w-[19rem] rounded-2xl pt-6 px-5 pb-4 space-y-5 shadow-xl text-left">
         <div className="space-y-1.5">
-          {req.title && <h3 className="font-black text-base text-slate-900">{req.title}</h3>}
-          {req.message && <p className="text-xs font-bold text-slate-500 whitespace-pre-line leading-relaxed">{req.message}</p>}
+          {req.title && <h3 className="text-[18px] font-bold text-slate-900">{req.title}</h3>}
+          {req.message && <p className="text-[14px] text-slate-500 whitespace-pre-line leading-relaxed">{req.message}</p>}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => done(false)}
-            className="py-3 rounded-2xl bg-slate-100 text-slate-600 text-sm font-black cursor-pointer hover:bg-slate-200"
+            className="h-12 rounded-xl bg-slate-100 text-slate-700 text-[15px] font-semibold cursor-pointer"
           >
             {req.cancelText}
           </button>
@@ -51,7 +42,7 @@ export default function ConfirmHost() {
             type="button"
             data-confirm-ok
             onClick={() => done(true)}
-            className={`py-3 rounded-2xl text-white text-sm font-black cursor-pointer hover:opacity-90 ${req.danger ? 'bg-rose-600' : 'bg-indigo-600'}`}
+            className={`h-12 rounded-xl text-white text-[15px] font-semibold cursor-pointer ${req.danger ? 'bg-rose-600' : 'bg-blue-600'}`}
           >
             {req.confirmText}
           </button>

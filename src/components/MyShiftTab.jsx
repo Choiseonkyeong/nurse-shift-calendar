@@ -3,7 +3,7 @@ import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
-import { Bell, BellOff, Edit3, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, StickyNote, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
+import { Bell, BellOff, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useSwipe } from '../lib/swipe';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
@@ -609,56 +609,59 @@ export default function MyShiftTab({
 
       {isEditModalOpen && (
         <Modal onClose={() => setIsEditModalOpen(false)} label="근무 직접 수정">
-          <div className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
+            <div className="flex justify-between items-start">
               <div>
-                <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
-                  <Edit3 size={16} className="text-indigo-600" /> 근무 직접 수정
-                </h3>
-                <p className="text-xs font-bold text-slate-400 mt-0.5">{formatDateKo(editingDateKey)}</p>
+                <p className="text-[13px] text-slate-400">근무 직접 수정</p>
+                <h3 className="text-[20px] font-bold text-slate-900 mt-0.5">{formatDateKo(editingDateKey)}</h3>
               </div>
               <button
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer"
                 aria-label="닫기"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            {/* 근무 선택 버튼 그리드 */}
-            <div className="grid grid-cols-2 gap-2">
-              {shiftTypes.map((item) => (
-                <button
-                  key={item.code}
-                  onClick={() => handleSelectShiftCode(item.code)}
-                  style={{ backgroundColor: item.bg, color: item.fg }}
-                  className="py-3 px-3 rounded-2xl font-black text-xs flex items-center justify-between shadow-2xs hover:scale-[1.02] transition cursor-pointer"
-                >
-                  <span>{item.label}</span>
-                  {myShifts[editingDateKey] === item.code && <Check size={14} />}
-                </button>
-              ))}
+            {/* 근무 고르기: 근무 색 글자 + 이름 */}
+            <div className="grid grid-cols-3 gap-2">
+              {shiftTypes.map((item) => {
+                const on = myShifts[editingDateKey] === item.code;
+                return (
+                  <button
+                    key={item.code}
+                    onClick={() => handleSelectShiftCode(item.code)}
+                    className={`relative h-[68px] px-1 rounded-xl flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                      on ? 'bg-blue-50 ring-2 ring-inset ring-blue-500' : 'bg-slate-50 active:bg-slate-100'
+                    }`}
+                  >
+                    <span aria-hidden="true" style={{ color: item.fg }} className="text-[18px] font-bold leading-none truncate max-w-full">
+                      {item.code}
+                    </span>
+                    <span className="text-[11px] text-slate-500 leading-tight truncate max-w-full">{item.label}</span>
+                    {on && <Check size={14} className="absolute top-1.5 right-1.5 text-blue-600" />}
+                  </button>
+                );
+              })}
             </div>
 
             <button
               onClick={() => handleSelectShiftCode('')}
-              className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold text-xs rounded-2xl transition cursor-pointer"
+              className="w-full h-11 text-slate-500 text-[14px] rounded-xl bg-slate-50 active:bg-slate-100 cursor-pointer"
             >
               근무 삭제 (빈 칸으로 설정)
             </button>
 
-            <label className="block space-y-1 pt-1 border-t border-slate-100">
-              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                <StickyNote size={12} className="text-amber-500" /> 메모 (나만 보기)
-              </span>
+            <label className="block space-y-1.5">
+              <span className="text-[13px] text-slate-400">메모 (나만 보기)</span>
               <textarea
                 value={dayNotes[editingDateKey] || ''}
                 onChange={(e) => setNote(editingDateKey, e.target.value)}
                 rows={2}
                 maxLength={500}
                 placeholder="예: 교육 준비물, 인계 사항, 약속"
-                className="w-full px-3 py-2 bg-amber-50/50 border border-amber-100 rounded-2xl text-xs font-bold text-slate-700 outline-none focus:border-amber-300 resize-none"
+                className="w-full px-3 py-2.5 bg-slate-100 rounded-xl text-[15px] text-slate-800 outline-none focus:ring-2 focus:ring-blue-200 resize-none"
               />
             </label>
           </div>
@@ -712,8 +715,8 @@ export default function MyShiftTab({
       {isAlarmModalOpen && (
         <Modal onClose={() => setIsAlarmModalOpen(false)} label="근무 시작 알림 설정">
           <div className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-black text-base text-slate-900 flex items-center gap-1.5">
+            <div className="flex justify-between items-center">
+              <h3 className="text-[18px] font-bold text-slate-900 flex items-center gap-1.5">
                 <Bell size={16} className="text-amber-500" /> 근무 시작 알림 설정
               </h3>
               <button

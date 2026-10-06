@@ -706,7 +706,7 @@ export default function ImportTab({
       {sheetChoice && (
         <Modal onClose={() => setSheetChoice(null)} label="엑셀 탭 선택">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center border-b pb-2 border-slate-100">
+            <div className="flex justify-between items-center">
               <h3 className="font-extrabold text-sm text-slate-900">어느 달을 가져올까요?</h3>
               <button onClick={() => setSheetChoice(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
                 <X size={16} />
@@ -736,7 +736,7 @@ export default function ImportTab({
       {pendingImport && (
         <Modal onClose={() => setPendingImport(null)} label="본인 이름 선택">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center border-b pb-2 border-slate-100">
+            <div className="flex justify-between items-center">
               <h3 className="font-extrabold text-sm text-slate-900">본인 이름 선택</h3>
               <button onClick={() => setPendingImport(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
                 <X size={16} />
