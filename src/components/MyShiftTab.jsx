@@ -319,45 +319,45 @@ export default function MyShiftTab({
       
       {/* 사진/엑셀 가져오기 결과 */}
       {importBanner && (
-        <div className="bg-indigo-600 text-white p-4 rounded-3xl shadow-xs space-y-2">
+        <div className="bg-blue-50 text-slate-800 p-4 rounded-2xl space-y-2.5">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-black leading-snug">
+            <p className="text-[15px] font-semibold text-slate-900 leading-snug">
               {importBanner.source}에서 {importPeriod(importBanner)} 근무 {importBanner.count}일을 등록했어요
-              <span className="block text-[11px] font-bold text-indigo-200 mt-0.5">근무표 이름: {importBanner.name}</span>
+              <span className="block text-[12px] font-normal text-slate-500 mt-1">근무표 이름: {importBanner.name}</span>
               {importBanner.counts && (
-                <span className="block text-[11px] font-bold text-indigo-100 mt-0.5">
+                <span className="block text-[12px] font-normal text-slate-500 mt-0.5">
                   {importBanner.counts.map(([code, n]) => `${code} ${n}`).join(' · ')} — 근무표 합계와 같은지 확인해 보세요
                 </span>
               )}
             </p>
-            <button onClick={onCloseImportBanner} className="text-indigo-200 hover:text-white cursor-pointer shrink-0" aria-label="닫기">
-              <X size={16} />
+            <button onClick={onCloseImportBanner} className="w-8 h-8 -mr-1 -mt-1 flex items-center justify-center rounded-full text-slate-400 active:bg-blue-100 cursor-pointer shrink-0" aria-label="닫기">
+              <X size={18} />
             </button>
           </div>
           {importBanner.uncertain.length > 0 && (
-            <p className="text-[11px] font-bold bg-white/15 rounded-xl px-2.5 py-1.5 flex items-center gap-1.5">
-              <AlertTriangle size={12} className="shrink-0" /> 노란 테두리 {importBanner.uncertain.length}일은 사진과 비교해 확인해 주세요 (눌러서 수정)
+            <p className="text-[13px] text-amber-800 bg-amber-100/70 rounded-xl px-3 py-2 flex items-center gap-1.5">
+              <AlertTriangle size={14} className="shrink-0" /> 노란 테두리 {importBanner.uncertain.length}일은 사진과 비교해 확인해 주세요 (눌러서 수정)
             </p>
           )}
           {/* 확인할 칸이 많으면(10% 이상) 대개 사진이 작거나 흐린 경우 → 다시 찍는 방법 안내 */}
           {needsRetakeHint(importBanner) && (
-              <p className="text-[11px] font-bold text-indigo-100" role="note">
+              <p className="text-[12px] text-slate-500" role="note">
                 사진이 작거나 흐려서 확인할 칸이 많아요. 근무표를 화면에 크게 띄우거나 가까이서 반듯하게 다시 찍으면 더 정확해요.
               </p>
             )}
           {/* 사진·엑셀에서 달을 잘못 인식했으면 한 달씩 옮기기 */}
           {importBanner.imp && (
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-100">
+            <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
               <span>달이 틀렸나요?</span>
               <button
                 onClick={() => onMoveImportMonth(-1)}
-                className="flex items-center gap-0.5 bg-white/15 text-white px-2 py-1 rounded-lg font-black cursor-pointer"
+                className="flex items-center gap-0.5 bg-white text-slate-700 h-7 px-2.5 rounded-full font-medium cursor-pointer"
               >
                 <ChevronLeft size={12} /> 이전 달로
               </button>
               <button
                 onClick={() => onMoveImportMonth(1)}
-                className="flex items-center gap-0.5 bg-white/15 text-white px-2 py-1 rounded-lg font-black cursor-pointer"
+                className="flex items-center gap-0.5 bg-white text-slate-700 h-7 px-2.5 rounded-full font-medium cursor-pointer"
               >
                 다음 달로 <ChevronRight size={12} />
               </button>
@@ -366,17 +366,17 @@ export default function MyShiftTab({
           <div className="flex flex-wrap gap-2">
             <button
               onClick={onUndoImport}
-              className="flex items-center gap-1 text-[11px] font-black bg-white text-indigo-700 px-3 py-1.5 rounded-xl cursor-pointer"
+              className="flex items-center gap-1 text-[13px] font-semibold bg-blue-600 text-white h-9 px-4 rounded-full cursor-pointer"
             >
-              <Undo2 size={12} /> 되돌리기
+              <Undo2 size={15} /> 되돌리기
             </button>
             {/* 다른 사람 줄로 들어갔으면 바로 다시 고르기 (가져오기 화면에 따로 이름 설정을 두지 않음) */}
             {Object.keys(importBanner.imp?.byName || {}).length > 1 && (
               <button
                 onClick={onRepickImport}
-                className="flex items-center gap-1 text-[11px] font-black bg-white/15 text-white px-3 py-1.5 rounded-xl cursor-pointer"
+                className="flex items-center gap-1 text-[13px] font-semibold bg-white text-slate-700 h-9 px-4 rounded-full cursor-pointer"
               >
-                <UserX size={12} /> 내 이름이 아니에요
+                <UserX size={15} /> 내 이름이 아니에요
               </button>
             )}
           </div>
@@ -706,23 +706,24 @@ export default function MyShiftTab({
       {/* 4. 알람 시간 설정 모달 */}
       {isAlarmModalOpen && (
         <Modal onClose={() => setIsAlarmModalOpen(false)} label="근무 시작 알림 설정">
-          <div className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center">
-              <h3 className="text-[18px] font-bold text-slate-900 flex items-center gap-1.5">
-                <Bell size={16} className="text-amber-500" /> 근무 시작 알림 설정
-              </h3>
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-[20px] font-bold text-slate-900">근무 시작 알림</h3>
+                <p className="text-[13px] text-slate-400 mt-0.5">근무 시작 얼마 전에 알려 드릴까요?</p>
+              </div>
               <button
                 onClick={() => setIsAlarmModalOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer"
                 aria-label="닫기"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
             {alarmBlocked && (
-              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-100 space-y-2">
-                <p className="text-[11px] font-bold text-rose-700">
+              <div className="p-3 rounded-2xl bg-rose-50 space-y-2">
+                <p className="text-[13px] text-rose-700">
                   {alarmPerm === 'unsupported'
                     ? '이 브라우저는 알림을 지원하지 않아요. 앱을 설치하면 알림을 받을 수 있어요.'
                     : '알림이 켜져 있지만 이 기기에서는 알림 권한이 없어서 알림이 오지 않아요.'}
@@ -731,7 +732,7 @@ export default function MyShiftTab({
                   <button
                     type="button"
                     onClick={() => handleToggleAlarm(alarmSettings.minutesBefore)}
-                    className="w-full py-2 rounded-xl bg-rose-600 text-white text-xs font-black cursor-pointer"
+                    className="w-full h-11 rounded-xl bg-rose-600 text-white text-[14px] font-semibold cursor-pointer"
                   >
                     이 기기에서 알림 허용하기
                   </button>
@@ -739,42 +740,43 @@ export default function MyShiftTab({
               </div>
             )}
 
-            <div className="space-y-2">
+            {/* 몇 분 전: 큰 칸 4개 */}
+            <div className="grid grid-cols-2 gap-2">
               {[
-                { min: 30, label: '30분 전 알림' },
-                { min: 60, label: '1시간 전 알림' },
-                { min: 120, label: '2시간 전 알림' },
-                { min: 180, label: '3시간 전 알림' }
-              ].map((opt) => (
-                <button
-                  key={opt.min}
-                  onClick={() => handleToggleAlarm(opt.min)}
-                  className={`w-full py-2.5 px-4 rounded-2xl font-black text-xs flex justify-between items-center transition cursor-pointer ${
-                    alarmSettings.enabled && alarmSettings.minutesBefore === opt.min
-                      ? 'bg-amber-500 text-white shadow-2xs'
-                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <span>{opt.label}</span>
-                  {alarmSettings.enabled && alarmSettings.minutesBefore === opt.min && <Check size={14} />}
-                </button>
-              ))}
+                { min: 30, big: '30분', label: '30분 전 알림' },
+                { min: 60, big: '1시간', label: '1시간 전 알림' },
+                { min: 120, big: '2시간', label: '2시간 전 알림' },
+                { min: 180, big: '3시간', label: '3시간 전 알림' }
+              ].map((opt) => {
+                const on = alarmSettings.enabled && alarmSettings.minutesBefore === opt.min;
+                return (
+                  <button
+                    key={opt.min}
+                    onClick={() => handleToggleAlarm(opt.min)}
+                    aria-label={opt.label}
+                    aria-pressed={on}
+                    className={`relative h-20 rounded-2xl flex flex-col items-center justify-center cursor-pointer ${
+                      on ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-800 active:bg-slate-100'
+                    }`}
+                  >
+                    <span className="text-[20px] font-bold leading-none">{opt.big}</span>
+                    <span className={`text-[12px] mt-1 ${on ? 'text-blue-100' : 'text-slate-400'}`}>전에 알림</span>
+                    {on && <Check size={16} className="absolute top-2 right-2" />}
+                  </button>
+                );
+              })}
             </div>
 
             {isNativeApp() ? (
-              <p className="text-[11px] font-bold text-slate-500 bg-slate-50 rounded-2xl p-3">
-                앱을 꺼 둬도 알림이 와요. 앞으로 {REMINDER_DAYS}일 동안의 근무(최대 {MAX_REMINDERS}개)를 미리 예약하고, 앱을 열 때마다 이어서 예약해요.
-              </p>
+              <p className="text-[12px] text-slate-400">앱을 꺼 둬도 알림이 와요. 앞으로 {REMINDER_DAYS}일(최대 {MAX_REMINDERS}개)을 미리 예약해요.</p>
             ) : !usesServerPush() && (
-              <p className="text-[11px] font-bold text-slate-500 bg-slate-50 rounded-2xl p-3">
-                웹에서는 이 화면이 열려 있을 때만 알림이 와요. 앱을 설치하면 앱을 꺼 둬도 알림을 받을 수 있어요.
-              </p>
+              <p className="text-[12px] text-slate-400">웹에서는 이 화면이 열려 있을 때만 알림이 와요. 앱을 설치하면 꺼 둬도 받을 수 있어요.</p>
             )}
 
             {alarmSettings.enabled && (
               <button
                 onClick={() => handleToggleAlarm()}
-                className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold text-xs rounded-2xl transition cursor-pointer"
+                className="w-full h-11 text-rose-600 text-[14px] font-medium rounded-xl bg-rose-50 cursor-pointer"
               >
                 알림 끄기 (해제)
               </button>
