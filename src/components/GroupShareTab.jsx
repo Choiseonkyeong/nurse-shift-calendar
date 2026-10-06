@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import { toast, formatDateKo } from '../lib/toast';
-import { Users, Plus, LogIn, ChevronLeft, ChevronRight, Share2, RotateCcw, Palette } from 'lucide-react';
+import { Users, Plus, LogIn, ChevronLeft, ChevronRight, ChevronDown, Share2, RotateCcw, Palette } from 'lucide-react';
+import MonthPicker, { monthPickKey } from './MonthPicker';
 import { useSwipe } from '../lib/swipe';
 import { shareText, webOrigin } from '../lib/shareCalendar';
 import { addMonthsKey, getTodayDateObj } from '../utils/dateUtils';
@@ -138,6 +139,8 @@ export default function GroupShareTab({
     setGroupSchedule({ shifts: {}, styles: {} });
     fetchScheduleFromDB();
   }, [fetchScheduleFromDB]);
+
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
 
   // 그룹 근무표 자동 새로고침: 1분마다(화면이 보일 때) + 앱으로 돌아올 때
   useEffect(() => {
@@ -508,9 +511,12 @@ export default function GroupShareTab({
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <h3 className="text-[17px] font-semibold text-slate-900 text-center whitespace-nowrap">
-                  {year}년 {month}월
-                </h3>
+                <button type="button" onClick={() => setMonthPickerOpen(true)} aria-label="년·월 선택" className="flex items-center gap-0.5 cursor-pointer">
+                  <h3 className="text-[17px] font-semibold text-slate-900 text-center whitespace-nowrap">
+                    {year}년 {month}월
+                  </h3>
+                  <ChevronDown size={16} className="text-slate-400" aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   aria-label="다음 달"
@@ -612,6 +618,20 @@ export default function GroupShareTab({
               })}
             </div>
           </div>
+
+          {monthPickerOpen && (
+            <MonthPicker
+              year={year}
+              month={month}
+              onClose={() => setMonthPickerOpen(false)}
+              onPick={(y, m) => {
+                const key = monthPickKey(y, m);
+                setSelectedDate(key);
+                setSelectedDayKey(key);
+                setMonthPickerOpen(false);
+              }}
+            />
+          )}
 
           <GroupBoard
             group={currentGroup}

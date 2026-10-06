@@ -3,11 +3,12 @@ import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
-import { Bell, BellOff, Camera, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
+import { Bell, BellOff, Camera, Check, ChevronDown, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useSwipe } from '../lib/swipe';
 import { useShiftTypes, shiftTextVars, findShiftType } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
+import MonthPicker, { monthPickKey } from './MonthPicker';
 import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey, getTodayDateObj } from '../utils/dateUtils';
 import { usesServerPush, enablePushReminders, disablePushReminders, toStartTimes } from '../lib/pushNotifications';
@@ -102,6 +103,7 @@ export default function MyShiftTab({
   const [quickCode, setQuickCode] = useState(null);
   const quickMode = quickCode !== null;
   const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [isPatternOpen, setIsPatternOpen] = useState(false); // false | true | 'first'(처음 사용자 안내에서 열림)
 
   // 알림 권한 요청 및 타이머 등록
@@ -410,10 +412,14 @@ export default function MyShiftTab({
       {/* 1. 달 제목 · 이번 달 요약 */}
       <section className="pt-1">
         <div className="flex items-end justify-between">
-          <h2 className="text-slate-900 leading-none">
-            <span className="block text-[13px] font-medium text-slate-400 mb-1.5">{year}년 </span>
-            <span className="text-[34px] font-bold tracking-tight">{month}월</span>
-          </h2>
+          {/* 누르면 년·월 바로 고르기 */}
+          <button type="button" onClick={() => setIsMonthPickerOpen(true)} aria-label="년·월 선택" className="text-left cursor-pointer">
+            <h2 className="text-slate-900 leading-none">
+              <span className="block text-[13px] font-medium text-slate-400 mb-1.5">{year}년 </span>
+              <span className="text-[34px] font-bold tracking-tight">{month}월</span>
+              <ChevronDown size={22} className="inline-block ml-1 -mt-1 text-slate-400" aria-hidden="true" />
+            </h2>
+          </button>
           <div className="flex items-center -mr-2 text-slate-700">
             <button type="button" aria-label="이전 달" onClick={() => goMonth(-1)} className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100">
               <ChevronLeft size={24} />
@@ -658,6 +664,18 @@ export default function MyShiftTab({
             </label>
           </div>
         </Modal>
+      )}
+
+      {isMonthPickerOpen && (
+        <MonthPicker
+          year={year}
+          month={month}
+          onClose={() => setIsMonthPickerOpen(false)}
+          onPick={(y, m) => {
+            setSelectedDate(monthPickKey(y, m));
+            setIsMonthPickerOpen(false);
+          }}
+        />
       )}
 
       {isTypeManagerOpen && (
