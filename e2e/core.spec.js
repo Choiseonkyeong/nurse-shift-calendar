@@ -122,8 +122,8 @@ test('다크 모드 전환', async ({ page }) => {
   const theme = page.getByRole('button', { name: /화면 테마/ });
   await theme.click(); // 기기 설정 → 다크
   await expect(page.locator('html')).toHaveClass(/dark/);
-  const cardBg = await page.locator('.bg-white').first().evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(cardBg).toBe('rgb(15, 23, 42)');
+  // 카드 배경 (버튼은 색이 부드럽게 바뀌므로 전환이 끝날 때까지 기다림)
+  await expect.poll(() => page.locator('.card').first().evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(15, 23, 42)');
   await page.reload();
   await expect(page.locator('html')).toHaveClass(/dark/); // 설정 유지
   await theme.click(); // 다크 → 라이트

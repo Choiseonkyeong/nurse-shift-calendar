@@ -26,7 +26,7 @@ export default function ConfirmHost() {
   const Icon = req.danger ? AlertTriangle : HelpCircle;
 
   return (
-    <Modal onClose={() => done(false)} label={req.title || '확인'} zIndex={300}>
+    <Modal onClose={() => done(false)} label={req.title || '확인'} align="center" zIndex={300}>
       <div data-confirm-dialog className="bg-white w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100 text-center">
         <div
           className={`w-11 h-11 mx-auto rounded-2xl flex items-center justify-center ${

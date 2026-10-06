@@ -109,6 +109,7 @@ export default function App() {
 
   // 탭을 바꾸면 맨 위부터 보이게
   const scrollAreaRef = useRef(null);
+  const [scrolled, setScrolled] = useState(false); // 내용을 내리면 헤더 아래에 얇은 선
   useEffect(() => {
     if (scrollAreaRef.current) scrollAreaRef.current.scrollTop = 0;
   }, [activeTab]);
@@ -770,19 +771,21 @@ export default function App() {
       />
     )}
     <div className="min-h-screen bg-page flex justify-center items-start sm:py-6 font-sans">
-      <div className="w-full max-w-md bg-white h-[100dvh] sm:h-[min(840px,calc(100dvh-3rem))] sm:rounded-3xl sm:shadow-2xl flex flex-col justify-between overflow-hidden relative border border-slate-200/80">
+      <div className="w-full max-w-md bg-page h-[100dvh] sm:h-[min(840px,calc(100dvh-3rem))] sm:rounded-[2rem] sm:shadow-2xl flex flex-col justify-between overflow-hidden relative sm:border sm:border-slate-200/80">
         
         {/* 1. 상단 프로필 헤더 */}
         <div
-          className="bg-white px-5 py-4 border-b border-slate-100 flex justify-between items-center z-10 shrink-0"
-          style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
+          className={`bg-page px-4 pb-2.5 flex justify-between items-center z-10 shrink-0 transition-shadow ${
+            scrolled ? 'shadow-[0_1px_0_rgb(var(--c-slate-200))]' : ''
+          }`}
+          style={{ paddingTop: 'calc(0.75rem + var(--safe-top))' }}
         >
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <button
               type="button"
               onClick={() => setAccountModal('link')}
               aria-label={accountStatus === 'linked' ? '계정' : '계정 (연결 필요)'}
-              className="relative w-10 h-10 shrink-0 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-sm shadow-2xs cursor-pointer"
+              className="relative w-9 h-9 shrink-0 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-sm cursor-pointer"
             >
               {userName.substring(0, 1)}
               {accountStatus && accountStatus !== 'linked' && (
@@ -819,7 +822,7 @@ export default function App() {
                   }}
                   aria-label="이름 수정"
                 >
-                  <h1 className="font-black text-[15px] sm:text-base text-slate-900 leading-tight truncate">
+                  <h1 className="font-extrabold text-[17px] text-slate-900 leading-tight truncate tracking-tight">
                     {nameSkipped ? (
                       '내 근무표'
                     ) : (
@@ -839,7 +842,7 @@ export default function App() {
           <div className="flex items-center gap-1 shrink-0 ml-1.5">
             <button
               onClick={handleGoToday}
-              className="flex items-center gap-1 px-2 py-1.5 whitespace-nowrap bg-amber-50 text-amber-600 border border-amber-200 rounded-2xl text-xs font-black hover:bg-amber-100 transition cursor-pointer"
+              className="flex items-center gap-1 h-9 px-3 whitespace-nowrap bg-white text-slate-700 rounded-full text-[13px] font-bold cursor-pointer"
             >
               <RotateCcw size={13} />
               <span>오늘</span>
@@ -848,7 +851,7 @@ export default function App() {
               type="button"
               onClick={cycleTheme}
               aria-label={`화면 테마: ${{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]} (눌러서 변경)`}
-              className="p-1.5 rounded-2xl border bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 transition cursor-pointer"
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-slate-600 cursor-pointer"
             >
               {themePref === 'dark' ? <Moon size={14} /> : themePref === 'light' ? <Sun size={14} /> : <SunMoon size={14} />}
             </button>
@@ -857,8 +860,8 @@ export default function App() {
               aria-label={privacyBlur ? '보안 모드 끄기 (근무 보이기)' : '보안 모드 (남에게 근무 가리기)'}
               aria-pressed={privacyBlur}
               title="보안 모드: 화면의 근무를 가려요"
-              className={`text-xs px-1.5 py-1.5 whitespace-nowrap rounded-2xl font-black flex items-center gap-1 border transition cursor-pointer ${
-                privacyBlur ? 'bg-amber-400 text-slate-900 border-amber-300' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              className={`h-9 min-w-9 px-2.5 whitespace-nowrap rounded-full text-xs font-bold flex items-center justify-center gap-1 cursor-pointer ${
+                privacyBlur ? 'bg-amber-400 text-slate-900' : 'bg-white text-slate-600'
               }`}
             >
               <Shield size={14} />
@@ -870,8 +873,9 @@ export default function App() {
         {/* 2. 탭 메인 컨텐츠 영역 (하단 패딩 확보) */}
         <div
           ref={scrollAreaRef}
-          className="p-4 flex-1 overflow-y-auto bg-slate-50/50"
-          style={{ paddingBottom: 'calc(5rem + var(--safe-bottom))' }}
+          className="px-4 pt-1 flex-1 overflow-y-auto bg-page"
+          onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 4)}
+          style={{ paddingBottom: 'calc(5.5rem + var(--safe-bottom))' }}
         >
           <Suspense
             fallback={
@@ -974,51 +978,51 @@ export default function App() {
 
         {/* 3. 프레임 바닥에 완벽 밀착시킨 하단 네비게이션 탭 */}
         <div
-          className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-3 py-2 flex justify-around items-center z-50"
-          style={{ paddingBottom: 'calc(0.5rem + var(--safe-bottom))' }}
+          className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md shadow-[0_-1px_0_rgb(var(--c-slate-200))] px-2 pt-1.5 grid grid-cols-4 z-50"
+          style={{ paddingBottom: 'calc(0.375rem + var(--safe-bottom))' }}
         >
           <button
             onClick={() => setActiveTab('myShift')}
             aria-current={activeTab === 'myShift' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'myShift' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'
+            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl cursor-pointer ${
+              activeTab === 'myShift' ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
-            <Calendar size={18} className={activeTab === 'myShift' ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className="text-[11px] font-black mt-0.5">내 근무</span>
+            <Calendar size={22} className={activeTab === 'myShift' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+            <span className="text-[11px] font-bold">내 근무</span>
           </button>
 
           <button
             onClick={() => setActiveTab('allowance')}
             aria-current={activeTab === 'allowance' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'allowance' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'
+            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl cursor-pointer ${
+              activeTab === 'allowance' ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
-            <DollarSign size={18} className={activeTab === 'allowance' ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className="text-[11px] font-black mt-0.5">연차/수당</span>
+            <DollarSign size={22} className={activeTab === 'allowance' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+            <span className="text-[11px] font-bold">연차/수당</span>
           </button>
 
           <button
             onClick={() => setActiveTab('groupShare')}
             aria-current={activeTab === 'groupShare' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'groupShare' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'
+            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl cursor-pointer ${
+              activeTab === 'groupShare' ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
-            <Users size={18} className={activeTab === 'groupShare' ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className="text-[11px] font-black mt-0.5">그룹</span>
+            <Users size={22} className={activeTab === 'groupShare' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+            <span className="text-[11px] font-bold">그룹</span>
           </button>
 
           <button
             onClick={() => setActiveTab('import')}
             aria-current={activeTab === 'import' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'import' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'
+            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl cursor-pointer ${
+              activeTab === 'import' ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
-            <Upload size={18} className={activeTab === 'import' ? 'stroke-[2.5]' : 'stroke-2'} />
-            <span className="text-[11px] font-black mt-0.5">등록</span>
+            <Upload size={22} className={activeTab === 'import' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+            <span className="text-[11px] font-bold">등록</span>
           </button>
         </div>
 

@@ -151,7 +151,7 @@ export default function AllowanceTab({
     <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
       
       {/* 1. 상단 근무시간 입력 세션 */}
-      <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-2">
+      <div className="card p-4 space-y-2">
         <h3 className="font-black text-sm text-slate-800 px-1">근무 시간 설정</h3>
         <div className="flex items-center gap-2 px-1 text-[10px] font-bold text-slate-400">
           <span className="w-8" />
@@ -164,7 +164,7 @@ export default function AllowanceTab({
           return (
             <div key={code} className="flex items-center gap-2">
               <span className="font-black text-xs text-indigo-950 w-8 text-center truncate">{code}</span>
-              <div className="flex-1 min-w-0 flex items-center gap-1 bg-slate-50 border border-slate-200/60 rounded-2xl px-2 py-1">
+              <div className="flex-1 min-w-0 flex items-center gap-1 bg-slate-100 rounded-2xl px-2 py-1">
                 <input
                   type="time"
                   aria-label={`${code} 시작 시각`}
@@ -203,7 +203,7 @@ export default function AllowanceTab({
                   aria-label={`${code} 야간 인정 시간`}
                   value={shiftTimes[code]?.nightHours ?? 0}
                   onChange={(e) => updateShiftTimes(code, 'nightHours', Number(e.target.value) || 0)}
-                  className="shrink-0 w-12 py-2 text-center font-black text-xs bg-slate-50 border border-slate-200/60 rounded-2xl outline-none text-indigo-600 focus:border-indigo-400"
+                  className="shrink-0 w-12 py-2 text-center font-black text-xs bg-slate-100 rounded-2xl outline-none text-indigo-600 focus:border-indigo-400"
                 />
               ) : (
                 <span className="shrink-0 w-12 text-center text-xs font-bold text-slate-300">-</span>
@@ -214,7 +214,7 @@ export default function AllowanceTab({
       </div>
 
       {/* 2. 연차(휴가) 현황 세션 */}
-      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+      <div className="card p-5 space-y-3">
         <h3 className="font-black text-sm text-rose-500 flex items-center gap-1.5">
           <span>🌴</span> 연차(휴가) 현황
         </h3>
@@ -237,7 +237,7 @@ export default function AllowanceTab({
             </div>
           </div>
 
-          <div className="px-1 py-3 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col items-center justify-center">
+          <div className="px-1 py-3 bg-slate-50 rounded-2xl flex flex-col items-center justify-center">
             <span className="text-[10px] font-extrabold text-slate-400 block mb-1">사용 연차</span>
             <div className="text-lg font-black text-slate-800">
               {totalUsed} <span className="text-xs font-bold text-slate-700">개</span>
@@ -269,7 +269,7 @@ export default function AllowanceTab({
         </div>
         )}
 
-        <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-2xl border border-slate-100">
+        <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-2xl">
           <span className="text-[11px] font-bold text-slate-500">앱 사용 전 이미 쓴 연차</span>
           <div className="flex items-center gap-1">
               <input
@@ -286,7 +286,7 @@ export default function AllowanceTab({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-2 rounded-2xl">
           <span className="text-[11px] font-bold text-slate-500 shrink-0">연차 기준</span>
           <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
             <select
@@ -322,7 +322,7 @@ export default function AllowanceTab({
       </div>
 
       {/* 3. 월 야간근로수당 계산기 세션 (자유 정산 시작일 설정 기능) */}
-      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
+      <div className="card p-5 space-y-4">
         
         {/* 헤더 및 정산 기준일 선택 드롭다운 */}
         <div className="space-y-2">
@@ -336,7 +336,7 @@ export default function AllowanceTab({
           </div>
 
           {/* 정산 시작일 선택 옵션 바 */}
-          <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-2xl border border-slate-100 text-xs font-bold">
+          <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-2xl text-xs font-bold">
             <span className="text-slate-600 whitespace-nowrap">정산 시작일</span>
             <div className="flex items-center gap-1">
               <select

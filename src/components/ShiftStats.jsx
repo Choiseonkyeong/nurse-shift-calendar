@@ -11,7 +11,7 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
   const usedTypes = shiftTypes.filter((t) => stats.totals[t.code]);
 
   return (
-    <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+    <div className="card p-5 space-y-3">
       <div className="flex justify-between items-center">
         <h3 className="font-black text-sm text-slate-800 flex items-center gap-1.5">
           <span>📊</span> 근무 통계
@@ -33,7 +33,7 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
           ['최장 연속근무', `${stats.longestWork}일`],
           ['최장 연속N', `${stats.longestNight}일`]
         ].map(([label, value]) => (
-          <div key={label} className="p-2.5 bg-slate-50 rounded-2xl border border-slate-100">
+          <div key={label} className="p-2.5 bg-slate-50 rounded-2xl">
             <p className="text-[10px] font-extrabold text-slate-400">{label}</p>
             <p className="text-base font-black text-slate-800">{value}</p>
           </div>

@@ -44,3 +44,102 @@ body {
 .time-compact {
   cursor: pointer;
 }
+
+/* ───────── 앱처럼 보이게: 공통 화면 규칙 ───────── */
+
+/* 카드: 테두리·그림자 없이 회색 바탕 위 흰 면 (토스·은행 앱처럼) */
+@layer components {
+  .card {
+    @apply bg-white rounded-[22px];
+  }
+}
+
+html,
+body {
+  /* 당겨서 새로고침·바운스로 화면 전체가 끌려가지 않게 */
+  overscroll-behavior: none;
+}
+
+button,
+[role='button'],
+a {
+  /* 두 번 눌러 확대 방지 + 누르는 즉시 반응 */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 누를 때 살짝 들어가는 느낌 (마우스 hover 대신 손가락 피드백) */
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+button {
+  transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+  transition-duration: 120ms;
+}
+
+/* 팝업 배경 */
+.modal-overlay {
+  animation: overlay-in 0.18s ease-out;
+}
+@keyframes overlay-in {
+  from {
+    background-color: transparent;
+  }
+}
+.modal-center > * {
+  animation: pop-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* 폰: 팝업은 아래에서 올라오는 시트 */
+@media (max-width: 639px) {
+  .modal-sheet {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal-sheet > * {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: 88dvh;
+    overflow-y: auto;
+    border: 0 !important;
+    border-radius: 24px 24px 0 0 !important;
+    padding-bottom: calc(1.5rem + var(--safe-bottom)) !important;
+    animation: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  /* 손잡이 */
+  .modal-sheet > *::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgb(var(--c-slate-200));
+    margin: -6px auto 12px;
+  }
+}
+@media (min-width: 640px) {
+  .modal-sheet > * {
+    animation: pop-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay,
+  .modal-overlay > *,
+  button {
+    animation: none !important;
+    transition: none !important;
+  }
+}

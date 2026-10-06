@@ -72,6 +72,20 @@ test('다른 탭에서 바꾼 날짜가 그룹 탭 선택 날짜에 반영', asy
   await expect(page.getByText('10월 1일 (목) 근무')).toBeVisible();
 });
 
+test('달을 빨리 넘겨도 늦게 온 지난달 응답이 그룹 근무표를 덮지 않음', async ({ page }) => {
+  const { state } = await setup(page, { mateShifts: { '2026-09-01': 'N', '2026-10-01': 'E' } });
+  // 9월 조회만 느리게: 10월 응답이 먼저 오고, 9월 응답은 나중에 도착
+  state.delay = { get_group_schedule: (body) => (String(body?.p_from).startsWith('2026-09') ? 2500 : 0) };
+  await tab(page, '그룹').click();
+  await page.getByText('7병동 (2명)').click();
+  await page.getByRole('button', { name: '다음 달' }).first().click();
+  await expect(page.getByRole('heading', { name: '2026년 10월' })).toBeVisible();
+  const mate = page.getByText('10월 1일 (목) 근무').locator('xpath=ancestor::*[contains(., \'박동료\')][1]');
+  await expect(mate).toContainText('E');
+  await page.waitForTimeout(3000); // 늦은 9월 응답 도착
+  await expect(mate).toContainText('E');
+});
+
 test('그룹 만들기 → 초대 링크 공유 → 동료가 링크로 열어 참여 → 게시판 → 나가기', async ({ page, browser }) => {
   const state = createFakeState();
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -164,14 +178,14 @@ test('그룹 색상은 내 폰에서만 바뀌고 서버·다른 멤버 색은 �
   await tab(page, '그룹').click();
   await page.getByText('7병동 (2명)').click();
   await page.getByLabel('그룹 색상 (내 폰에서만 적용)').fill('#10b981');
-  const back = page.getByRole('button', { name: /전체 그룹 목록/ });
-  await expect(back).toHaveCSS('color', 'rgb(16, 185, 129)');
+  await expect(page.getByRole('button', { name: /동료 초대하기/ })).toHaveCSS('background-color', 'rgb(16, 185, 129)');
   expect(group.color).toBe('#6366F1');
   expect(serverWrites).toBe(0);
   expect(await readLocal(page, 'my_group_colors')).toEqual({ [group.id]: '#10b981' });
 
   await page.reload();
   await tab(page, '그룹').click();
-  await expect(page.getByText('7병동 (2명)').locator('..')).toHaveCSS('background-color', 'rgb(16, 185, 129)');
+  // 목록의 그룹 아이콘 색
+  await expect(page.getByRole('button', { name: /7병동/ }).locator('span').first()).toHaveCSS('background-color', 'rgb(16, 185, 129)');
   expect(state.groups[0].color).toBe('#6366F1');
 });

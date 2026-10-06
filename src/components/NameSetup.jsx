@@ -23,7 +23,7 @@ export default function NameSetup({ onSubmit, onLogin, onCancel, initialName = '
   const required = confirmMode || groupMode;
 
   return (
-    <Modal label="이름 입력" zIndex={110} onClose={groupMode ? onCancel : undefined}>
+    <Modal align="center" label="이름 입력" zIndex={110} onClose={groupMode ? onCancel : undefined}>
       <form onSubmit={submit} className="bg-white w-full max-w-xs rounded-3xl p-6 space-y-4 shadow-xl text-center">
         <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
           <CalendarHeart size={24} />
