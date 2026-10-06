@@ -144,7 +144,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
   );
 
   return (
-    <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+    <div className="card p-5 space-y-3">
       <div className="flex justify-between items-center">
         <h4 className="font-black text-sm text-slate-800 flex items-center gap-1.5">
           <MessageSquare size={15} style={{ color: themeColor }} /> 그룹 게시판
@@ -192,7 +192,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
                 const mine = s.requester_id === profile.id;
                 const toMe = s.target_id === profile.id;
                 return (
-                  <div key={s.id} className="p-3 rounded-2xl border border-slate-100 bg-slate-50 space-y-1.5">
+                  <div key={s.id} className="p-3 rounded-2xl bg-slate-50 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className={`text-[11px] font-black text-slate-700 ${blurCls}`}>
                         {names[s.requester_id] || '알 수 없음'} → {names[s.target_id] || '알 수 없음'}
@@ -251,7 +251,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
               rows={2}
               placeholder="공지, 회식 일정 등을 남겨 보세요"
               aria-label="게시글 내용"
-              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none resize-none focus:border-indigo-300"
+              className="flex-1 px-3 py-2 bg-slate-100 rounded-2xl text-xs font-bold outline-none resize-none focus:border-indigo-300"
             />
             <button
               type="button"
@@ -270,7 +270,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
           <div className="space-y-2">
             {posts.length === 0 && <p className="text-xs font-bold text-slate-300 text-center py-3">아직 글이 없습니다.</p>}
             {posts.map((p) => (
-              <div key={p.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+              <div key={p.id} className="p-3 bg-slate-50 rounded-2xl space-y-1">
                 <div className="flex items-center justify-between">
                   <span className={`text-[11px] font-black text-slate-700 ${blurCls}`}>{names[p.author_id] || '알 수 없음'}</span>
                   <div className="flex items-center gap-2">
@@ -344,7 +344,7 @@ function SwapForm({ group, profile, defaultDate, getCode, loadDayCodes, chip, bl
         <select
           value={targetId}
           onChange={(e) => setTargetId(e.target.value)}
-          className={`min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 font-black ${blurCls}`}
+          className={`min-w-0 flex-1 bg-slate-100 rounded-xl px-2 py-1.5 font-black ${blurCls}`}
         >
           {others.map((m) => (
             <option key={m.id} value={m.id}>
@@ -364,7 +364,7 @@ function SwapForm({ group, profile, defaultDate, getCode, loadDayCodes, chip, bl
               type="date"
               value={value}
               onChange={(e) => setter(e.target.value)}
-              className="min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 font-bold"
+              className="min-w-0 flex-1 bg-slate-100 rounded-xl px-2 py-1 font-bold"
             />
           </label>
           {value ? (
@@ -381,7 +381,7 @@ function SwapForm({ group, profile, defaultDate, getCode, loadDayCodes, chip, bl
         onChange={(e) => setMessage(e.target.value)}
         maxLength={200}
         placeholder="메시지 (선택) 예: 가족 행사가 있어서요 🙏"
-        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold outline-none"
+        className="w-full bg-slate-100 rounded-xl px-3 py-2 font-bold outline-none"
       />
       <p className="text-[10px] text-slate-400">상대가 수락하면 두 사람의 해당 날짜 근무가 서로 바뀌어요.</p>
       <button

@@ -8,7 +8,7 @@ import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
 import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
-import { addMonthsKey, toDateKey } from '../utils/dateUtils';
+import { addMonthsKey, toDateKey, getTodayDateObj } from '../utils/dateUtils';
 import { usesServerPush, enablePushReminders, disablePushReminders, toStartTimes } from '../lib/pushNotifications';
 import {
   isNativeApp,
@@ -288,6 +288,7 @@ export default function MyShiftTab({
   // 캘린더 날짜 계산
   const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
   const lastDateOfMonth = new Date(year, month, 0).getDate();
+  const todayKey = getTodayDateObj().dateStr;
   const calendarDays = [];
 
   for (let i = 0; i < firstDayOfMonth; i++) calendarDays.push(null);
@@ -412,7 +413,7 @@ export default function MyShiftTab({
       )}
 
       {/* 1. 월간 요약 카드 & 알림 버튼 */}
-      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+      <div className="card p-5 space-y-3">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1">
             <button
@@ -440,19 +441,15 @@ export default function MyShiftTab({
             onClick={handleShareImage}
             disabled={isSharing}
             aria-label="근무표 이미지 공유"
-            className="p-2 rounded-2xl border bg-slate-50 text-slate-500 border-slate-200 hover:text-indigo-600 transition cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 cursor-pointer"
           >
             {isSharing ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
           </button>
           {/* 알람 설정 버튼 (켜져 있어도 이 기기에 알림 권한이 없으면 '권한 필요') */}
           <button
             onClick={() => setIsAlarmModalOpen(true)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-2xl text-xs font-black transition border cursor-pointer whitespace-nowrap ${
-              alarmBlocked
-                ? 'bg-rose-50 text-rose-600 border-rose-200'
-                : alarmSettings.enabled
-                  ? 'bg-amber-50 text-amber-600 border-amber-200'
-                  : 'bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600'
+            className={`flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold cursor-pointer whitespace-nowrap ${
+              alarmBlocked ? 'bg-rose-50 text-rose-600' : alarmSettings.enabled ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-500'
             }`}
           >
             {alarmBlocked ? (
@@ -487,7 +484,7 @@ export default function MyShiftTab({
       </div>
 
       {/* 2. 메인 근무 달력 */}
-      <div className="bg-white p-4 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+      <div className="card p-4 space-y-3">
         {/* 빠른 입력: 근무를 고르고 날짜를 연속으로 터치 */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -498,22 +495,22 @@ export default function MyShiftTab({
             <button
               type="button"
               onClick={() => setIsTypeManagerOpen(true)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-2xl text-xs font-black border bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold bg-slate-100 text-slate-600 cursor-pointer whitespace-nowrap"
             >
               <Palette size={13} /> 종류
             </button>
             <button
               type="button"
               onClick={() => setIsPatternOpen(true)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-2xl text-xs font-black border bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold bg-slate-100 text-slate-600 cursor-pointer whitespace-nowrap"
             >
               <Repeat size={13} /> 패턴
             </button>
             <button
               type="button"
               onClick={() => setQuickCode(quickMode ? null : (shiftTypes[0]?.code || ''))}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-2xl text-xs font-black border transition cursor-pointer whitespace-nowrap ${
-                quickMode ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              className={`flex items-center gap-1 h-8 px-3 rounded-full text-xs font-bold cursor-pointer whitespace-nowrap ${
+                quickMode ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
               }`}
             >
               <Zap size={13} className={quickMode ? 'fill-white' : ''} />
@@ -540,7 +537,7 @@ export default function MyShiftTab({
               <button
                 type="button"
                 onClick={() => setQuickCode('')}
-                className={`shrink-0 px-3 py-2 rounded-full text-xs font-black bg-white border border-slate-200 text-slate-500 flex items-center gap-1 transition cursor-pointer ${
+                className={`shrink-0 px-3 py-2 rounded-full text-xs font-black bg-slate-100 text-slate-500 flex items-center gap-1 transition cursor-pointer ${
                   quickCode === '' ? 'ring-2 ring-offset-1 ring-indigo-500' : ''
                 }`}
               >
@@ -551,7 +548,7 @@ export default function MyShiftTab({
         </div>
 
         {/* 요일 헤더 */}
-        <div className="grid grid-cols-7 text-center font-bold text-xs border-b border-slate-100 pb-2">
+        <div className="grid grid-cols-7 text-center font-semibold text-[11px] pb-1">
           <span className="text-rose-500">일</span>
           <span className="text-slate-400">월</span>
           <span className="text-slate-400">화</span>
@@ -562,13 +559,15 @@ export default function MyShiftTab({
         </div>
 
         {/* 날짜 그리드 */}
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-x-0.5 gap-y-1">
           {calendarDays.map((item, idx) => {
-            if (!item) return <div key={`empty_${idx}`} className="min-h-[64px]"></div>;
+            if (!item) return <div key={`empty_${idx}`} className="min-h-[62px]"></div>;
 
             const shift = myShifts[item.dateKey] || '';
             const isSelected = selectedDate === item.dateKey;
+            const isToday = item.dateKey === todayKey;
             const badgeStyle = getBadgeStyle(shift);
+            const holidayShort = getHoliday(item.dateKey) ? getHolidayShort(item.dateKey) : '';
 
             return (
               <button
@@ -577,33 +576,37 @@ export default function MyShiftTab({
                 onClick={() => handleDayClick(item.dateKey)}
                 aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${dayNotes[item.dateKey] ? ' 메모 있음' : ''}`}
                 aria-pressed={isSelected}
-                className={`min-h-[64px] w-full min-w-0 text-left p-1 min-[360px]:p-1.5 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
+                className={`relative min-h-[62px] w-full min-w-0 px-0.5 pt-1 pb-1 rounded-2xl transition-colors flex flex-col items-center gap-0.5 cursor-pointer active:bg-slate-100 ${
                   isSelected
-                    ? 'border-indigo-600 ring-2 ring-indigo-200 bg-indigo-50/20'
+                    ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-300'
                     : uncertainSet.has(item.dateKey)
-                      ? 'border-amber-400 ring-2 ring-amber-200 bg-amber-50'
-                      : 'border-slate-100 bg-slate-50/30 hover:bg-slate-50'
+                      ? 'bg-amber-50 ring-2 ring-inset ring-amber-400'
+                      : ''
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <span className={`text-[11px] font-black px-0.5 ${dayNumberClass(item.dateKey)}`}>{item.day}</span>
-                  {dayNotes[item.dateKey] && <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400" title="메모 있음" />}
-                </div>
-                {getHoliday(item.dateKey) && (
-                  <span className="text-[8px] font-bold text-rose-400 leading-none whitespace-nowrap overflow-hidden tracking-tighter">{getHolidayShort(item.dateKey)}</span>
-                )}
+                <span
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-bold leading-none ${
+                    isToday ? 'bg-indigo-600 !text-white' : dayNumberClass(item.dateKey)
+                  }`}
+                >
+                  {item.day}
+                </span>
+                {dayNotes[item.dateKey] && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400" title="메모 있음" />}
 
                 {shift ? (
-                  <div
+                  <span
                     style={badgeStyle}
-                    className={`w-full py-1 text-center rounded-xl font-black shadow-2xs mt-1 whitespace-nowrap overflow-hidden tracking-tighter ${
-                      [...shift].length >= 3 ? 'text-[9px] min-[360px]:text-[10px]' : 'text-[10px] min-[360px]:text-xs'
+                    className={`w-full max-w-[2.75rem] py-[3px] text-center rounded-lg font-extrabold whitespace-nowrap overflow-hidden tracking-tighter ${
+                      [...shift].length >= 3 ? 'text-[9px] min-[360px]:text-[10px]' : 'text-[11px] min-[360px]:text-xs'
                     }`}
                   >
                     {shift}
-                  </div>
+                  </span>
                 ) : (
-                  <div className="h-5" aria-hidden="true" />
+                  <span className="h-[22px]" aria-hidden="true" />
+                )}
+                {holidayShort && (
+                  <span className="text-[8px] font-bold text-rose-400 leading-none whitespace-nowrap overflow-hidden max-w-full tracking-tighter">{holidayShort}</span>
                 )}
               </button>
             );
@@ -675,7 +678,7 @@ export default function MyShiftTab({
         <button
           type="button"
           onClick={() => { setEditingDateKey(selectedDate); setIsEditModalOpen(true); }}
-          className="w-full text-left bg-white p-4 rounded-3xl shadow-xs border border-slate-100 flex items-start gap-2 cursor-pointer hover:bg-slate-50 transition"
+          className="w-full text-left card p-4 flex items-start gap-2 cursor-pointer hover:bg-slate-50 transition"
         >
           <StickyNote size={15} className="text-amber-500 mt-0.5 shrink-0" />
           <div className="min-w-0">

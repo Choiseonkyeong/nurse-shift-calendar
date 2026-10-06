@@ -31,9 +31,9 @@ const FOCUSABLE =
  *  - Esc·바깥 누르면 닫힘 (onClose 가 없으면 닫을 수 없는 필수 창)
  *  - 열리면 창 안 첫 입력칸/버튼으로 포커스, Tab 은 창 안에서만 이동, 닫히면 원래 위치로 복귀
  * @param label   스크린리더용 창 이름
- * @param align   'center' | 'bottom' (작은 화면에서 아래쪽 시트)
+ * @param align   'sheet'(기본: 폰에서는 아래에서 올라오는 시트, 넓은 화면에서는 가운데) | 'center'(확인 창처럼 항상 가운데)
  */
-export default function Modal({ onClose, label, children, align = 'center', zIndex = 100, className = '' }) {
+export default function Modal({ onClose, label, children, align = 'sheet', zIndex = 100, className = '' }) {
   const overlayRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -103,8 +103,8 @@ export default function Modal({ onClose, label, children, align = 'center', zInd
       aria-label={label}
       tabIndex={-1}
       style={{ zIndex }}
-      className={`fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex justify-center p-4 outline-none ${
-        align === 'bottom' ? 'items-end sm:items-center' : 'items-center'
+      className={`modal-overlay fixed inset-0 bg-slate-900/40 flex justify-center items-center p-4 outline-none ${
+        align === 'sheet' ? 'modal-sheet' : 'modal-center'
       } ${className}`}
       onMouseDown={(e) => {
         // 창 바깥(어두운 배경)을 눌렀을 때만 닫기

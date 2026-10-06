@@ -178,14 +178,14 @@ test('그룹 색상은 내 폰에서만 바뀌고 서버·다른 멤버 색은 �
   await tab(page, '그룹').click();
   await page.getByText('7병동 (2명)').click();
   await page.getByLabel('그룹 색상 (내 폰에서만 적용)').fill('#10b981');
-  const back = page.getByRole('button', { name: /전체 그룹 목록/ });
-  await expect(back).toHaveCSS('color', 'rgb(16, 185, 129)');
+  await expect(page.getByRole('button', { name: /동료 초대하기/ })).toHaveCSS('background-color', 'rgb(16, 185, 129)');
   expect(group.color).toBe('#6366F1');
   expect(serverWrites).toBe(0);
   expect(await readLocal(page, 'my_group_colors')).toEqual({ [group.id]: '#10b981' });
 
   await page.reload();
   await tab(page, '그룹').click();
-  await expect(page.getByText('7병동 (2명)').locator('..')).toHaveCSS('background-color', 'rgb(16, 185, 129)');
+  // 목록의 그룹 아이콘 색
+  await expect(page.getByRole('button', { name: /7병동/ }).locator('span').first()).toHaveCSS('background-color', 'rgb(16, 185, 129)');
   expect(state.groups[0].color).toBe('#6366F1');
 });

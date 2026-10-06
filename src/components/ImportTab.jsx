@@ -458,7 +458,7 @@ export default function ImportTab({
 
   return (
     <div className="space-y-4 font-sans max-w-md mx-auto pb-10">
-      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-4">
+      <div className="card p-5 space-y-4">
         <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
           <Upload size={18} className="text-indigo-600" /> 근무표 가져오기
         </h2>
@@ -543,7 +543,7 @@ export default function ImportTab({
       </div>
 
       {/* 내 데이터: 계정 · 백업 · 내보내기 */}
-      <div className="bg-white p-5 rounded-3xl shadow-xs border border-slate-100 space-y-3">
+      <div className="card p-5 space-y-3">
         <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
           <Archive size={18} className="text-indigo-600" /> 내 데이터
         </h2>
