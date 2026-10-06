@@ -11,7 +11,7 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
   const usedTypes = shiftTypes.filter((t) => stats.totals[t.code]);
 
   return (
-    <div className="pt-4 space-y-3">
+    <div className="rounded-3xl bg-slate-50 p-5 space-y-3">
       <div className="flex justify-between items-center">
         <h3 className="text-[13px] font-medium text-slate-400">근무 통계</h3>
         <div className="flex items-center gap-1">
