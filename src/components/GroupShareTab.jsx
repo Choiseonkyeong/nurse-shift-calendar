@@ -52,6 +52,12 @@ export default function GroupShareTab({
   // 기본 추천 색상 5종 + 무한 커스텀 컬러 선택
   const DEFAULT_COLORS = ['#6366F1', '#A855F7', '#10B981', '#F43F5E', '#F59E0B', '#0284C7', '#EC4899'];
   
+  // 아래쪽 '새 그룹' / '코드로 참여' 중 펼친 것 (초대 링크로 코드가 채워져 있으면 참여를 펼침)
+  const [formMode, setFormMode] = useState(joinCodeInput ? 'join' : null);
+  useEffect(() => {
+    if (joinCodeInput) setFormMode('join');
+  }, [joinCodeInput]);
+
   // 새 그룹 생성 시 기본선택 커스텀 색상
   const [selectedColor, setSelectedColor] = useState('#6366F1');
 
@@ -328,19 +334,39 @@ export default function GroupShareTab({
                 ))}
               </div>
             ) : (
-              <div className="py-8 text-center space-y-1">
-                <Users size={28} className="mx-auto text-indigo-300" />
-                <p className="text-sm font-bold text-slate-700">아직 참여 중인 공유 그룹이 없습니다.</p>
-                <p className="text-xs font-medium text-slate-400">새 그룹을 만들거나, 동료에게 받은 코드로 참여하세요.</p>
+              <div className="py-6 text-center">
+                <span className="w-16 h-16 mx-auto rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Users size={30} />
+                </span>
+                <p className="text-[17px] font-semibold text-slate-900 mt-3">동료와 근무를 함께 봐요</p>
+                <p className="sr-only">아직 참여 중인 공유 그룹이 없습니다.</p>
               </div>
             )}
           </section>
 
-          {/* 새 그룹 만들기 */}
-          <section className="border-t border-slate-100 pt-4 space-y-3">
-            <h3 className="text-[13px] font-medium text-slate-400 flex items-center gap-1">
-              <Plus size={14} /> 새 그룹 생성
-            </h3>
+          {/* 그룹 만들기 / 코드로 참여: 큰 버튼 2개, 고른 것만 펼침 */}
+          <section className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { key: 'create', icon: <Plus size={24} />, label: '새 그룹' },
+                { key: 'join', icon: <LogIn size={24} />, label: '코드로 참여' }
+              ].map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setFormMode((m) => (m === t.key ? null : t.key))}
+                  aria-expanded={formMode === t.key}
+                  className={`h-24 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer ${
+                    formMode === t.key ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-700 active:bg-slate-100'
+                  }`}
+                >
+                  {t.icon}
+                  <span className="text-[15px] font-semibold">{t.label}</span>
+                </button>
+              ))}
+            </div>
+            {formMode === 'create' && (
+              <div className="space-y-3">
             <input
               type="text"
               placeholder="예: 81병동 동기"
@@ -384,13 +410,10 @@ export default function GroupShareTab({
             >
               {loading ? '처리 중...' : '그룹 만들기'}
             </button>
-          </section>
-
-          {/* 코드로 참여 */}
-          <section className="border-t border-slate-100 pt-4 space-y-3">
-            <h3 className="text-[13px] font-medium text-slate-400 flex items-center gap-1">
-              <LogIn size={14} /> 코드 입장
-            </h3>
+              </div>
+            )}
+            {formMode === 'join' && (
+              <div className="space-y-3">
             <input
               type="text"
               placeholder="6자리 코드 입력"
@@ -406,6 +429,8 @@ export default function GroupShareTab({
             >
               {loading ? '조회 중...' : '그룹 참여하기'}
             </button>
+              </div>
+            )}
           </section>
         </div>
       )}

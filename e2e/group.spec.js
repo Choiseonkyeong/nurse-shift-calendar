@@ -92,6 +92,7 @@ test('그룹 만들기 → 초대 링크 공유 → 동료가 링크로 열어 �
   await openApp(page, { state, name: '김간호' });
   await waitSaved(page);
   await tab(page, '그룹').click();
+  await page.getByRole('button', { name: '새 그룹', exact: true }).click();
   await page.getByPlaceholder('예: 81병동 동기').fill('7병동 동기');
   await page.getByRole('button', { name: '그룹 만들기' }).click();
   await expect(page.getByText(/'7병동 동기' 그룹이 생성되었습니다/)).toBeVisible();
@@ -145,6 +146,7 @@ test('이름 없이 시작 → 그룹 만들 때만 이름을 묻고 이어서 �
   await waitSaved(page);
 
   await tab(page, '그룹').click();
+  await page.getByRole('button', { name: '새 그룹', exact: true }).click();
   await page.getByPlaceholder('예: 81병동 동기').fill('7병동');
   await page.getByRole('button', { name: '그룹 만들기' }).click();
   await expect(page.getByRole('heading', { name: '그룹에서 쓸 이름' })).toBeVisible();
