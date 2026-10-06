@@ -29,3 +29,19 @@ export function leaveYearRange(selectedDate, basis = 'calendar', hireDate = '') 
   const end = new Date(next.getFullYear(), next.getMonth(), next.getDate() - 1);
   return { start: key(start), end: key(end) };
 }
+
+/**
+ * 근무 시간('HH:MM - HH:MM')에서 야간(22시~다음날 6시)에 걸친 시간 수
+ * 시간이 없거나 형식이 틀리면 null → 예전에 직접 입력한 값 사용
+ */
+export function nightHoursFromTime(time) {
+  const m = String(time || '').match(/^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$/);
+  if (!m) return null;
+  const start = Number(m[1]) * 60 + Number(m[2]);
+  let end = Number(m[3]) * 60 + Number(m[4]);
+  if (end <= start) end += 24 * 60; // 밤을 넘기는 근무
+  // 전날 22시~6시, 당일 22시~다음날 6시 두 구간과 겹치는 분
+  const overlap = (a, b) => Math.max(0, Math.min(end, b) - Math.max(start, a));
+  const mins = overlap(-120, 360) + overlap(1320, 1800);
+  return Math.round((mins / 60) * 100) / 100;
+}

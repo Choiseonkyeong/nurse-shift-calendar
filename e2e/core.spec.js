@@ -150,13 +150,23 @@ test('수당 탭: 휴일·야간 가산, 입사일 기준 연차, 통계', async
   await expect(page.getByText('휴일 가산수당').locator('..')).toContainText('80,000 원');
   await expect(page.getByText('야간 가산수당').locator('..')).toContainText('120,000 원');
   await page.getByRole('button', { name: /계산 설정/ }).click(); // 설정은 아래 창에서
-  await page.getByLabel('일요일도 휴일로').check();
+  const calc = page.getByRole('dialog', { name: '계산 설정' });
+  await expect(calc.getByText('야간 8h')).toBeVisible(); // N 22:00~07:00 → 22~6시 8시간 자동
+  await calc.getByRole('switch', { name: '일요일도 휴일로' }).click();
   await expect(page.getByText('휴일 근무 3회')).toBeAttached();
+  await calc.getByLabel('E 종료 시각').fill('23:00'); // E 14:00~23:00 → 야간 1시간 자동, E 1회 → +5,000원
+  await expect(calc.getByText('야간 1h')).toBeVisible();
+  await calc.getByRole('button', { name: '닫기' }).click();
+  await expect(page.getByText('야간 가산수당').locator('..')).toContainText('125,000 원');
 
-  await page.locator('select:has(option[value=hire])').selectOption('hire');
-  await page.getByLabel('입사일').fill('2021-11-01');
-  await expect(page.getByText('2025.11.01 ~ 2026.10.31')).toBeVisible();
-  await page.getByRole('dialog', { name: '계산 설정' }).getByRole('button', { name: '닫기' }).click();
+  await page.getByRole('button', { name: '연차 설정' }).click();
+  const leave = page.getByRole('dialog', { name: '연차 설정' });
+  await leave.getByRole('button', { name: '총 부여 연차 늘리기' }).click();
+  await leave.getByRole('button', { name: '입사일 기준' }).click();
+  await leave.getByLabel('입사일').fill('2021-11-01');
+  await expect(leave.getByText('2025.11.01 ~ 2026.10.31')).toBeVisible();
+  await leave.getByRole('button', { name: '닫기' }).click();
+  await expect(page.getByText('16일 중')).toBeVisible();
 
   await expect(page.getByText('최장 연속N').locator('..')).toContainText('2일');
 });

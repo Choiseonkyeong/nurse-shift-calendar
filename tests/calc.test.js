@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { leaveYearRange } from '../src/lib/allowance';
+import { leaveYearRange, nightHoursFromTime } from '../src/lib/allowance';
 import { computeYearStats } from '../src/lib/stats';
 import { expandPattern } from '../src/components/PatternFill';
 import { HOLIDAYS, getHoliday, getHolidayShort } from '../src/utils/holidays';
@@ -97,5 +97,16 @@ describe('설정 동기화 방향', () => {
     ['2026-09-28T10:00:00Z', { updated_at: '2026-09-28T10:00:00+00:00' }, 'none']
   ])('기기 %s / 서버 %j → %s', (local, server, expected) => {
     expect(decideSettingsSync(local, server)).toBe(expected);
+  });
+});
+
+describe('야간 시간 자동 계산 (22시~6시)', () => {
+  it('근무별', () => {
+    expect(nightHoursFromTime('07:00 - 15:00')).toBe(0);
+    expect(nightHoursFromTime('14:30 - 22:30')).toBe(0.5);
+    expect(nightHoursFromTime('21:30 - 08:00')).toBe(8);
+    expect(nightHoursFromTime('22:00 - 07:00')).toBe(8);
+    expect(nightHoursFromTime('05:00 - 13:00')).toBe(1);
+    expect(nightHoursFromTime('')).toBe(null);
   });
 });
