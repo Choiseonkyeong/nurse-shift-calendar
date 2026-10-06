@@ -243,3 +243,20 @@ test('모니터 화면을 폰으로 찍은 사진(어두운 테두리·1.5° 기
   expect(right).toBeGreaterThanOrEqual(28);
   expect(Object.keys(saved).every((k) => k >= '2026-10-26' && k <= '2026-11-26')).toBe(true);
 });
+
+test('사진 인식 중 [취소]: 바로 멈추고 근무는 그대로, 다시 올리면 정상 등록', async ({ page }) => {
+  test.setTimeout(240000);
+  const before = { '2026-10-01': 'N' };
+  await openApp(page, { name: '한소희', local: { my_shift_data: before } });
+  await tab(page, '등록').click();
+  await photoInput(page).setInputFiles(fixture('roster-oct-photo.jpg'));
+  await expect(page.getByText(/표 구조 분석 중|인식 엔진 준비 중/)).toBeVisible({ timeout: 60000 });
+  await page.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(page.getByText('사진 인식을 취소했어요. 근무는 바뀌지 않았어요.')).toBeVisible();
+  await expect(page.getByRole('button', { name: '취소', exact: true })).toHaveCount(0);
+  expect(await readLocal(page, 'my_shift_data')).toEqual(before);
+
+  // 취소 뒤에도 다시 올리면 정상 동작 (엔진이 멈춘 상태로 남지 않음)
+  await photoInput(page).setInputFiles(fixture('roster-oct-photo.jpg'));
+  await expect(page.getByText('사진에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible({ timeout: 200000 });
+});
