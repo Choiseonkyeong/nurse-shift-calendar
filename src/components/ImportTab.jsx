@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getTodayDateObj } from '../utils/dateUtils';
 import { errorText } from '../lib/errorText';
 import { readSheet } from '../lib/readSheet';
 import { rosterSheets } from '../lib/sheetPick';
@@ -398,7 +399,7 @@ export default function ImportTab({
   // 0. 전체 백업 파일 저장 / 복원
   const handleBackupSave = async () => {
     try {
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = getTodayDateObj().dateStr; // 기기 날짜 (UTC 면 한국 오전 9시 전엔 어제 날짜)
       const result = await shareFile({
         fileName: `nurse-shift-backup-${stamp}.json`,
         mimeType: 'application/json',
@@ -442,7 +443,7 @@ export default function ImportTab({
       setStatusMessage('❌ 내보낼 근무·메모가 없습니다.');
       return;
     }
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = getTodayDateObj().dateStr; // 기기 날짜 (UTC 면 한국 오전 9시 전엔 어제 날짜)
     try {
       const result = await shareFile(
         kind === 'csv'

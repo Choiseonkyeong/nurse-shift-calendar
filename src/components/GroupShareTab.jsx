@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import { toast, formatDateKo } from '../lib/toast';
@@ -87,29 +87,34 @@ export default function GroupShareTab({
   const [activity, setActivity] = useState({});
 
   // 내가 참여 중인 그룹 목록 + 멤버 조회
-  const fetchMyGroupsFromDB = useCallback(
-    () =>
-      withLoading(async () => {
-        if (!profile) return;
-        const list = await fetchMyGroups();
-        setGroups(list);
-        fetchGroupActivity(list.map((g) => g.id), profile.id).then(setActivity).catch(() => {});
-      }),
-    [profile, setGroups, withLoading]
-  );
+  // 조회는 버튼 잠금(loading)과 따로: 1분마다 도는 새로고침이 '그룹 만들기' 중에 잠금을 풀면 두 번 눌림
+  const fetchMyGroupsFromDB = useCallback(async () => {
+    if (!profile) return;
+    try {
+      const list = await fetchMyGroups();
+      setGroups(list);
+      fetchGroupActivity(list.map((g) => g.id), profile.id).then(setActivity).catch(() => {});
+    } catch (err) {
+      console.error(err);
+    }
+  }, [profile, setGroups]);
 
   // 현재 그룹의 선택 월 근무표 조회
   const currentGroupId = currentGroup?.id;
-  const fetchScheduleFromDB = useCallback(
-    () =>
-      withLoading(async () => {
-        if (!profile || !currentGroupId) return;
-        const mm = String(month).padStart(2, '0');
-        const lastDay = new Date(year, month, 0).getDate();
-        setGroupSchedule(await fetchGroupSchedule(currentGroupId, `${year}-${mm}-01`, `${year}-${mm}-${lastDay}`));
-      }),
-    [profile, currentGroupId, year, month, withLoading]
-  );
+  // 그룹·달을 빠르게 바꾸면 늦게 온 예전 응답이 지금 화면을 덮지 않도록 마지막 요청만 반영
+  const scheduleReqRef = useRef(0);
+  const fetchScheduleFromDB = useCallback(async () => {
+    const req = ++scheduleReqRef.current;
+    if (!profile || !currentGroupId) return;
+    try {
+      const mm = String(month).padStart(2, '0');
+      const lastDay = new Date(year, month, 0).getDate();
+      const data = await fetchGroupSchedule(currentGroupId, `${year}-${mm}-01`, `${year}-${mm}-${lastDay}`);
+      if (req === scheduleReqRef.current) setGroupSchedule(data);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [profile, currentGroupId, year, month]);
 
   const refreshAll = async () => {
     await fetchMyGroupsFromDB();

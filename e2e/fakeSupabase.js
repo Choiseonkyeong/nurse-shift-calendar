@@ -230,8 +230,9 @@ export async function installFakeSupabase(context, state) {
 
     // ---------------- RPC ----------------
     const rpc = path.split('/rpc/')[1];
-    // 느린 서버 흉내: state.delay = { rpc이름: ms }
-    if (rpc && state.delay?.[rpc]) await new Promise((r) => setTimeout(r, state.delay[rpc]));
+    // 느린 서버 흉내: state.delay = { rpc이름: ms | (body) => ms }
+    const wait = rpc && (typeof state.delay?.[rpc] === 'function' ? state.delay[rpc](body) : state.delay?.[rpc]);
+    if (wait) await new Promise((r) => setTimeout(r, wait));
     if (rpc) {
       switch (rpc) {
         case 'ensure_profile': {

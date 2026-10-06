@@ -80,6 +80,10 @@ describe('위젯 데이터', () => {
     expect(Object.keys(data.days)).toEqual(['2026-09-28', '2026-09-29']);
     expect(data.days['2026-09-28']).toMatchObject({ code: 'D', time: '07:00-15:00', bg: '#FEF08A' });
   });
+  it('앱을 몇 주 안 열어도 위젯이 비지 않게 두 달치를 넘김', () => {
+    const data = buildWidgetData({ '2026-10-20': 'D', '2026-11-27': 'N' }, DEFAULT_SHIFT_TYPES, new Date(2026, 8, 28));
+    expect(Object.keys(data.days)).toEqual(['2026-10-20', '2026-11-27']);
+  });
 });
 
 import { decideSettingsSync } from '../src/lib/settingsSync';
