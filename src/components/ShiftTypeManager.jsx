@@ -3,7 +3,7 @@ import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import Modal from './Modal';
 import { X, Plus, ChevronLeft, Trash2, Check } from 'lucide-react';
-import { useShiftTypes, DEFAULT_CODES } from '../lib/shiftTypes';
+import { useShiftTypes, DEFAULT_CODES, shiftTextVars } from '../lib/shiftTypes';
 
 // 파스텔 색상 팔레트 (배경 / 글자)
 export const PALETTE = [
@@ -83,38 +83,38 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
   return (
     // 추가·수정 화면에서 Esc·뒤로가기 → 목록으로, 목록에서 → 닫기
     <Modal onClose={editing ? () => setEditing(null) : onClose} label="근무 종류 관리">
-      <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl border border-slate-100 max-h-[85dvh] overflow-y-auto">
+      <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl max-h-[85dvh] overflow-y-auto">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1.5">
             {editing && (
               <button onClick={() => setEditing(null)} className="p-1 -ml-1 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer" aria-label="목록으로">
-                <ChevronLeft size={18} />
+                <ChevronLeft size={22} />
               </button>
             )}
-            <h3 className="font-black text-base text-slate-900">
+            <h3 className="text-[20px] font-bold text-slate-900">
               {editing ? (isNew ? '새 근무 추가' : `'${editing.code}' 수정`) : '근무 종류 관리'}
             </h3>
           </div>
           <button onClick={onClose} className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
         {!editing && (
           <>
-            <div className="space-y-2">
+            <div className="rounded-2xl bg-slate-50 px-4 divide-y divide-slate-200/60">
               {shiftTypes.map((t) => (
                 <button
                   key={t.code}
                   type="button"
                   onClick={() => openEdit(t)}
-                  className="w-full flex items-center gap-3 p-2.5 rounded-2xl border border-slate-100 hover:bg-slate-50 transition cursor-pointer text-left"
+                  className="w-full flex items-center gap-3 py-3 cursor-pointer text-left"
                 >
-                  <span style={{ backgroundColor: t.bg, color: t.fg }} className="min-w-[3rem] px-2 py-1.5 rounded-xl text-xs font-black text-center">
+                  <span style={shiftTextVars(t)} className="shift-text w-12 shrink-0 text-[17px] font-bold truncate">
                     {t.code}
                   </span>
-                  <span className="flex-1 text-xs font-bold text-slate-700 truncate">{t.label}</span>
-                  <span className="text-[10px] font-bold text-slate-400">
+                  <span className="flex-1 text-[15px] text-slate-800 truncate">{t.label}</span>
+                  <span className="text-[12px] text-slate-400 whitespace-nowrap">
                     {KINDS.find((k) => k.value === t.kind)?.label}
                     {t.kind === 'work' && t.start ? ` · ${t.start}~${t.end}` : ''}
                   </span>
@@ -124,9 +124,9 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
             <button
               type="button"
               onClick={() => openEdit(null)}
-              className="w-full py-2.5 rounded-2xl bg-indigo-600 text-white text-xs font-black flex items-center justify-center gap-1 hover:bg-indigo-700 transition cursor-pointer"
+              className="w-full h-12 rounded-xl bg-blue-600 text-white text-[15px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
             >
-              <Plus size={14} /> 새 근무 추가 (교육, 반차, 당직 등)
+              <Plus size={18} /> 새 근무 추가 (교육, 반차, 당직 등)
             </button>
           </>
         )}
@@ -134,36 +134,36 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
         {editing && (
           <div className="space-y-3">
             <div className="flex justify-center">
-              <span style={{ backgroundColor: editing.bg, color: editing.fg }} className="px-6 py-2 rounded-full text-sm font-black">
+              <span style={{ backgroundColor: editing.bg, color: editing.fg }} className="min-w-[4rem] text-center px-6 py-2.5 rounded-2xl text-[20px] font-bold">
                 {editing.code || '코드'}
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
               <label className="space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">코드</span>
+                <span className="text-[13px] text-slate-400">코드</span>
                 <input
                   value={editing.code}
                   disabled={!isNew}
                   maxLength={4}
                   onChange={(e) => set('code', e.target.value)}
                   placeholder="예: 교"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-center outline-none focus:border-indigo-400 disabled:opacity-60"
+                  className="w-full px-3 h-11 bg-slate-100 rounded-xl text-[15px] font-bold text-center outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
                 />
               </label>
               <label className="space-y-1 col-span-2">
-                <span className="text-[11px] font-bold text-slate-500">이름</span>
+                <span className="text-[13px] text-slate-400">이름</span>
                 <input
                   value={editing.label}
                   onChange={(e) => set('label', e.target.value)}
                   placeholder="예: 교육"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-400"
+                  className="w-full px-3 h-11 bg-slate-100 rounded-xl text-[15px] outline-none focus:ring-2 focus:ring-blue-200"
                 />
               </label>
             </div>
 
             <div className="space-y-1">
-              <span className="text-[11px] font-bold text-slate-500">분류</span>
+              <span className="text-[13px] text-slate-400">분류</span>
               <div className="grid grid-cols-3 gap-1.5">
                 {KINDS.map((k) => (
                   <button
@@ -171,8 +171,8 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
                     type="button"
                     disabled={!isNew && DEFAULT_CODES.has(editing.code)}
                     onClick={() => set('kind', k.value)}
-                    className={`py-2 rounded-xl text-xs font-black border transition cursor-pointer disabled:cursor-not-allowed ${
-                      editing.kind === k.value ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'
+                    className={`h-10 rounded-xl text-[14px] font-medium cursor-pointer disabled:cursor-not-allowed ${
+                      editing.kind === k.value ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
                     }`}
                   >
                     {k.label}
@@ -183,24 +183,24 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
 
             {editing.kind === 'work' && (
               <div className="space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">근무 시간 (알림·수당 계산에 사용)</span>
+                <span className="text-[13px] text-slate-400">근무 시간 (알림·수당 계산에 사용)</span>
                 <div className="flex items-center gap-2">
                   <input type="time" value={editing.start || ''} onChange={(e) => set('start', e.target.value)}
-                    className="flex-1 min-w-0 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-center outline-none" />
+                    className="flex-1 min-w-0 px-2 h-11 bg-slate-100 rounded-xl text-[14px] text-center outline-none" />
                   <span className="text-slate-300">~</span>
                   <input type="time" value={editing.end || ''} onChange={(e) => set('end', e.target.value)}
-                    className="flex-1 min-w-0 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-center outline-none" />
+                    className="flex-1 min-w-0 px-2 h-11 bg-slate-100 rounded-xl text-[14px] text-center outline-none" />
                 </div>
               </div>
             )}
 
             {editing.kind === 'leave' && (
               <label className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500">연차 차감 (일)</span>
+                <span className="text-[13px] text-slate-400">연차 차감 (일)</span>
                 <select
                   value={editing.leaveDays ?? 1}
                   onChange={(e) => set('leaveDays', Number(e.target.value))}
-                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black outline-none"
+                  className="px-3 h-10 bg-slate-100 rounded-xl text-[14px] outline-none"
                 >
                   <option value={1}>1일 (연차)</option>
                   <option value={0.5}>0.5일 (반차)</option>
@@ -211,7 +211,7 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
             )}
 
             <div className="space-y-1">
-              <span className="text-[11px] font-bold text-slate-500">색상</span>
+              <span className="text-[13px] text-slate-400">색상</span>
               <div className="grid grid-cols-6 gap-2">
                 {PALETTE.map(([bg, fg]) => (
                   <button
@@ -219,8 +219,8 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
                     type="button"
                     onClick={() => setEditing((prev) => ({ ...prev, bg, fg }))}
                     style={{ backgroundColor: bg, color: fg }}
-                    className={`h-9 rounded-xl text-[10px] font-black flex items-center justify-center cursor-pointer ${
-                      editing.bg === bg ? 'ring-2 ring-offset-1 ring-indigo-500' : ''
+                    className={`h-10 rounded-full text-[11px] font-bold flex items-center justify-center cursor-pointer ${
+                      editing.bg === bg ? 'ring-2 ring-offset-2 ring-blue-500' : ''
                     }`}
                     aria-label={`색상 ${bg}`}
                   >
@@ -230,14 +230,14 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
               </div>
             </div>
 
-            {error && <p className="text-xs font-bold text-rose-500">{error}</p>}
+            {error && <p className="text-[13px] text-rose-500">{error}</p>}
 
             <div className="flex gap-2 pt-1">
               {!isNew && !DEFAULT_CODES.has(editing.code) && (
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="px-4 py-2.5 rounded-2xl bg-rose-50 text-rose-600 text-xs font-black flex items-center gap-1 cursor-pointer"
+                  className="px-4 h-12 rounded-xl bg-rose-50 text-rose-600 text-[15px] font-semibold flex items-center gap-1 cursor-pointer"
                 >
                   <Trash2 size={13} /> 삭제
                 </button>
@@ -245,7 +245,7 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
               <button
                 type="button"
                 onClick={handleSave}
-                className="flex-1 py-2.5 rounded-2xl bg-indigo-600 text-white text-xs font-black hover:bg-indigo-700 transition cursor-pointer"
+                className="flex-1 h-12 rounded-xl bg-blue-600 text-white text-[15px] font-semibold cursor-pointer"
               >
                 저장
               </button>

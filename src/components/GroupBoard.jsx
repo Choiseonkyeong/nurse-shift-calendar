@@ -10,7 +10,7 @@ import {
   createShiftSwap,
   respondShiftSwap
 } from '../lib/shiftApi';
-import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
+import { useShiftTypes, shiftTextVars, findShiftType } from '../lib/shiftTypes';
 import { markGroupSeen } from '../lib/groupActivity';
 
 const formatTime = (iso) => {
@@ -132,11 +132,11 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
 
   const chip = (code) =>
     code ? (
-      <span style={badgeStyle(shiftTypes, code)} className="px-1.5 py-0.5 rounded-md font-black">
+      <span style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text font-bold">
         {code}
       </span>
     ) : (
-      <span className="px-1.5 py-0.5 rounded-md font-black bg-white text-slate-300 border border-slate-200">없음</span>
+      <span className="text-slate-300">없음</span>
     );
 
   const visibleSwaps = swaps.filter(
@@ -146,9 +146,9 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
   return (
     <div className="card p-5 space-y-3">
       <div className="flex justify-between items-center">
-        <h4 className="font-black text-sm text-slate-800 flex items-center gap-1.5">
+        <h4 className="font-semibold text-[15px] text-slate-900 flex items-center gap-1.5">
           <MessageSquare size={15} style={{ color: themeColor }} /> 그룹 게시판
-          <span className="text-[10px] font-bold text-slate-400">멤버만 볼 수 있어요</span>
+          <span className="text-[12px] font-normal text-slate-400">멤버만 볼 수 있어요</span>
         </h4>
         <button onClick={load} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="새로고침">
           <RotateCcw size={13} />
@@ -194,18 +194,18 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
                 return (
                   <div key={s.id} className="p-3 rounded-2xl bg-slate-50 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-[11px] font-black text-slate-700 ${blurCls}`}>
+                      <span className={`text-[13px] font-semibold text-slate-700 ${blurCls}`}>
                         {names[s.requester_id] || '알 수 없음'} → {names[s.target_id] || '알 수 없음'}
                       </span>
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${STATUS_CLS[s.status]}`}>{STATUS_LABEL[s.status]}</span>
+                      <span className={`text-[12px] font-semibold px-2 py-0.5 rounded-lg ${STATUS_CLS[s.status]}`}>{STATUS_LABEL[s.status]}</span>
                     </div>
                     {s.dates.map((d) => (
-                      <div key={d} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
+                      <div key={d} className="flex items-center gap-1.5 text-[13px] text-slate-600">
                         <span className="w-10">{shortDate(d)}</span>
                         {chip(s.snapshot?.[d]?.requester)} <span className="text-slate-300">⇄</span> {chip(s.snapshot?.[d]?.target)}
                       </div>
                     ))}
-                    {s.message && <p className="text-[11px] font-bold text-slate-500 break-words">“{s.message}”</p>}
+                    {s.message && <p className="text-[13px] text-slate-500 break-words">“{s.message}”</p>}
                     {s.status === 'pending' && (toMe || mine) && (
                       <div className="flex gap-1.5 pt-0.5">
                         {toMe && (
@@ -213,14 +213,14 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
                             <button
                               onClick={() => handleRespond(s, 'accept')}
                               disabled={loading}
-                              className="flex-1 py-1.5 rounded-xl bg-emerald-600 text-white text-[11px] font-black flex items-center justify-center gap-1 cursor-pointer"
+                              className="flex-1 h-10 rounded-xl bg-emerald-600 text-white text-[13px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
                             >
                               <Check size={12} /> 수락
                             </button>
                             <button
                               onClick={() => handleRespond(s, 'decline')}
                               disabled={loading}
-                              className="flex-1 py-1.5 rounded-xl bg-white text-slate-600 text-[11px] font-black flex items-center justify-center gap-1 cursor-pointer"
+                              className="flex-1 h-10 rounded-xl bg-white text-slate-600 text-[13px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
                             >
                               <X size={12} /> 거절
                             </button>
@@ -230,7 +230,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
                           <button
                             onClick={() => handleRespond(s, 'cancel')}
                             disabled={loading}
-                            className="flex-1 py-1.5 rounded-xl bg-white text-slate-500 text-[11px] font-black cursor-pointer"
+                            className="flex-1 h-10 rounded-xl bg-white text-slate-500 text-[13px] font-semibold cursor-pointer"
                           >
                             요청 취소
                           </button>
@@ -272,9 +272,9 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
             {posts.map((p) => (
               <div key={p.id} className="p-3 bg-slate-50 rounded-2xl space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className={`text-[11px] font-black text-slate-700 ${blurCls}`}>{names[p.author_id] || '알 수 없음'}</span>
+                  <span className={`text-[13px] font-semibold text-slate-700 ${blurCls}`}>{names[p.author_id] || '알 수 없음'}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-400">{formatTime(p.created_at)}</span>
+                    <span className="text-[12px] text-slate-400">{formatTime(p.created_at)}</span>
                     {p.author_id === profile.id && (
                       <button onClick={() => handleDelete(p.id)} className="text-slate-300 hover:text-rose-500 cursor-pointer" aria-label="삭제">
                         <Trash2 size={12} />
@@ -344,7 +344,7 @@ function SwapForm({ group, profile, defaultDate, getCode, loadDayCodes, chip, bl
         <select
           value={targetId}
           onChange={(e) => setTargetId(e.target.value)}
-          className={`min-w-0 flex-1 bg-slate-100 rounded-xl px-2 py-1.5 font-black ${blurCls}`}
+          className={`min-w-0 flex-1 bg-slate-100 rounded-xl px-3 h-10 font-semibold ${blurCls}`}
         >
           {others.map((m) => (
             <option key={m.id} value={m.id}>
@@ -388,7 +388,7 @@ function SwapForm({ group, profile, defaultDate, getCode, loadDayCodes, chip, bl
         type="button"
         onClick={submit}
         disabled={busy || !targetId || !dates.length}
-        className="w-full py-2 rounded-xl bg-indigo-600 text-white font-black disabled:opacity-40 cursor-pointer"
+        className="w-full h-11 rounded-xl bg-blue-600 text-white text-[14px] font-semibold disabled:opacity-40 cursor-pointer"
       >
         교환 요청 보내기
       </button>
