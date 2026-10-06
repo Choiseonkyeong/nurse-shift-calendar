@@ -35,5 +35,8 @@ export function badgeStyle(types, code) {
   return { backgroundColor: t.bg, color: t.fg };
 }
 
+/** 근무 색 글자: 밝은 화면은 진한 글자색(fg), 다크 모드는 밝은 바탕색(bg)을 글자로 (.shift-text 와 함께) */
+export const shiftTextVars = (t) => ({ '--fg': t?.fg || FALLBACK.fg, '--bg': t?.bg || FALLBACK.bg });
+
 export const ShiftTypesContext = createContext(DEFAULT_SHIFT_TYPES);
 export const useShiftTypes = () => useContext(ShiftTypesContext);

@@ -62,6 +62,14 @@ body {
   }
 }
 
+/* 근무 색 글자: 다크 모드에서는 밝은 쪽 색으로 (진한 갈색·주황이 어두운 바탕에 묻히지 않게) */
+.shift-text {
+  color: var(--fg);
+}
+.dark .shift-text {
+  color: var(--bg);
+}
+
 /* 아이콘은 얇은 선 */
 svg.lucide {
   stroke-width: 1.75;

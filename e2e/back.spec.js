@@ -48,7 +48,7 @@ test('다른 탭에서 뒤로가기 → 내 근무 탭, 등록 탭의 계정 창
   await expect(page.getByRole('dialog')).toBeVisible();
   await back(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByText('근무표 가져오기')).toBeVisible(); // 창만 닫히고 등록 탭 유지
+  await expect(page.getByText('근무표 사진으로 등록')).toBeVisible(); // 창만 닫히고 설정 탭 유지
   await back(page);
   await expect(page.getByRole('heading', { name: /김간호/ })).toBeVisible();
   await back(page);

@@ -5,7 +5,7 @@ import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
 import { Bell, BellOff, Camera, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useSwipe } from '../lib/swipe';
-import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
+import { useShiftTypes, shiftTextVars, findShiftType } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
 import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
@@ -312,7 +312,7 @@ export default function MyShiftTab({
     }
   });
 
-  const getBadgeStyle = (code) => badgeStyle(shiftTypes, code);
+  const findType = (code) => findShiftType(shiftTypes, code);
 
   return (
     <div className="space-y-4 max-w-md mx-auto pb-12 text-slate-800">
@@ -386,28 +386,18 @@ export default function MyShiftTab({
       {/* 처음 쓰는 사용자: 근무 등록 방법 안내 (근무가 하나라도 생기면 사라짐)
           서버에서 근무를 불러오는 동안은 숨김 → 새 폰 로그인 직후 안내가 잠깐 떴다 사라지지 않게 */}
       {!importBanner && !loadingFromServer && Object.keys(myShifts || {}).length === 0 && (
-        <section className="rounded-2xl bg-slate-50 px-4 pt-4 pb-2">
-          <p className="text-[17px] font-semibold text-slate-900">근무를 등록해 볼까요?</p>
-          <p className="text-[13px] text-slate-500 mt-1">한 번 등록하면 수당·연차 계산, 그룹 공유, 근무 알림이 모두 자동이에요.</p>
-          <div className="mt-2 divide-y divide-slate-200/70">
-            <button type="button" onClick={onOpenImport} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
-              <Camera size={20} className="text-blue-600 shrink-0" />
-              <span className="flex-1 min-w-0">
-                <span className="block text-[15px] font-medium text-slate-900">근무표 사진·엑셀로</span>
-                <span className="block text-[12px] text-slate-400">한 달을 한 번에</span>
-              </span>
-              <ChevronRight size={18} className="text-slate-300 shrink-0" />
+        <section className="space-y-2">
+          <p className="text-[17px] font-semibold text-slate-900 px-1">근무를 등록해 볼까요?</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={onOpenImport} className="h-24 rounded-2xl bg-blue-600 text-white flex flex-col items-center justify-center gap-2 cursor-pointer">
+              <Camera size={26} />
+              <span className="text-[15px] font-semibold">사진·엑셀로</span>
             </button>
-            <button type="button" onClick={() => setIsPatternOpen('first')} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
-              <Repeat size={20} className="text-blue-600 shrink-0" />
-              <span className="flex-1 min-w-0">
-                <span className="block text-[15px] font-medium text-slate-900">반복 패턴으로</span>
-                <span className="block text-[12px] text-slate-400">3교대·주5일 등</span>
-              </span>
-              <ChevronRight size={18} className="text-slate-300 shrink-0" />
+            <button type="button" onClick={() => setIsPatternOpen('first')} className="h-24 rounded-2xl bg-slate-50 text-slate-800 flex flex-col items-center justify-center gap-2 cursor-pointer active:bg-slate-100">
+              <Repeat size={26} className="text-blue-600" />
+              <span className="text-[15px] font-semibold">반복 패턴으로</span>
             </button>
           </div>
-          <p className="text-[12px] text-slate-400 pb-2">또는 아래 달력에서 날짜를 눌러 하나씩 입력할 수 있어요.</p>
         </section>
       )}
 
@@ -431,7 +421,7 @@ export default function MyShiftTab({
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[13px] text-slate-500">
           {Object.entries(shiftCounts).map(([code, count]) => (
             <span key={code} className={count === 0 ? 'opacity-40' : ''}>
-              <b style={{ color: getBadgeStyle(code).color }} className="font-bold">{code}</b> {count}
+              <b style={shiftTextVars(findType(code))} className="shift-text font-bold">{code}</b> {count}
             </span>
           ))}
         </div>
@@ -450,8 +440,8 @@ export default function MyShiftTab({
                   key={t.code}
                   type="button"
                   onClick={() => setQuickCode(t.code)}
-                  style={quickCode === t.code ? { backgroundColor: t.fg, color: '#fff' } : { color: t.fg }}
-                  className={`shrink-0 min-w-[44px] px-3 h-9 rounded-full text-sm font-bold cursor-pointer ${quickCode === t.code ? '' : 'bg-slate-100'}`}
+                  style={quickCode === t.code ? { backgroundColor: t.fg, color: '#fff' } : shiftTextVars(t)}
+                  className={`shrink-0 min-w-[44px] px-3 h-9 rounded-full text-sm font-bold cursor-pointer ${quickCode === t.code ? '' : 'bg-slate-100 shift-text'}`}
                 >
                   {t.code}
                 </button>
@@ -510,8 +500,8 @@ export default function MyShiftTab({
                 </span>
                 {shift ? (
                   <span
-                    style={{ color: getBadgeStyle(shift).color }}
-                    className={`max-w-full px-0.5 font-bold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
+                    style={shiftTextVars(findType(shift))}
+                    className={`shift-text max-w-full px-0.5 font-bold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
                       [...shift].length >= 3 ? 'text-[10px]' : 'text-[13px]'
                     }`}
                   >
@@ -546,7 +536,7 @@ export default function MyShiftTab({
               <p className="text-[17px] font-semibold text-slate-900 mt-1">
                 {code ? (
                   <>
-                    <span style={{ color: getBadgeStyle(code).color }}>{code}</span>
+                    <span style={shiftTextVars(findType(code))} className="shift-text">{code}</span>
                     {t?.label && t.label !== code && <span> {t.label}</span>}
                     {t?.start && t?.end && <span className="font-normal text-slate-500"> · {t.start}–{t.end}</span>}
                   </>
@@ -632,7 +622,7 @@ export default function MyShiftTab({
                       on ? 'bg-blue-50 ring-2 ring-inset ring-blue-500' : 'bg-slate-50 active:bg-slate-100'
                     }`}
                   >
-                    <span aria-hidden="true" style={{ color: item.fg }} className="text-[18px] font-bold leading-none truncate max-w-full">
+                    <span aria-hidden="true" style={shiftTextVars(item)} className="shift-text text-[18px] font-bold leading-none truncate max-w-full">
                       {item.code}
                     </span>
                     <span className="text-[11px] text-slate-500 leading-tight truncate max-w-full">{item.label}</span>
