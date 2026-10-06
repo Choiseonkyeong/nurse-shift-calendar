@@ -4,7 +4,7 @@ import { readSheet } from '../lib/readSheet';
 import { toast } from '../lib/toast';
 import Modal from './Modal';
 import { confirmDialog } from '../lib/confirm';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive, ChevronRight } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, ShieldCheck, ShieldAlert, Archive, ChevronRight } from 'lucide-react';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
@@ -433,12 +433,19 @@ export default function ImportTab({
         </h2>
 
         {/* 상태 메시지 */}
-        {statusMessage && (
-          <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
-            <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
-            <span>{statusMessage}</span>
-          </div>
-        )}
+        {statusMessage &&
+          (statusMessage.startsWith('❌') ? (
+            // 실패: 체크 표시 대신 경고 (성공처럼 보이지 않게)
+            <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-center text-xs font-bold text-rose-900 flex items-center justify-center gap-2">
+              <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+              <span>{statusMessage.replace(/^❌\s*/, '')}</span>
+            </div>
+          ) : (
+            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-center text-xs font-bold text-indigo-900 flex items-center justify-center gap-2">
+              <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
+              <span>{statusMessage}</span>
+            </div>
+          ))}
 
         {/* 2. 근무표 사진 인식 */}
         <div className="p-4 rounded-3xl space-y-3 bg-violet-50">
