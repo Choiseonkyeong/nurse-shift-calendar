@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { errorText } from '../lib/errorText';
 import { readSheet } from '../lib/readSheet';
 import { toast } from '../lib/toast';
@@ -60,6 +60,7 @@ export default function ImportTab({
 }) {
   const shiftTypes = useShiftTypes();
   const [ocrProgress, setOcrProgress] = useState(null); // { p, msg }
+  const ocrAbortRef = useRef(null); // 사진 인식 취소용 (다른 탭에 갔다 와도 인식은 계속)
   const [icsPreview, setIcsPreview] = useState(null); // { shifts, notes, eventCount, fileName }
   const [icsOverwrite, setIcsOverwrite] = useState(true);
   const [icsWithNotes, setIcsWithNotes] = useState(true);
@@ -287,12 +288,22 @@ export default function ImportTab({
       setIsProcessing(true);
       setStatusMessage('');
       setOcrProgress({ p: 0, msg: '준비 중...' });
-      const result = await recognizeRosterLazy(file, {
-        year: y || now.getFullYear(),
-        month: m || now.getMonth() + 1,
-        shiftTypes,
-        onProgress: (p, msg) => setOcrProgress({ p, msg })
-      });
+      const ctrl = new AbortController();
+      ocrAbortRef.current = ctrl;
+      // 취소하면 엔진이 멈추길 기다리지 않고 바로 끝냄
+      const cancelled = new Promise((_, reject) =>
+        ctrl.signal.addEventListener('abort', () => reject(new DOMException('사진 인식을 취소했어요.', 'AbortError')), { once: true })
+      );
+      const result = await Promise.race([
+        recognizeRosterLazy(file, {
+          year: y || now.getFullYear(),
+          month: m || now.getMonth() + 1,
+          shiftTypes,
+          signal: ctrl.signal,
+          onProgress: (p, msg) => setOcrProgress({ p, msg })
+        }),
+        cancelled
+      ]);
       if (result.error) {
         setStatusMessage(`❌ ${result.error}`);
       } else {
@@ -311,10 +322,15 @@ export default function ImportTab({
         autoRegister({ source: '사진', yearMonth: `${result.year}-${String(result.month).padStart(2, '0')}`, byName });
       }
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        setStatusMessage('사진 인식을 취소했어요. 근무는 바뀌지 않았어요.');
+        return;
+      }
       console.error(err);
       if (recoverIfStale(err)) setStatusMessage('앱이 새 버전으로 업데이트되어 새로고침하는 중이에요...');
       else setStatusMessage(`❌ 사진 인식 실패: ${errorText(err)}`);
     } finally {
+      ocrAbortRef.current = null;
       setOcrProgress(null);
       setIsProcessing(false);
     }
@@ -463,9 +479,18 @@ export default function ImportTab({
               <div className="h-2 bg-white rounded-full overflow-hidden">
                 <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-violet-600" />
               </div>
-              <p className="text-[11px] font-bold text-violet-700 flex items-center gap-1.5">
-                <Loader2 size={12} className="animate-spin" /> {ocrProgress.msg}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="flex-1 text-[11px] font-bold text-violet-700 flex items-center gap-1.5">
+                  <Loader2 size={12} className="animate-spin shrink-0" /> {ocrProgress.msg}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => ocrAbortRef.current?.abort()}
+                  className="shrink-0 px-3 py-1 rounded-xl bg-white border border-violet-200 text-[11px] font-black text-violet-700 cursor-pointer"
+                >
+                  취소
+                </button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">

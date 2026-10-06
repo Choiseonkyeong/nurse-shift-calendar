@@ -6,8 +6,9 @@ const EMPTY = { data: { text: '', confidence: 0, blocks: [] } };
 /**
  * @param create      () => Promise<worker>  새 작업자 만들기
  * @param maxCrashes  이보다 많이 죽으면 원래 오류를 그대로 던짐 (사진 자체 문제 → 무한 반복 방지)
+ * @param isAborted   취소됐으면 true → 다시 만들지 않고 오류 그대로
  */
-export async function resilientWorker(create, { maxCrashes = 5 } = {}) {
+export async function resilientWorker(create, { maxCrashes = 5, isAborted = () => false } = {}) {
   let worker = await create();
   let params = {};
   const api = {
@@ -20,6 +21,7 @@ export async function resilientWorker(create, { maxCrashes = 5 } = {}) {
       try {
         return await worker.recognize(...args);
       } catch (e) {
+        if (isAborted()) throw e; // 사용자가 취소해서 멈춘 것 → 새로 만들지 않음
         api.crashes += 1;
         if (api.crashes > maxCrashes) throw e;
         try {

@@ -264,7 +264,11 @@ async function createOcrWorker(onProgress) {
     langPath: assetUrl('ocr/lang'),
     gzip: true,
     logger: (m) => {
-      if (m.status === 'recognizing text') onProgress(m.progress);
+      try {
+        if (m.status === 'recognizing text') onProgress(m.progress);
+      } catch {
+        /* 취소 중: 진행 표시만 건너뜀 (엔진 콜백 안에서 오류를 던지지 않게) */
+      }
     }
   });
 }
@@ -816,7 +820,11 @@ async function readTitle(worker, src, headerTop) {
  * @param file        이미지 파일
  * @param opts        { year, month, shiftTypes, onProgress(0~1, 메시지) }
  */
-export async function recognizeRoster(file, { year, month, shiftTypes = [], onProgress = () => {} } = {}) {
+export async function recognizeRoster(file, { year, month, shiftTypes = [], onProgress = () => {}, signal } = {}) {
+  // 취소(signal): 인식 엔진을 바로 멈추고 AbortError 로 끝냄
+  const aborted = () => !!signal?.aborted;
+  const abortError = () => new DOMException('사진 인식을 취소했어요.', 'AbortError');
+  if (aborted()) throw abortError();
   onProgress(0.02, '사진 보정 중...');
   // 기울어진 사진은 먼저 바로 세움 (이후 모든 단계가 회전한 이미지 기준)
   const base = fitSize(await loadImage(file));
@@ -826,7 +834,15 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
   onProgress(0.06, '인식 엔진 준비 중... (처음 한 번은 조금 걸려요)');
   let stage = (p) => onProgress(0.1 + p * 0.3, `표 구조 분석 중... ${Math.round(p * 100)}%`);
   // 특정 칸에서 엔진이 죽으면 새로 만들어 이어서 (그 칸만 못 읽은 칸으로)
-  const worker = await resilientWorker(() => createOcrWorker((p) => stage(p)));
+  const worker = await resilientWorker(() => createOcrWorker((p) => stage(p)), { isAborted: aborted });
+  const stop = () => worker.terminate().catch(() => {});
+  signal?.addEventListener('abort', stop, { once: true });
+  // 진행 표시를 바꿀 때마다 취소 확인 (엔진을 멈춰도 다음 단계로 넘어가지 않게)
+  const report = onProgress;
+  onProgress = (p, msg) => {
+    if (aborted()) throw abortError();
+    report(p, msg);
+  };
 
   try {
     let source = canvas;
@@ -924,7 +940,11 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
     if (sureRatio(result) < 0.4) return { error: '사진이 흐려서 근무를 거의 읽지 못했어요. 표에 가까이, 밝은 곳에서 초점을 맞춰 다시 찍어 주세요.' };
     onProgress(1, '완료');
     return result;
+  } catch (e) {
+    if (aborted()) throw abortError();
+    throw e;
   } finally {
-    await worker.terminate();
+    signal?.removeEventListener('abort', stop);
+    await worker.terminate().catch(() => {});
   }
 }

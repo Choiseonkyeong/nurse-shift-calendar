@@ -51,3 +51,14 @@ describe('resilientWorker', () => {
     await expect(w.recognize('bad')).rejects.toThrow('Aborted');
   });
 });
+
+describe('resilientWorker 취소', () => {
+  it('취소된 뒤 엔진이 멈추면 새로 만들지 않고 오류 그대로 (계속 다시 띄우지 않음)', async () => {
+    const { create } = factory(new Set(['bad']));
+    let aborted = false;
+    const w = await resilientWorker(create, { isAborted: () => aborted });
+    aborted = true;
+    await expect(w.recognize('bad')).rejects.toThrow('Aborted');
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});
