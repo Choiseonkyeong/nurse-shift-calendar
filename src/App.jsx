@@ -816,7 +816,7 @@ export default function App() {
                 aria-label="이름 수정"
               >
                 <h1 className="text-[15px] font-medium text-slate-500 leading-tight truncate">
-                  {nameSkipped ? (
+                  {nameSkipped || !userName ? (
                     '내 근무표'
                   ) : (
                     <>

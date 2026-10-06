@@ -3,7 +3,7 @@ import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
-import { Bell, BellOff, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
+import { Bell, BellOff, Camera, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useSwipe } from '../lib/swipe';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
@@ -386,33 +386,29 @@ export default function MyShiftTab({
       {/* 처음 쓰는 사용자: 근무 등록 방법 안내 (근무가 하나라도 생기면 사라짐)
           서버에서 근무를 불러오는 동안은 숨김 → 새 폰 로그인 직후 안내가 잠깐 떴다 사라지지 않게 */}
       {!importBanner && !loadingFromServer && Object.keys(myShifts || {}).length === 0 && (
-        <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-3xl space-y-3">
-          <div>
-            <p className="text-sm font-black text-indigo-900">근무를 등록해 볼까요?</p>
-            <p className="text-[11px] font-bold text-indigo-700/70 mt-0.5">한 번 등록하면 수당·연차 계산, 그룹 공유, 근무 알림이 모두 자동이에요.</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={onOpenImport}
-              className="p-3 rounded-2xl bg-white border border-indigo-100 text-left cursor-pointer hover:border-indigo-300"
-            >
-              <span className="block text-lg">📷</span>
-              <span className="block text-xs font-black text-slate-800 mt-1">근무표 사진·엑셀로</span>
-              <span className="block text-[10px] font-bold text-slate-400">한 달을 한 번에</span>
+        <section className="rounded-2xl bg-slate-50 px-4 pt-4 pb-2">
+          <p className="text-[17px] font-semibold text-slate-900">근무를 등록해 볼까요?</p>
+          <p className="text-[13px] text-slate-500 mt-1">한 번 등록하면 수당·연차 계산, 그룹 공유, 근무 알림이 모두 자동이에요.</p>
+          <div className="mt-2 divide-y divide-slate-200/70">
+            <button type="button" onClick={onOpenImport} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
+              <Camera size={20} className="text-blue-600 shrink-0" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-medium text-slate-900">근무표 사진·엑셀로</span>
+                <span className="block text-[12px] text-slate-400">한 달을 한 번에</span>
+              </span>
+              <ChevronRight size={18} className="text-slate-300 shrink-0" />
             </button>
-            <button
-              type="button"
-              onClick={() => setIsPatternOpen('first')}
-              className="p-3 rounded-2xl bg-white border border-indigo-100 text-left cursor-pointer hover:border-indigo-300"
-            >
-              <span className="block text-lg">🔁</span>
-              <span className="block text-xs font-black text-slate-800 mt-1">반복 패턴으로</span>
-              <span className="block text-[10px] font-bold text-slate-400">3교대·주5일 등</span>
+            <button type="button" onClick={() => setIsPatternOpen('first')} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
+              <Repeat size={20} className="text-blue-600 shrink-0" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-medium text-slate-900">반복 패턴으로</span>
+                <span className="block text-[12px] text-slate-400">3교대·주5일 등</span>
+              </span>
+              <ChevronRight size={18} className="text-slate-300 shrink-0" />
             </button>
           </div>
-          <p className="text-[11px] font-bold text-indigo-700/70">또는 아래 달력에서 날짜를 눌러 하나씩 입력할 수 있어요.</p>
-        </div>
+          <p className="text-[12px] text-slate-400 pb-2">또는 아래 달력에서 날짜를 눌러 하나씩 입력할 수 있어요.</p>
+        </section>
       )}
 
       {/* 1. 달 제목 · 이번 달 요약 */}
