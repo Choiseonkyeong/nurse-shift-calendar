@@ -1,5 +1,5 @@
 // src/lib/readSheet.js
-// 엑셀·CSV 파일 읽기 (워커에서, 시간 제한). 결과: { matrix, dateCells }
+// 엑셀·CSV 파일 읽기 (워커에서, 시간 제한). 결과: { matrix, dateCells(첫 탭), sheets: [{ name, matrix, dateCells }], active }
 export const READ_TIMEOUT_MS = 20000;
 
 export async function readSheet(file, { timeoutMs = READ_TIMEOUT_MS } = {}) {
@@ -14,7 +14,10 @@ export async function readSheet(file, { timeoutMs = READ_TIMEOUT_MS } = {}) {
       );
       worker.onmessage = ({ data }) => {
         clearTimeout(timer);
-        if (data?.ok) resolve({ matrix: data.matrix, dateCells: data.dateCells });
+        if (data?.ok) {
+          const sheets = data.sheets || [{ name: '', matrix: data.matrix, dateCells: data.dateCells }];
+          resolve({ matrix: data.matrix, dateCells: data.dateCells, sheets, active: data.active || 0 });
+        }
         else reject(new Error('엑셀 파일을 열 수 없습니다.'));
       };
       worker.onerror = (e) => {

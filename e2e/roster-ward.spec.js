@@ -260,3 +260,63 @@ test('사진 인식 중 [취소]: 바로 멈추고 근무는 그대로, 다시 �
   await photoInput(page).setInputFiles(fixture('roster-oct-photo.jpg'));
   await expect(page.getByText('사진에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible({ timeout: 200000 });
 });
+
+/** 여러 탭 엑셀: [표지, 10월, 11월] (가짜 이름) */
+function multiSheetWorkbook({ withCover = true, months = [10, 11], activeTab } = {}) {
+  const wb = XLSX.utils.book_new();
+  if (withCover) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['2026년 하반기 근무표'], ['작성: 수간호사']]), '표지');
+  const rosters = {};
+  months.forEach((month) => {
+    const roster = makeRoster({ year: 2026, month, seed: 40 + month });
+    const dates = rosterDates(2026, month, true);
+    rosters[month] = roster;
+    const rows = [
+      ['', '', `<분당 5병동 2026년 ${month}월 근무표>`],
+      ['', '', '분당\r\n5병동', ...dates.map((d) => String(d.getDate()))],
+      ['', '', '', ...dates.map((d) => '일월화수목금토'[d.getDay()])],
+      ...roster.people.map((p) => [p.rank, '', p.name, ...dates.map((d) => p.codes[keyOf(d)])])
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `${month}월`);
+  });
+  const file = path.join(os.tmpdir(), `multi-${Date.now()}-${Math.random()}.xlsx`);
+  XLSX.writeFile(wb, file);
+  if (activeTab !== undefined) {
+    // 엑셀이 저장하는 '마지막으로 보던 탭'(workbookView activeTab) — 라이브러리가 써 주지 않아 직접 넣음
+    const zip = XLSX.CFB.read(fs.readFileSync(file), { type: 'buffer' });
+    const entry = XLSX.CFB.find(zip, '/xl/workbook.xml');
+    let xml = Buffer.from(entry.content).toString();
+    xml = xml.includes('<bookViews>')
+      ? xml.replace(/<workbookView/, `<workbookView activeTab="${activeTab}"`)
+      : xml.replace('<sheets>', `<bookViews><workbookView activeTab="${activeTab}"/></bookViews><sheets>`);
+    entry.content = Buffer.from(xml);
+    entry.size = entry.content.length;
+    fs.writeFileSync(file, XLSX.CFB.write(zip, { fileType: 'zip', type: 'buffer' }));
+  }
+  return { file, rosters };
+}
+
+test('엑셀 탭이 여러 개: 근무표 탭을 고르는 창(마지막으로 본 탭이 위), 고른 달로 등록 / 표지+근무표 1개면 바로 등록', async ({ page }) => {
+  const { file, rosters } = multiSheetWorkbook({ activeTab: 2 }); // 11월 탭을 보던 파일
+  await openApp(page, { name: '김하늘' });
+  await tab(page, '등록').click();
+  await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(file);
+  const dialog = page.getByRole('dialog', { name: '엑셀 탭 선택' });
+  await expect(dialog.getByText('근무표 탭이 2개')).toBeVisible();
+  const names = await dialog.locator('button.w-full > span:first-child').allInnerTexts();
+  expect(names).toEqual(['11월', '10월']); // 표지 제외, 보던 탭 먼저
+  await expect(dialog.getByText('마지막으로 본 탭')).toBeVisible();
+  await dialog.getByRole('button', { name: /^10월/ }).click();
+  await expect(page.getByText('엑셀에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible();
+  const me10 = rosters[10].people.find((p) => p.name === '김하늘');
+  expect(await readLocal(page, 'my_shift_data')).toEqual(me10.codes);
+  fs.rmSync(file, { force: true });
+
+  // 표지 + 근무표 1개: 묻지 않고 근무표 탭으로 (예전에는 첫 탭(표지)만 읽어 '날짜 행을 찾지 못했습니다')
+  const one = multiSheetWorkbook({ months: [11] });
+  await page.getByRole('button', { name: '되돌리기' }).click();
+  await tab(page, '등록').click();
+  await page.locator('input[accept=".xlsx, .xls, .csv"]').setInputFiles(one.file);
+  await expect(page.getByText('엑셀에서 10월 26일~11월 25일 근무 31일을 등록했어요')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '엑셀 탭 선택' })).toHaveCount(0);
+  fs.rmSync(one.file, { force: true });
+});

@@ -27,7 +27,7 @@ afterEach(() => {
 describe('readSheet (엑셀은 격리된 워커에서, 시간 제한)', () => {
   it('워커 결과를 돌려주고 워커는 정리', async () => {
     const made = installWorker((w, msg) => setTimeout(() => w.onmessage({ data: { ok: true, matrix: [['a']], dateCells: {}, isCsv: msg.isCsv } })));
-    expect(await readSheet(file())).toEqual({ matrix: [['a']], dateCells: {} });
+    expect(await readSheet(file())).toEqual({ matrix: [['a']], dateCells: {}, sheets: [{ name: '', matrix: [['a']], dateCells: {} }], active: 0 });
     expect(made[0].terminated).toBe(true);
   });
 

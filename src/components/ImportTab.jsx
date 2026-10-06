@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { errorText } from '../lib/errorText';
 import { readSheet } from '../lib/readSheet';
+import { rosterSheets } from '../lib/sheetPick';
 import { toast } from '../lib/toast';
 import Modal from './Modal';
 import { confirmDialog } from '../lib/confirm';
@@ -60,6 +61,7 @@ export default function ImportTab({
 }) {
   const shiftTypes = useShiftTypes();
   const [ocrProgress, setOcrProgress] = useState(null); // { p, msg }
+  const [sheetChoice, setSheetChoice] = useState(null); // 엑셀 근무표 탭이 여러 개일 때 고를 탭 목록
   const ocrAbortRef = useRef(null); // 사진 인식 취소용 (다른 탭에 갔다 와도 인식은 계속)
   const [icsPreview, setIcsPreview] = useState(null); // { shifts, notes, eventCount, fileName }
   const [icsOverwrite, setIcsOverwrite] = useState(true);
@@ -95,6 +97,169 @@ export default function ImportTab({
     else setPendingImport(imp);
   };
 
+  // 엑셀 한 장(탭) → 근무 등록
+  const importMatrix = (matrix, dateCells) => {
+    try {
+      // 엑셀 상단 제목에서 연/월 (2026년 10월 · 10월 · 2026.10). 없으면 보고 있던 달 → 아래에서 요일·공휴일로 확인
+      const now = new Date();
+      const [sYear, sMonth] = (selectedDate || '').split('-').map(Number);
+      const title = detectYearMonth(matrix.slice(0, 5).map((row) => row.join(' ')).join(' '), {
+        year: sYear || now.getFullYear(),
+        month: sMonth || now.getMonth() + 1
+      });
+      let parsedYear = title.year;
+      let parsedMonth = title.month;
+      const foundHeaderYearMonth = title.found;
+
+      // 날짜 행(1~31) 탐색
+      let dateRowIdx = -1;
+      const colToDateMap = {};
+
+      for (let r = 0; r < matrix.length; r++) {
+        const row = matrix[r];
+        const numberCols = [];
+
+        row.forEach((val, c) => {
+          const num = parseInt(val, 10);
+          if (!isNaN(num) && num >= 1 && num <= 31) {
+            numberCols.push({ col: c, day: num });
+          }
+        });
+
+        if (numberCols.length >= 15) {
+          dateRowIdx = r;
+          // 날짜 서식 칸이면 적힌 날짜 그대로 (제목에 연월이 없어도 정확)
+          const exact = numberCols.map(({ col }) => [col, dateCells[`${r}:${col}`]]).filter(([, k]) => k);
+          if (exact.length >= 15) {
+            exact.forEach(([col, key]) => (colToDateMap[col] = key));
+            if (!foundHeaderYearMonth) {
+              const ym = exact[Math.floor(exact.length / 2)][1];
+              parsedYear = Number(ym.slice(0, 4));
+              parsedMonth = Number(ym.slice(5, 7));
+            }
+            break;
+          }
+          // 날짜 줄 위아래의 요일(토 일 월 …)·공휴일(3 개천절 …)로 달 확인 → 제목을 못 읽었거나 틀려도 올바른 달로
+          const weekdays = {};
+          const holidays = {};
+          numberCols.forEach(({ col }) => {
+            [r - 1, r + 1, r + 2].forEach((rr) => {
+              const wd = weekdayOf(matrix[rr]?.[col]);
+              if (wd >= 0 && weekdays[col] === undefined) weekdays[col] = wd;
+            });
+            [r - 1, r, r + 1, r + 2].forEach((rr) => {
+              const h = holidayOf(matrix[rr]?.[col]);
+              if (h && !holidays[col]) holidays[col] = h;
+            });
+          });
+          const checked = checkDayRowMonth({
+            days: numberCols,
+            weekdays,
+            holidays,
+            ym: { year: parsedYear, month: parsedMonth },
+            found: foundHeaderYearMonth
+          });
+          parsedYear = checked.year;
+          parsedMonth = checked.month;
+          // '1' 앞쪽 날짜는 지난달 (26 27 … 31 1 2 … 25)
+          datesForDayRow(numberCols, parsedYear, parsedMonth).forEach(({ col, key }) => (colToDateMap[col] = key));
+          break;
+        }
+      }
+
+      const targetYM = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`;
+
+      if (dateRowIdx === -1) {
+        toast('엑셀 파일에서 날짜 행을 찾지 못했습니다.', 'error');
+        setIsProcessing(false);
+        return;
+      }
+
+      const nameMap = {};
+      
+      // 시스템 및 직급 제외 키워드
+      const excludeKeywords = [
+        '날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', 
+        '비고', '합계', '부서', '팀', 'HN', 'CN', 'RN', 'OFF', '오프', '휴무', '연차', '분당', '병동', '보고', '사항'
+      ];
+
+      for (let r = dateRowIdx + 1; r < matrix.length; r++) {
+        const row = matrix[r];
+        if (!row || row.length === 0) continue;
+
+        let foundName = '';
+        
+        // 앞쪽 6개 열(A~F열: 번호·직급·사번 다음에 이름이 있는 표까지) 순회하며 이름 정제
+        for (let c = 0; c < Math.min(6, row.length); c++) {
+          let val = String(row[c] || '').trim();
+          if (!val) continue;
+
+          // 1. 줄바꿈(`\n`)이 있으면 첫 줄 텍스트만 취득 (예: '남영주\n(N-keep)' -> '남영주')
+          val = val.split('\n')[0].split('(')[0].trim();
+
+          // 2. 근무 코드 매칭용 단어 제외
+          const isShiftCodeOnly = /^(D|E|N|M|OFF|DD|DDEE|DE|N\/|\/)$/i.test(val);
+          
+          // 3. 이름: 한글 2~5자 (띄어쓴 이름 '남 궁민' 도 붙여서) 또는 영문 이름 (Kim Minji)
+          const korean = val.replace(/\s+/g, '');
+          const isKoreanName = /^[가-힣]{2,5}$/.test(korean) && !excludeKeywords.includes(korean);
+          const isEnglishName =
+            /^[A-Za-z][A-Za-z .'-]{1,29}$/.test(val) &&
+            (val.match(/[A-Za-z]/g) || []).length >= 3 &&
+            !ENGLISH_HEADER_WORDS.has(val.toLowerCase().replace(/[^a-z]/g, '')) &&
+            !cellToCode(val, shiftTypes);
+
+          if (!isShiftCodeOnly && (isKoreanName || isEnglishName)) {
+            foundName = isKoreanName ? korean : val.replace(/\s+/g, ' ');
+            break;
+          }
+        }
+
+        if (foundName) {
+          const personShifts = {};
+
+          Object.entries(colToDateMap).forEach(([colStr, dateKey]) => {
+            const c = parseInt(colStr, 10);
+            const rawShift = String(row[c] || '').trim();
+
+            // 표기 통일: 사용자 근무 종류 + 데이/나이트/오프/주/야/휴//, O 등 (사진 인식과 같은 규칙)
+            const finalShift = cellToCode(rawShift.split('\n')[0], shiftTypes) || '';
+
+            if (finalShift) {
+              personShifts[dateKey] = finalShift;
+            }
+          });
+
+          if (Object.keys(personShifts).length > 0) {
+            nameMap[foundName] = personShifts;
+          }
+        }
+      }
+
+      const foundNames = Object.keys(nameMap);
+
+      if (foundNames.length === 0) {
+        toast('엑셀 파일에서 근무자 이름 목록을 읽지 못했습니다.', 'error');
+        setStatusMessage('❌ 파싱 실패');
+        setIsProcessing(false);
+        return;
+      }
+
+      setStatusMessage('');
+      autoRegister({
+        source: '엑셀',
+        yearMonth: targetYM,
+        byName: Object.fromEntries(foundNames.map((n) => [n, { shifts: nameMap[n], uncertain: [] }]))
+      });
+
+    } catch (err) {
+      console.error(err);
+      if (!recoverIfStale(err)) setStatusMessage('❌ 엑셀 분석 오류가 발생했습니다.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // 1. 엑셀 파서 (7명 전원 정밀 추출 및 줄바꿈/특수문자 정제)
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
@@ -106,168 +271,17 @@ export default function ImportTab({
 
     try {
       // 앱에 포함된 xlsx 를 별도 워커에서 사용 (CDN 불필요, 조작된 파일로부터 앱 화면 격리 — lib/readSheet)
-      const { matrix, dateCells } = await readSheet(file);
-      {
-        try {
-          // 엑셀 상단 제목에서 연/월 (2026년 10월 · 10월 · 2026.10). 없으면 보고 있던 달 → 아래에서 요일·공휴일로 확인
-          const now = new Date();
-          const [sYear, sMonth] = (selectedDate || '').split('-').map(Number);
-          const title = detectYearMonth(matrix.slice(0, 5).map((row) => row.join(' ')).join(' '), {
-            year: sYear || now.getFullYear(),
-            month: sMonth || now.getMonth() + 1
-          });
-          let parsedYear = title.year;
-          let parsedMonth = title.month;
-          const foundHeaderYearMonth = title.found;
-
-          // 날짜 행(1~31) 탐색
-          let dateRowIdx = -1;
-          const colToDateMap = {};
-
-          for (let r = 0; r < matrix.length; r++) {
-            const row = matrix[r];
-            const numberCols = [];
-
-            row.forEach((val, c) => {
-              const num = parseInt(val, 10);
-              if (!isNaN(num) && num >= 1 && num <= 31) {
-                numberCols.push({ col: c, day: num });
-              }
-            });
-
-            if (numberCols.length >= 15) {
-              dateRowIdx = r;
-              // 날짜 서식 칸이면 적힌 날짜 그대로 (제목에 연월이 없어도 정확)
-              const exact = numberCols.map(({ col }) => [col, dateCells[`${r}:${col}`]]).filter(([, k]) => k);
-              if (exact.length >= 15) {
-                exact.forEach(([col, key]) => (colToDateMap[col] = key));
-                if (!foundHeaderYearMonth) {
-                  const ym = exact[Math.floor(exact.length / 2)][1];
-                  parsedYear = Number(ym.slice(0, 4));
-                  parsedMonth = Number(ym.slice(5, 7));
-                }
-                break;
-              }
-              // 날짜 줄 위아래의 요일(토 일 월 …)·공휴일(3 개천절 …)로 달 확인 → 제목을 못 읽었거나 틀려도 올바른 달로
-              const weekdays = {};
-              const holidays = {};
-              numberCols.forEach(({ col }) => {
-                [r - 1, r + 1, r + 2].forEach((rr) => {
-                  const wd = weekdayOf(matrix[rr]?.[col]);
-                  if (wd >= 0 && weekdays[col] === undefined) weekdays[col] = wd;
-                });
-                [r - 1, r, r + 1, r + 2].forEach((rr) => {
-                  const h = holidayOf(matrix[rr]?.[col]);
-                  if (h && !holidays[col]) holidays[col] = h;
-                });
-              });
-              const checked = checkDayRowMonth({
-                days: numberCols,
-                weekdays,
-                holidays,
-                ym: { year: parsedYear, month: parsedMonth },
-                found: foundHeaderYearMonth
-              });
-              parsedYear = checked.year;
-              parsedMonth = checked.month;
-              // '1' 앞쪽 날짜는 지난달 (26 27 … 31 1 2 … 25)
-              datesForDayRow(numberCols, parsedYear, parsedMonth).forEach(({ col, key }) => (colToDateMap[col] = key));
-              break;
-            }
-          }
-
-          const targetYM = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`;
-
-          if (dateRowIdx === -1) {
-            toast('엑셀 파일에서 날짜 행을 찾지 못했습니다.', 'error');
-            setIsProcessing(false);
-            return;
-          }
-
-          const nameMap = {};
-          
-          // 시스템 및 직급 제외 키워드
-          const excludeKeywords = [
-            '날짜', '이름', '성명', '구분', '직급', '근무', '토', '일', '월', '화', '수', '목', '금', 
-            '비고', '합계', '부서', '팀', 'HN', 'CN', 'RN', 'OFF', '오프', '휴무', '연차', '분당', '병동', '보고', '사항'
-          ];
-
-          for (let r = dateRowIdx + 1; r < matrix.length; r++) {
-            const row = matrix[r];
-            if (!row || row.length === 0) continue;
-
-            let foundName = '';
-            
-            // 앞쪽 6개 열(A~F열: 번호·직급·사번 다음에 이름이 있는 표까지) 순회하며 이름 정제
-            for (let c = 0; c < Math.min(6, row.length); c++) {
-              let val = String(row[c] || '').trim();
-              if (!val) continue;
-
-              // 1. 줄바꿈(`\n`)이 있으면 첫 줄 텍스트만 취득 (예: '남영주\n(N-keep)' -> '남영주')
-              val = val.split('\n')[0].split('(')[0].trim();
-
-              // 2. 근무 코드 매칭용 단어 제외
-              const isShiftCodeOnly = /^(D|E|N|M|OFF|DD|DDEE|DE|N\/|\/)$/i.test(val);
-              
-              // 3. 이름: 한글 2~5자 (띄어쓴 이름 '남 궁민' 도 붙여서) 또는 영문 이름 (Kim Minji)
-              const korean = val.replace(/\s+/g, '');
-              const isKoreanName = /^[가-힣]{2,5}$/.test(korean) && !excludeKeywords.includes(korean);
-              const isEnglishName =
-                /^[A-Za-z][A-Za-z .'-]{1,29}$/.test(val) &&
-                (val.match(/[A-Za-z]/g) || []).length >= 3 &&
-                !ENGLISH_HEADER_WORDS.has(val.toLowerCase().replace(/[^a-z]/g, '')) &&
-                !cellToCode(val, shiftTypes);
-
-              if (!isShiftCodeOnly && (isKoreanName || isEnglishName)) {
-                foundName = isKoreanName ? korean : val.replace(/\s+/g, ' ');
-                break;
-              }
-            }
-
-            if (foundName) {
-              const personShifts = {};
-
-              Object.entries(colToDateMap).forEach(([colStr, dateKey]) => {
-                const c = parseInt(colStr, 10);
-                const rawShift = String(row[c] || '').trim();
-
-                // 표기 통일: 사용자 근무 종류 + 데이/나이트/오프/주/야/휴//, O 등 (사진 인식과 같은 규칙)
-                const finalShift = cellToCode(rawShift.split('\n')[0], shiftTypes) || '';
-
-                if (finalShift) {
-                  personShifts[dateKey] = finalShift;
-                }
-              });
-
-              if (Object.keys(personShifts).length > 0) {
-                nameMap[foundName] = personShifts;
-              }
-            }
-          }
-
-          const foundNames = Object.keys(nameMap);
-
-          if (foundNames.length === 0) {
-            toast('엑셀 파일에서 근무자 이름 목록을 읽지 못했습니다.', 'error');
-            setStatusMessage('❌ 파싱 실패');
-            setIsProcessing(false);
-            return;
-          }
-
-          setStatusMessage('');
-          autoRegister({
-            source: '엑셀',
-            yearMonth: targetYM,
-            byName: Object.fromEntries(foundNames.map((n) => [n, { shifts: nameMap[n], uncertain: [] }]))
-          });
-
-        } catch (err) {
-          console.error(err);
-          if (!recoverIfStale(err)) setStatusMessage('❌ 엑셀 분석 오류가 발생했습니다.');
-        } finally {
-          setIsProcessing(false);
-        }
+      const book = await readSheet(file);
+      // 탭이 여러 개인 파일: 근무표처럼 생긴 탭(날짜 1~31 줄)만. 여러 개면 어느 달인지 고르게 (엑셀에서 마지막으로 본 탭이 맨 위)
+      const rosters = rosterSheets(book);
+      if (rosters.length > 1) {
+        setStatusMessage('');
+        setSheetChoice(rosters);
+        setIsProcessing(false);
+        return;
       }
+      const chosen = rosters[0] || book.sheets[0];
+      importMatrix(chosen.matrix, chosen.dateCells);
     } catch (err) {
       console.error(err);
       if (recoverIfStale(err)) setStatusMessage('앱이 새 버전으로 업데이트되어 새로고침하는 중이에요...');
@@ -665,6 +679,36 @@ export default function ImportTab({
       )}
 
       {/* 추출된 전체 근무자 목록 선택 모달 */}
+      {sheetChoice && (
+        <Modal onClose={() => setSheetChoice(null)} label="엑셀 탭 선택">
+          <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
+            <div className="flex justify-between items-center border-b pb-2 border-slate-100">
+              <h3 className="font-extrabold text-sm text-slate-900">어느 달을 가져올까요?</h3>
+              <button onClick={() => setSheetChoice(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">엑셀 파일에 근무표 탭이 {sheetChoice.length}개 있어요. 가져올 탭을 골라 주세요.</p>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {sheetChoice.map((sheet) => (
+                <button
+                  key={sheet.index}
+                  onClick={() => {
+                    setSheetChoice(null);
+                    setIsProcessing(true);
+                    importMatrix(sheet.matrix, sheet.dateCells);
+                  }}
+                  className="w-full py-2.5 px-3 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 font-extrabold text-xs rounded-2xl transition cursor-pointer text-left flex items-center justify-between"
+                >
+                  <span>{sheet.name || `${sheet.index + 1}번째 탭`}</span>
+                  {sheet.active && <span className="text-[10px] font-bold text-indigo-500">마지막으로 본 탭</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {pendingImport && (
         <Modal onClose={() => setPendingImport(null)} label="본인 이름 선택">
           <div className="bg-white rounded-3xl p-5 max-w-xs w-full space-y-4 shadow-xl border border-slate-100">
