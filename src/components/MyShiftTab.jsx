@@ -386,18 +386,24 @@ export default function MyShiftTab({
       {/* 처음 쓰는 사용자: 근무 등록 방법 안내 (근무가 하나라도 생기면 사라짐)
           서버에서 근무를 불러오는 동안은 숨김 → 새 폰 로그인 직후 안내가 잠깐 떴다 사라지지 않게 */}
       {!importBanner && !loadingFromServer && Object.keys(myShifts || {}).length === 0 && (
-        <section className="space-y-2">
-          <p className="text-[17px] font-semibold text-slate-900 px-1">근무를 등록해 볼까요?</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={onOpenImport} className="h-24 rounded-2xl bg-blue-600 text-white flex flex-col items-center justify-center gap-2 cursor-pointer">
-              <Camera size={26} />
-              <span className="text-[15px] font-semibold">사진·엑셀로</span>
-            </button>
-            <button type="button" onClick={() => setIsPatternOpen('first')} className="h-24 rounded-2xl bg-slate-50 text-slate-800 flex flex-col items-center justify-center gap-2 cursor-pointer active:bg-slate-100">
-              <Repeat size={26} className="text-blue-600" />
-              <span className="text-[15px] font-semibold">반복 패턴으로</span>
-            </button>
-          </div>
+        <section className="flex items-center gap-2 rounded-2xl bg-blue-50 pl-4 pr-2 py-2">
+          <p className="flex-1 min-w-0 text-[14px] text-slate-700">아직 등록된 근무가 없어요</p>
+          <button
+            type="button"
+            onClick={onOpenImport}
+            aria-label="근무표 사진·엑셀로 등록"
+            className="shrink-0 h-9 px-3 rounded-full bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-1 cursor-pointer"
+          >
+            <Camera size={15} /> 사진
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsPatternOpen('first')}
+            aria-label="반복 패턴으로 입력"
+            className="shrink-0 h-9 px-3 rounded-full bg-white text-blue-700 text-[13px] font-semibold flex items-center gap-1 cursor-pointer"
+          >
+            <Repeat size={15} /> 패턴
+          </button>
         </section>
       )}
 
