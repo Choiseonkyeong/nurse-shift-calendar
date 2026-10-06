@@ -146,11 +146,11 @@ test('수당 탭: 휴일·야간 가산, 입사일 기준 연차, 통계', async
   });
   await page.getByRole('button', { name: '다음 달' }).first().click();
   await tab(page, '수당').click();
-  await expect(page.getByText(/휴일 근무:/).locator('..')).toContainText('2 회 (16시간)');
+  await expect(page.getByText('휴일 근무', { exact: true }).locator('..')).toContainText('2 회 (16시간)');
   await expect(page.getByText('휴일 가산수당').locator('..')).toContainText('80,000 원');
   await expect(page.getByText('야간 가산수당').locator('..')).toContainText('120,000 원');
   await page.getByLabel('일요일도 휴일로').check();
-  await expect(page.getByText(/휴일 근무:/).locator('..')).toContainText('3 회');
+  await expect(page.getByText('휴일 근무', { exact: true }).locator('..')).toContainText('3 회');
 
   await page.locator('select:has(option[value=hire])').selectOption('hire');
   await page.getByLabel('입사일').fill('2021-11-01');

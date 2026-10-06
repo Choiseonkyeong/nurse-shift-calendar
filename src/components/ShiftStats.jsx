@@ -11,31 +11,29 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
   const usedTypes = shiftTypes.filter((t) => stats.totals[t.code]);
 
   return (
-    <div className="card p-5 space-y-3">
+    <div className="pt-4 space-y-3">
       <div className="flex justify-between items-center">
-        <h3 className="font-bold text-[15px] text-slate-900">
-          근무 통계
-        </h3>
+        <h3 className="text-[13px] font-medium text-slate-400">근무 통계</h3>
         <div className="flex items-center gap-1">
           <button onClick={() => setYear((y) => y - 1)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer" aria-label="이전 해">
             <ChevronLeft size={16} />
           </button>
-          <span className="text-xs font-black text-slate-700">{year}년</span>
+          <span className="text-[13px] text-slate-700">{year}년</span>
           <button onClick={() => setYear((y) => y + 1)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer" aria-label="다음 해">
             <ChevronRight size={16} />
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="grid grid-cols-3 text-center">
         {[
           ['근무일', `${stats.workDays}일`],
           ['최장 연속근무', `${stats.longestWork}일`],
           ['최장 연속N', `${stats.longestNight}일`]
         ].map(([label, value]) => (
-          <div key={label} className="p-2.5 bg-slate-50 rounded-2xl">
-            <p className="text-[10px] font-extrabold text-slate-400">{label}</p>
-            <p className="text-base font-black text-slate-800">{value}</p>
+          <div key={label} className="py-1">
+            <p className="text-[22px] font-bold text-slate-900">{value}</p>
+            <p className="text-[12px] text-slate-400">{label}</p>
           </div>
         ))}
       </div>
@@ -44,13 +42,13 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
         <p className="text-xs font-bold text-slate-300 text-center py-3">{year}년에 입력된 근무가 없습니다.</p>
       ) : (
         <div className="overflow-x-auto -mx-1">
-          <table className="w-full text-center text-[11px] font-bold border-separate border-spacing-y-0.5">
+          <table className="w-full text-center text-[13px] border-separate border-spacing-y-1">
             <thead>
               <tr className="text-slate-400">
                 <th className="px-1 text-left">월</th>
                 {usedTypes.map((t) => (
                   <th key={t.code} className="px-1">
-                    <span style={{ backgroundColor: t.bg, color: t.fg }} className="inline-block px-1.5 py-0.5 rounded-md font-black">
+                    <span style={{ color: t.fg }} className="font-bold">
                       {t.code}
                     </span>
                   </th>
@@ -70,7 +68,7 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
                     ))}
                   </tr>
                 ))}
-              <tr className="font-black text-indigo-700">
+              <tr className="font-semibold text-slate-900">
                 <td className="px-1 text-left">합계</td>
                 {usedTypes.map((t) => (
                   <td key={t.code} className="px-1">

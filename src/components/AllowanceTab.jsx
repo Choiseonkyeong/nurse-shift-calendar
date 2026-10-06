@@ -5,6 +5,17 @@ import { getTodayDateObj } from '../utils/dateUtils';
 import { leaveYearRange } from '../lib/allowance';
 import ShiftStats from './ShiftStats';
 
+// 설정 목록 한 줄 (왼쪽 이름, 오른쪽 값/입력). 화면 함수 밖에 둬야 입력 중 칸이 다시 만들어지지 않음
+const Row = ({ label, sub, children }) => (
+  <div className="flex items-center justify-between gap-3 py-3">
+    <span className="min-w-0">
+      <span className="block text-[15px] text-slate-800">{label}</span>
+      {sub && <span className="block text-[12px] text-slate-400 mt-0.5">{sub}</span>}
+    </span>
+    <span className="shrink-0 flex items-center gap-1.5 text-[15px] text-slate-600">{children}</span>
+  </div>
+);
+
 export default function AllowanceTab({
   myShifts = {},
   selectedDate,
@@ -147,24 +158,182 @@ export default function AllowanceTab({
   const totalUsed = calendarLeaveDays + priorUsed;
   const remainingVacation = Number(vacation.total || 0) - totalUsed;
 
-  return (
-    <div className="space-y-4 font-sans max-w-md mx-auto pb-12 text-slate-800">
-      
-      {/* 1. 상단 근무시간 입력 세션 */}
-      <div className="card p-4 space-y-2">
-        <h3 className="font-bold text-[15px] text-slate-900">근무 시간 설정</h3>
-        <div className="flex items-center gap-2 px-1 text-[10px] font-bold text-slate-400">
-          <span className="w-8" />
-          <span className="flex-1 text-center">근무 시간</span>
-          <span className="w-12 text-center">야간(h)</span>
-        </div>
-        {workTypes.map(({ code }) => {
-          const hasNightHours = true;
+  const fieldCls = 'h-9 px-3 bg-slate-100 rounded-lg text-[15px] text-slate-900 outline-none focus:ring-2 focus:ring-blue-200';
+  const saveVacation = (patch) => {
+    const val = { ...vacation, ...patch };
+    setVacation(val);
+    if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
+  };
 
-          return (
-            <div key={code} className="flex items-center gap-2">
-              <span className="font-black text-xs text-indigo-950 w-8 text-center truncate">{code}</span>
-              <div className="flex-1 min-w-0 flex items-center gap-1 bg-slate-100 rounded-2xl px-2 py-1">
+  return (
+    <div className="max-w-md mx-auto pb-12 text-slate-800">
+      {/* 1. 이번 달 가산수당 */}
+      <section className="pt-1 pb-4">
+        <p className="text-[13px] text-slate-400">
+          {month}월 가산수당 · {startDateStr.slice(5).replace('-', '.')} ~ {endDateStr.slice(5).replace('-', '.')}
+        </p>
+        <p className={`mt-1 text-[34px] font-bold tracking-tight text-slate-900 leading-tight ${blurCls}`}>
+          {(totalNightPay + totalHolidayPay).toLocaleString()}
+          <span className="text-[22px] font-semibold ml-0.5">원</span>
+        </p>
+        <span className="sr-only">{month}월 가산수당 합계</span>
+        <div className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+          <div className="flex justify-between items-center py-3 text-[15px]">
+            <span className="text-slate-500">야간 가산수당</span>
+            <span className={`text-slate-900 ${blurCls}`}>{totalNightPay.toLocaleString()} 원</span>
+          </div>
+          <div className="flex justify-between items-center py-3 text-[15px]">
+            <span className="text-slate-500">휴일 가산수당</span>
+            <span className={`text-slate-900 ${blurCls}`}>{totalHolidayPay.toLocaleString()} 원</span>
+          </div>
+        </div>
+        <p className="text-[12px] text-slate-400 mt-1">통상시급 × 50% 가산분만 계산한 예상 금액입니다. 병원 규정에 따라 다를 수 있어요.</p>
+      </section>
+
+      {/* 계산에 들어간 근무 */}
+      <section className="border-t border-slate-100 pt-3">
+        <h3 className="text-[13px] font-medium text-slate-400">계산 근거</h3>
+        <div className="divide-y divide-slate-100">
+          {/* 야간 인정 시간이 있는 근무만 표시 (기본 E/N + 사용자 정의 근무) */}
+          {workTypes.filter((t) => nightHoursOf(t.code) > 0 || t.code === 'N' || t.code === 'E').map((t) => (
+            <div key={t.code} className="flex justify-between items-center py-3 text-[15px]">
+              <span className="text-slate-800">{t.label} 근무</span>
+              <span className="text-slate-600">
+                {shiftCounts[t.code] || 0} 회 ({(shiftCounts[t.code] || 0) * nightHoursOf(t.code)}시간)
+              </span>
+            </div>
+          ))}
+          <div className="flex justify-between items-center py-3 text-[15px]">
+            <span className="text-slate-800">휴일 근무</span>
+            <span className="text-slate-600">
+              {holidayWorkDays.length} 회 ({holidayHours}시간)
+            </span>
+          </div>
+          <Row label="통상 시급">
+            <input
+              type="number"
+              placeholder="시급 입력"
+              value={hourlyWage || ''}
+              onChange={(e) => {
+                const val = Number(e.target.value) || 0;
+                setHourlyWage(val);
+                if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, hourlyWage: val, startDay });
+              }}
+              className={`${fieldCls} w-28 text-right ${blurCls}`}
+            />
+            원
+          </Row>
+          <Row label="정산 시작일" sub={Number(startDay) === 1 ? '1일 ~ 말일' : `전월 ${startDay}일 ~ 당월 ${startDay - 1}일`}>
+            <select value={startDay} onChange={(e) => handleStartDayChange(e.target.value)} className={`${fieldCls} max-w-[11rem] cursor-pointer`}>
+              {/* 병원마다 정산일이 달라 1~28일 모두 선택 가능 (29일 이후는 2월에 날짜가 없어 제외) */}
+              {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>
+                  {d}일
+                </option>
+              ))}
+            </select>
+          </Row>
+          <label className="flex items-center justify-between gap-3 py-3 cursor-pointer">
+            <span className="text-[15px] text-slate-800">일요일도 휴일로</span>
+            <input
+              type="checkbox"
+              checked={Boolean(holidayPay.includeSunday)}
+              onChange={(e) => setHolidayPay({ includeSunday: e.target.checked })}
+              className="w-5 h-5 accent-blue-600"
+            />
+          </label>
+          <Row label="휴일근무 1회 인정">
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              aria-label="휴일근무 1회 인정 시간"
+              value={holidayPay.hours ?? 8}
+              onChange={(e) => setHolidayPay({ hours: Number(e.target.value) || 0 })}
+              className={`${fieldCls} w-16 text-center`}
+            />
+            시간
+          </Row>
+        </div>
+      </section>
+
+      {/* 2. 연차 */}
+      <section className="border-t border-slate-100 pt-4 mt-2">
+        <p className="text-[13px] text-slate-400">남은 연차</p>
+        <p className="mt-1 text-[34px] font-bold tracking-tight text-slate-900 leading-tight">
+          {remainingVacation}
+          <span className="text-[22px] font-semibold ml-0.5">개</span>
+        </p>
+        <p className="text-[13px] text-slate-500 mt-1">
+          사용 {totalUsed}개 · 달력 {calendarLeaveDays}일 포함
+        </p>
+
+        {/* 휴가 종류별 사용 내역 (연차 기준 기간) — 종류가 여럿일 때만 (하나면 '사용 연차'와 같은 내용) */}
+        {leaveTypes.length > 1 && (
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[13px] text-slate-500">
+            {leaveTypes.map((t) => (
+              <span key={t.code} className={leaveUsage[t.code] ? '' : 'opacity-40'}>
+                <b style={{ color: t.fg }} className="font-bold">{t.code}</b> {leaveUsage[t.code]}회
+                {(t.leaveDays ?? 1) !== 1 && ` · ${leaveUsage[t.code] * (t.leaveDays ?? 1)}일`}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+          <Row label="총 부여 연차">
+            <input
+              type="number"
+              aria-label="총 부여 연차"
+              value={vacation.total}
+              onChange={(e) => saveVacation({ total: Number(e.target.value) || 0 })}
+              className={`${fieldCls} w-16 text-center`}
+            />
+            개
+          </Row>
+          <Row label="앱 사용 전 이미 쓴 연차">
+            <input
+              type="number"
+              aria-label="앱 사용 전 이미 쓴 연차"
+              value={vacation.used}
+              onChange={(e) => saveVacation({ used: Number(e.target.value) || 0 })}
+              className={`${fieldCls} w-16 text-center`}
+            />
+            개
+          </Row>
+          <Row label="연차 기준" sub={`집계 기간: ${leaveRange.start.replaceAll('-', '.')} ~ ${leaveRange.end.replaceAll('-', '.')}`}>
+            <select value={vacation.basis || 'calendar'} onChange={(e) => saveVacation({ basis: e.target.value })} className={`${fieldCls} cursor-pointer`}>
+              <option value="calendar">회계연도 (1/1)</option>
+              <option value="hire">입사일 기준</option>
+            </select>
+          </Row>
+          {vacation.basis === 'hire' && (
+            <Row label="입사일">
+              <input
+                type="date"
+                aria-label="입사일"
+                value={vacation.hireDate || ''}
+                onChange={(e) => saveVacation({ hireDate: e.target.value })}
+                className={fieldCls}
+              />
+            </Row>
+          )}
+        </div>
+      </section>
+
+      {/* 3. 근무 시간 설정 */}
+      <section className="border-t border-slate-100 pt-4 mt-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[13px] font-medium text-slate-400">근무 시간 설정</h3>
+          <span className="text-[12px] text-slate-400">야간 인정(시간)</span>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {workTypes.map(({ code }) => (
+            <div key={code} className="flex items-center gap-2 py-2.5">
+              <span className="w-9 text-[15px] font-bold truncate" style={{ color: workTypes.find((t) => t.code === code)?.fg }}>
+                {code}
+              </span>
+              <div className="flex-1 min-w-0 flex items-center gap-1 bg-slate-100 rounded-lg px-2 h-9">
                 <input
                   type="time"
                   aria-label={`${code} 시작 시각`}
@@ -177,7 +346,7 @@ export default function AllowanceTab({
                       /* 선택창을 열 수 없는 브라우저는 직접 입력 */
                     }
                   }}
-                  className="time-compact flex-1 min-w-0 bg-transparent text-[11px] font-bold text-center outline-none"
+                  className="time-compact flex-1 min-w-0 bg-transparent text-[13px] text-center outline-none"
                 />
                 <span className="text-slate-300 text-xs">~</span>
                 <input
@@ -192,248 +361,24 @@ export default function AllowanceTab({
                       /* 선택창을 열 수 없는 브라우저는 직접 입력 */
                     }
                   }}
-                  className="time-compact flex-1 min-w-0 bg-transparent text-[11px] font-bold text-center outline-none"
+                  className="time-compact flex-1 min-w-0 bg-transparent text-[13px] text-center outline-none"
                 />
               </div>
-              {hasNightHours ? (
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  aria-label={`${code} 야간 인정 시간`}
-                  value={shiftTimes[code]?.nightHours ?? 0}
-                  onChange={(e) => updateShiftTimes(code, 'nightHours', Number(e.target.value) || 0)}
-                  className="shrink-0 w-12 py-2 text-center font-black text-xs bg-slate-100 rounded-2xl outline-none text-indigo-600 focus:ring-2 focus:ring-indigo-200"
-                />
-              ) : (
-                <span className="shrink-0 w-12 text-center text-xs font-bold text-slate-300">-</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 2. 연차(휴가) 현황 세션 */}
-      <div className="card p-5 space-y-3">
-        <h3 className="font-bold text-[15px] text-slate-900">
-          연차(휴가) 현황
-        </h3>
-
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="px-1 py-3 bg-slate-50 rounded-2xl flex flex-col items-center justify-center">
-            <span className="text-[10px] font-extrabold text-rose-400 block mb-1 whitespace-nowrap">총 부여 연차</span>
-            <div className="flex items-center justify-center gap-0.5 w-full">
               <input
                 type="number"
-                value={vacation.total}
-                onChange={(e) => {
-                  const val = { ...vacation, total: Number(e.target.value) || 0 };
-                  setVacation(val);
-                  if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
-                }}
-                className="w-10 text-center text-lg font-black text-rose-950 bg-transparent outline-none p-0"
+                min="0"
+                step="0.5"
+                aria-label={`${code} 야간 인정 시간`}
+                value={shiftTimes[code]?.nightHours ?? 0}
+                onChange={(e) => updateShiftTimes(code, 'nightHours', Number(e.target.value) || 0)}
+                className="shrink-0 w-14 h-9 text-center text-[15px] bg-slate-100 rounded-lg outline-none focus:ring-2 focus:ring-blue-200"
               />
-              <span className="text-xs font-bold text-rose-900 shrink-0">개</span>
             </div>
-          </div>
-
-          <div className="px-1 py-3 bg-slate-50 rounded-2xl flex flex-col items-center justify-center">
-            <span className="text-[10px] font-extrabold text-slate-400 block mb-1">사용 연차</span>
-            <div className="text-lg font-black text-slate-800">
-              {totalUsed} <span className="text-xs font-bold text-slate-700">개</span>
-            </div>
-            <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap">달력 {calendarLeaveDays}일 포함</span>
-          </div>
-
-          <div className="px-1 py-3 bg-slate-50 rounded-2xl flex flex-col items-center justify-center">
-            <span className="text-[10px] font-extrabold text-indigo-400 block mb-1">잔여 연차</span>
-            <div className="text-lg font-black text-indigo-950">
-              {remainingVacation} <span className="text-xs font-bold">개</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 휴가 종류별 사용 내역 (연차 기준 기간) — 종류가 여럿일 때만 (하나면 '사용 연차'와 같은 내용) */}
-        {leaveTypes.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
-          {leaveTypes.map((t) => (
-            <span
-              key={t.code}
-              style={{ backgroundColor: t.bg, color: t.fg }}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-black ${leaveUsage[t.code] ? '' : 'opacity-40'}`}
-            >
-              {t.code} {leaveUsage[t.code]}회
-              {(t.leaveDays ?? 1) !== 1 && ` · ${leaveUsage[t.code] * (t.leaveDays ?? 1)}일`}
-            </span>
           ))}
         </div>
-        )}
+      </section>
 
-        <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-2xl">
-          <span className="text-[11px] font-bold text-slate-500">앱 사용 전 이미 쓴 연차</span>
-          <div className="flex items-center gap-1">
-              <input
-                type="number"
-                value={vacation.used}
-                onChange={(e) => {
-                  const val = { ...vacation, used: Number(e.target.value) || 0 };
-                  setVacation(val);
-                  if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
-                }}
-                className="w-12 py-1 text-center text-sm font-black text-slate-800 bg-white border border-slate-200 rounded-lg outline-none"
-              />
-              <span className="text-xs font-bold text-slate-500 shrink-0">개</span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-2 rounded-2xl">
-          <span className="text-[11px] font-bold text-slate-500 shrink-0">연차 기준</span>
-          <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
-            <select
-              value={vacation.basis || 'calendar'}
-              onChange={(e) => {
-                const val = { ...vacation, basis: e.target.value };
-                setVacation(val);
-                if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
-              }}
-              className="bg-white border border-slate-200 px-2 py-1 rounded-lg text-xs font-black text-slate-700 outline-none"
-            >
-              <option value="calendar">회계연도 (1/1)</option>
-              <option value="hire">입사일 기준</option>
-            </select>
-            {vacation.basis === 'hire' && (
-              <input
-                type="date"
-                aria-label="입사일"
-                value={vacation.hireDate || ''}
-                onChange={(e) => {
-                  const val = { ...vacation, hireDate: e.target.value };
-                  setVacation(val);
-                  if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, vacation: val });
-                }}
-                className="w-[8.5rem] bg-white border border-slate-200 px-2 py-1 rounded-lg text-xs font-bold outline-none"
-              />
-            )}
-          </div>
-        </div>
-        <p className="text-[10px] font-bold text-slate-400 px-1">
-          집계 기간: {leaveRange.start.replaceAll('-', '.')} ~ {leaveRange.end.replaceAll('-', '.')}
-        </p>
-      </div>
-
-      {/* 3. 월 야간근로수당 계산기 세션 (자유 정산 시작일 설정 기능) */}
-      <div className="card p-5 space-y-4">
-        
-        {/* 헤더 및 정산 기준일 선택 드롭다운 */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold text-[15px] text-slate-900">
-              {month}월 수당 계산기
-            </h3>
-            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg whitespace-nowrap">
-              {startDateStr.slice(5)} ~ {endDateStr.slice(5)}
-            </span>
-          </div>
-
-          {/* 정산 시작일 선택 옵션 바 */}
-          <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-2xl text-xs font-bold">
-            <span className="text-slate-600 whitespace-nowrap">정산 시작일</span>
-            <div className="flex items-center gap-1">
-              <select
-                value={startDay}
-                onChange={(e) => handleStartDayChange(e.target.value)}
-                className="bg-white border border-slate-200 px-2.5 py-1 rounded-xl font-black text-indigo-600 text-xs outline-none focus:border-indigo-400 cursor-pointer shadow-2xs"
-              >
-                {/* 병원마다 정산일이 달라 1~28일 모두 선택 가능 (29일 이후는 2월에 날짜가 없어 제외) */}
-                {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                  <option key={d} value={d}>
-                    {d === 1 ? '1일 (1일 ~ 말일)' : `${d}일 (전월${d}일 ~ 당월${d - 1}일)`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* 수당 산출 내역 */}
-        <div className="p-4 bg-slate-50 rounded-2xl space-y-3 text-xs">
-          {/* 야간 인정 시간이 있는 근무만 표시 (기본 E/N + 사용자 정의 근무) */}
-          {workTypes.filter((t) => nightHoursOf(t.code) > 0 || t.code === 'N' || t.code === 'E').map((t) => (
-            <div key={t.code} className="flex justify-between items-center font-bold text-slate-600">
-              <span>{t.label} 근무:</span>
-              <span className="font-black text-indigo-950 text-sm">
-                {shiftCounts[t.code] || 0} 회 ({(shiftCounts[t.code] || 0) * nightHoursOf(t.code)}시간)
-              </span>
-            </div>
-          ))}
-
-          <div className="pt-2 border-t border-slate-200/70 flex justify-between items-center">
-            <span className="font-extrabold text-slate-700">통상 시급 (원):</span>
-            <input
-              type="number"
-              placeholder="시급 입력"
-              value={hourlyWage || ''}
-              onChange={(e) => {
-                const val = Number(e.target.value) || 0;
-                setHourlyWage(val);
-                if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, hourlyWage: val, startDay });
-              }}
-              className={`w-28 py-1.5 px-3 bg-white border border-slate-200 rounded-xl font-black text-right text-slate-900 outline-none focus:border-indigo-500 ${blurCls}`}
-            />
-          </div>
-
-          <div className="pt-2 border-t border-slate-200/70 space-y-2">
-            <div className="flex justify-between items-center font-bold text-slate-600">
-              <span>휴일 근무:</span>
-              <span className="font-black text-indigo-950 text-sm">
-                {holidayWorkDays.length} 회 ({holidayHours}시간)
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-500">
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={Boolean(holidayPay.includeSunday)}
-                  onChange={(e) => setHolidayPay({ includeSunday: e.target.checked })}
-                />
-                일요일도 휴일로
-              </label>
-              <label className="flex items-center gap-1">
-                1회 인정
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  aria-label="휴일근무 1회 인정 시간"
-                  value={holidayPay.hours ?? 8}
-                  onChange={(e) => setHolidayPay({ hours: Number(e.target.value) || 0 })}
-                  className="w-12 py-1 text-center font-black bg-white border border-slate-200 rounded-lg outline-none"
-                />
-                시간
-              </label>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-200/70 space-y-1.5">
-            <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-              <span>야간 가산수당</span>
-              <span className={blurCls}>{totalNightPay.toLocaleString()} 원</span>
-            </div>
-            <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-              <span>휴일 가산수당</span>
-              <span className={blurCls}>{totalHolidayPay.toLocaleString()} 원</span>
-            </div>
-            <div className="flex justify-between items-center gap-2 pt-1">
-              <span className="font-black text-slate-900 text-sm shrink-0">{month}월 가산수당 합계</span>
-              <span className={`text-xl sm:text-2xl font-black text-indigo-600 whitespace-nowrap ${blurCls}`}>
-                {(totalNightPay + totalHolidayPay).toLocaleString()} <span className="text-base">원</span>
-              </span>
-            </div>
-            <p className="text-[10px] font-bold text-slate-400">통상시급 × 50% 가산분만 계산한 예상 금액입니다. 병원 규정에 따라 다를 수 있어요.</p>
-          </div>
-        </div>
-      </div>
-
+      <div className="border-t border-slate-100 mt-2" />
       <ShiftStats myShifts={myShifts} initialYear={year} />
     </div>
   );
