@@ -34,26 +34,28 @@ export default function AuthLanding({ type, onDone }) {
     }
   };
 
+  // 앱 화면처럼: 흰 바탕, 가운데 아이콘·제목·설명, 아래 큰 버튼
   const box = (icon, title, body, action) => (
-    <div className="min-h-[100dvh] bg-page flex items-center justify-center p-5">
-      <div className="bg-white w-full max-w-xs rounded-3xl p-6 space-y-4 shadow-xl text-center">
-        <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">{icon}</div>
-        <h1 className="font-black text-lg text-slate-900">{title}</h1>
-        <div className="text-xs font-bold text-slate-500 space-y-2">{body}</div>
-        {action}
+    <div className="min-h-[100dvh] bg-white flex flex-col px-6 pt-[calc(var(--safe-top)+15vh)] pb-[calc(var(--safe-bottom)+24px)]">
+      <div className="flex-1 w-full max-w-sm mx-auto text-center space-y-3">
+        <div className="w-16 h-16 mx-auto rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">{icon}</div>
+        <h1 className="pt-2 text-[22px] font-bold text-slate-900">{title}</h1>
+        <div className="text-[15px] text-slate-500 leading-relaxed space-y-3">{body}</div>
       </div>
+      <div className="w-full max-w-sm mx-auto">{action}</div>
     </div>
   );
 
+  const btnCls = 'w-full h-14 rounded-2xl bg-blue-600 text-white text-[16px] font-semibold disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5';
   const continueBtn = (
-    <button onClick={onDone} className="w-full py-3 rounded-2xl bg-indigo-600 text-white text-sm font-black cursor-pointer">
+    <button onClick={onDone} className={btnCls}>
       웹에서 근무표 열기
     </button>
   );
 
   if (type === 'error') {
     return box(
-      <AlertTriangle size={24} />,
+      <AlertTriangle size={30} />,
       '링크가 만료되었어요',
       <p>인증 링크는 한 번만, 일정 시간 안에만 쓸 수 있어요. 앱에서 메일을 다시 받아 주세요.</p>,
       continueBtn
@@ -62,10 +64,10 @@ export default function AuthLanding({ type, onDone }) {
 
   if (type === 'recovery') {
     if (done) {
-      return box(<CheckCircle2 size={24} />, '비밀번호를 바꿨어요', <p>앱의 [계정 → 기존 계정으로 로그인]에서 새 비밀번호로 로그인해 주세요.</p>, continueBtn);
+      return box(<CheckCircle2 size={30} />, '비밀번호를 바꿨어요', <p>앱의 [계정 → 기존 계정으로 로그인]에서 새 비밀번호로 로그인해 주세요.</p>, continueBtn);
     }
     return box(
-      <KeyRound size={24} />,
+      <KeyRound size={30} />,
       '새 비밀번호 설정',
       <>
         <input
@@ -74,22 +76,22 @@ export default function AuthLanding({ type, onDone }) {
           placeholder="새 비밀번호 (6자 이상)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none"
+          className="w-full h-14 px-4 bg-slate-50 rounded-2xl text-[16px] text-slate-900 outline-none focus:ring-2 focus:ring-blue-200"
         />
-        {error && <p className="text-rose-500">{error}</p>}
+        {error && <p className="text-[14px] text-rose-500">{error}</p>}
       </>,
       <button
         onClick={resetPassword}
         disabled={busy || password.length < 6}
-        className="w-full py-3 rounded-2xl bg-indigo-600 text-white text-sm font-black disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5"
+        className={btnCls}
       >
-        {busy && <Loader2 size={15} className="animate-spin" />} 비밀번호 바꾸기
+        {busy && <Loader2 size={18} className="animate-spin" />} 비밀번호 바꾸기
       </button>
     );
   }
 
   return box(
-    <CheckCircle2 size={24} />,
+    <CheckCircle2 size={30} />,
     '이메일 인증 완료',
     <p>앱으로 돌아가 [계정] 화면에서 [인증 확인]을 누른 뒤 비밀번호를 정해 주세요.</p>,
     continueBtn
