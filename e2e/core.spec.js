@@ -52,7 +52,7 @@ test('동기화: 다른 기기 변경은 반영, 오프라인에서 지운 근�
   await page.reload();
   await expect(page.getByText('오프라인 · 기기 저장')).toBeVisible();
   await day(page, '9월 3일').click();
-  await page.getByRole('button', { name: '근무 삭제 (빈 칸으로 설정)' }).click();
+  await page.getByRole('button', { name: '근무 비우기' }).click();
   state.offline = false;
   await page.reload();
   await waitSaved(page);

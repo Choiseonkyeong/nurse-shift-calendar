@@ -39,7 +39,7 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
       </div>
 
       {usedTypes.length === 0 ? (
-        <p className="text-xs font-bold text-slate-300 text-center py-3">{year}년에 입력된 근무가 없습니다.</p>
+        <p className="text-[14px] text-slate-400 text-center py-3">{year}년에 입력된 근무가 없습니다.</p>
       ) : (
         <div className="overflow-x-auto -mx-1">
           <table className="w-full text-center text-[13px] border-separate border-spacing-y-1">
@@ -62,8 +62,8 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
                   <tr key={m.month} className="text-slate-700">
                     <td className="px-1 text-left text-slate-500">{m.month}월</td>
                     {usedTypes.map((t) => (
-                      <td key={t.code} className={`px-1 ${m.counts[t.code] ? '' : 'text-slate-200'}`}>
-                        {m.counts[t.code] || 0}
+                      <td key={t.code} className={`px-1 ${m.counts[t.code] ? '' : 'text-slate-300'}`}>
+                        {m.counts[t.code] || '–'}
                       </td>
                     ))}
                   </tr>
