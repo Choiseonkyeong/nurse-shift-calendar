@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useShiftTypes, shiftTextVars } from '../lib/shiftTypes';
 import { getHoliday } from '../utils/holidays';
 import { getTodayDateObj, addMonthsKey } from '../utils/dateUtils';
-import { leaveYearRange, nightHoursFromTime } from '../lib/allowance';
+import { leaveYearRange, nightHoursFromTime, payPeriod } from '../lib/allowance';
 import ShiftStats from './ShiftStats';
 import { Moon, PartyPopper, SlidersHorizontal, ChevronLeft, ChevronRight, ChevronDown, X, Minus, Plus, Pencil } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './MonthPicker';
@@ -103,33 +103,8 @@ export default function AllowanceTab({
   // 1. 커스텀 정산 시작일 설정 (기본값: 26일)
   const [startDay, setStartDay] = useState(shiftConfigs.startDay || 26);
 
-  // 선택한 시작일에 따라 동적으로 정산 날짜 범위(시작일 ~ 종료일) 계산
-  const getCycleRange = (y, m, day) => {
-    const curM = String(m).padStart(2, '0');
-
-    if (day === 1) {
-      // 1일 선택 시: 당월 1일 ~ 당월 말일
-      const lastDay = new Date(y, m, 0).getDate();
-      return {
-        startDateStr: `${y}-${curM}-01`,
-        endDateStr: `${y}-${curM}-${String(lastDay).padStart(2, '0')}`
-      };
-    } else {
-      // 2일 이상 선택 시: 전월 startDay일 ~ 당월 (startDay - 1)일
-      const prevDateObj = new Date(y, m - 2, day);
-      const prevY = prevDateObj.getFullYear();
-      const prevM = String(prevDateObj.getMonth() + 1).padStart(2, '0');
-      const startD = String(day).padStart(2, '0');
-      const endD = String(day - 1).padStart(2, '0');
-
-      return {
-        startDateStr: `${prevY}-${prevM}-${startD}`,
-        endDateStr: `${y}-${curM}-${endD}`
-      };
-    }
-  };
-
-  const { startDateStr, endDateStr } = getCycleRange(year, month, Number(startDay));
+  // 정산 기간 (예: 26일 → 전달 26일 ~ 이번 달 25일)
+  const { start: startDateStr, end: endDateStr } = payPeriod(year, month, startDay);
 
   // 2. 근무별 시간 및 야간 인정시간 (D -> M -> E -> N)
   const [shiftTimes, setShiftTimes] = useState(

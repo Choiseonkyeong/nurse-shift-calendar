@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { leaveYearRange, nightHoursFromTime } from '../src/lib/allowance';
+import { leaveYearRange, nightHoursFromTime, payPeriod } from '../src/lib/allowance';
 import { computeYearStats } from '../src/lib/stats';
 import { expandPattern } from '../src/components/PatternFill';
 import { HOLIDAYS, getHoliday, getHolidayShort } from '../src/utils/holidays';
@@ -108,5 +108,13 @@ describe('야간 시간 자동 계산 (22시~6시)', () => {
     expect(nightHoursFromTime('22:00 - 07:00')).toBe(8);
     expect(nightHoursFromTime('05:00 - 13:00')).toBe(1);
     expect(nightHoursFromTime('')).toBe(null);
+  });
+});
+
+describe('정산 기간', () => {
+  it('1일 시작은 그 달 전체, 그 외는 전달~이번 달', () => {
+    expect(payPeriod(2026, 2, 1)).toEqual({ start: '2026-02-01', end: '2026-02-28' });
+    expect(payPeriod(2026, 10, 26)).toEqual({ start: '2026-09-26', end: '2026-10-25' });
+    expect(payPeriod(2026, 1, 26)).toEqual({ start: '2025-12-26', end: '2026-01-25' });
   });
 });

@@ -45,3 +45,13 @@ export function nightHoursFromTime(time) {
   const mins = overlap(-120, 360) + overlap(1320, 1800);
   return Math.round((mins / 60) * 100) / 100;
 }
+
+/**
+ * 정산 기간: 시작일이 1일이면 그 달 1일~말일, 아니면 전달 시작일~이번 달 (시작일-1)일
+ * 예) 2026년 10월, 26일 → 2026-09-26 ~ 2026-10-25
+ */
+export function payPeriod(year, month, startDay = 1) {
+  const day = Number(startDay) || 1;
+  if (day === 1) return { start: `${year}-${pad(month)}-01`, end: `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}` };
+  return { start: key(new Date(year, month - 2, day)), end: `${year}-${pad(month)}-${pad(day - 1)}` };
+}

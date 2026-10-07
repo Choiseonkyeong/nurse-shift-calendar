@@ -164,11 +164,25 @@ test('내보내기(CSV·.ics) + 전체 백업 저장 → 다른 기기에서 복
   await other.close();
 });
 
-test('근무표 이미지 공유(웹: 파일 저장)', async ({ page }) => {
-  await openApp(page, { local: { my_shift_data: { '2026-09-01': 'D' } } });
-  const [img] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '근무표 이미지 공유' }).click()]);
+test('근무표 이미지 공유(웹: 파일 저장): 이번 달 전체 또는 정산 기간 선택', async ({ page }) => {
+  await openApp(page, { local: { my_shift_data: { '2026-08-27': 'N', '2026-09-01': 'D' } } });
+  const share = page.getByRole('button', { name: '근무표 이미지 공유' });
+  await share.click();
+  const pick = page.getByRole('dialog', { name: '근무표 공유' });
+  await expect(pick.getByRole('button', { name: /정산 기간 8\.26 ~ 9\.25/ })).toBeVisible(); // 기본 정산 시작일 26일
+  const [img] = await Promise.all([page.waitForEvent('download'), pick.getByRole('button', { name: /9월 전체/ }).click()]);
   expect(img.suggestedFilename()).toBe('shift-2026-09.png');
   expect(fs.statSync(await img.path()).size).toBeGreaterThan(20000);
+
+  await share.click();
+  const [img2] = await Promise.all([page.waitForEvent('download'), pick.getByRole('button', { name: /정산 기간/ }).click()]);
+  expect(img2.suggestedFilename()).toBe('shift-2026-09-period.png');
+});
+
+test('정산 시작일이 1일이면 고르는 창 없이 바로 그 달 이미지', async ({ page }) => {
+  await openApp(page, { local: { shift_configs: { startDay: 1 } } });
+  const [img] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '근무표 이미지 공유' }).click()]);
+  expect(img.suggestedFilename()).toBe('shift-2026-09.png');
 });
 
 test('새 배포 후 오래 열린 탭: 사진 인식 파일을 못 찾으면 새로고침 → 등록 탭으로 돌아와 다시 시도 안내', async ({ page }) => {
