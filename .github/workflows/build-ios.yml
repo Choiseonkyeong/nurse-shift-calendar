@@ -1,19 +1,24 @@
 name: Build iOS
 
-# macOS 러너는 비용이 크므로 main/master 푸시, PR, 수동 실행 시에만 동작
+# macOS 러너는 사용 시간이 10배로 계산되므로 (비공개 저장소 무료 한도 월 2,000분)
+#  - master 푸시: 애플 서명 키(ASC_KEY_P8_BASE64)가 등록돼 있을 때만 빌드 → TestFlight 업로드
+#  - PR: ios/ 폴더를 고친 경우에만 서명 없이 컴파일 검증
+#  - 수동 실행(Actions → Build iOS → Run workflow): 항상 실행
 on:
   push:
     branches: [main, master]
     paths-ignore:
       - 'android/**'
       - 'supabase/**'
+      - 'docs/**'
       - '**.md'
       - '.github/workflows/build-apk.yml'
+      - '.github/workflows/e2e.yml'
   pull_request:
-    paths-ignore:
-      - 'android/**'
-      - 'supabase/**'
-      - '**.md'
+    paths:
+      - 'ios/**'
+      - 'capacitor.config.json'
+      - '.github/workflows/build-ios.yml'
   workflow_dispatch:
 
 concurrency:
@@ -21,7 +26,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 비싼 macOS 빌드 전에 실행할지만 우분투에서 판단
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          HAS_KEY: ${{ secrets.ASC_KEY_P8_BASE64 != '' }}
+        run: |
+          if [ "${{ github.event_name }}" != "push" ] || [ "$HAS_KEY" = "true" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+
   build:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: macos-latest
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

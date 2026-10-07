@@ -75,6 +75,14 @@
   - 구글 플레이 "데이터 보안": 계정 삭제 경로 = 프로필 → 계정 → 계정 삭제 (웹도 같은 경로)
   - 개인정보 라벨: 개인정보처리방침 1번 표 그대로 (광고·추적 없음, 사진은 기기 안에서만 처리)
 
+## 저장소 비공개 전환 (선택)
+
+- GitHub → 저장소 Settings → 맨 아래 Danger Zone → **Change visibility → Private**
+- 바꿔도 그대로인 것: 웹(Vercel) 자동 배포·주소, 서버(Supabase), GitHub Secrets, Claude 작업
+- 주의: 비공개 저장소는 GitHub Actions 무료 시간이 **월 2,000분** (공개는 무제한)
+  - 그래서 자동 실행을 줄여 둠 — PR: 린트·단위·E2E 테스트 1회 / master 머지: 안드로이드 APK / 아이폰: 애플 키 등록 후 master 머지 때만 (macOS 는 1분이 10분으로 계산)
+  - 남은 시간: GitHub → Settings(내 계정) → Billing and plans → Usage
+
 ## 하지 않아도 되는 것 (확인 완료)
 
 - 서버 1000행 제한: 앱이 1000개씩 나눠 받도록 되어 있어 **Supabase 설정 변경 불필요**
