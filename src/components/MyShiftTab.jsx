@@ -5,7 +5,7 @@ import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
 import { Bell, BellOff, Camera, Check, ChevronDown, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useSwipe } from '../lib/swipe';
-import { useShiftTypes, shiftTextVars, findShiftType } from '../lib/shiftTypes';
+import { useShiftTypes, shiftTextVars, findShiftType, shortLabel } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
 import MonthPicker, { monthPickKey } from './MonthPicker';
@@ -41,9 +41,6 @@ const importPeriod = ({ keys = [], yearMonth }) => {
   const md = (k) => `${Number(k.slice(5, 7))}월 ${Number(k.slice(8))}일`;
   return `${md(first)}~${md(last)}`;
 };
-
-// 'Day (데이)' → '데이' (괄호 안 한글 이름만, 없으면 그대로)
-const shortLabel = (label = '') => label.match(/\(([^)]+)\)\s*$/)?.[1] || label;
 
 export default function MyShiftTab({
   selectedDate,
@@ -706,8 +703,6 @@ export default function MyShiftTab({
       {isPatternOpen && (
         <PatternFill
           startDate={selectedDate}
-          // 처음 등록할 때는 넉넉히 3개월 (이번 달 끝까지면 며칠만 채워질 수 있음)
-          defaultPeriod={isPatternOpen === 'first' ? '3' : 'month'}
           myShifts={myShifts || {}}
           onClose={() => setIsPatternOpen(false)}
           onApply={(filled) => {
