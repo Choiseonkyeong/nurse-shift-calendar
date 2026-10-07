@@ -49,9 +49,29 @@
   - 설치한 앱(Android/iOS)은 폰 안에서 알림을 예약하므로 **이 설정 없이도 앱을 꺼 둔 상태에서 알림이 옵니다.**
   - 웹까지 원할 때만 [`PUSH_SETUP.md`](./PUSH_SETUP.md) 순서대로 (Firebase → GitHub Secrets 3개 → 함수 배포 → 예약 실행 SQL)
 
-- [ ] **8. 스토어 등록 전**
+- [ ] **8. 아이폰 테스트 앱 (TestFlight)** (30분, 애플 개발자 계정 연 $99 필요)
+  - 등록이 끝나면 **master 에 머지할 때마다 TestFlight 에 새 버전이 자동으로 올라갑니다.**
+  1. https://developer.apple.com/programs 가입 → 승인 메일 대기 (보통 1~2일)
+  2. 앱 ID 등록: https://developer.apple.com/account/resources/identifiers → `+` → App IDs → App
+     - Bundle ID(Explicit): `com.nurseshift.app` · Capabilities 에서 **Push Notifications** 체크 → 등록
+  3. 앱 만들기: https://appstoreconnect.apple.com → 앱 → `+` 신규 앱
+     - 플랫폼 iOS · 이름 `근무표` (이미 있으면 `근무표 - 간호사 근무 달력` 등) · 언어 한국어 · 번들 ID `com.nurseshift.app` · SKU `nurseshift`
+  4. Team ID 확인: https://developer.apple.com/account → 멤버십 세부 사항 → **팀 ID** (영문·숫자 10자리)
+  5. API 키 만들기: App Store Connect → 사용자 및 액세스 → **통합** → App Store Connect API → 팀 키 `+`
+     - 이름 `github` · 접근 권한 **관리(Admin)** → 생성
+     - 화면의 **Issuer ID**, 키의 **키 ID** 를 적어 두고 **API 키 다운로드**(`AuthKey_XXXX.p8`, 한 번만 받을 수 있음)
+  6. p8 파일을 한 줄 문자로 바꾸기
+     - 맥 터미널: `base64 -i AuthKey_XXXX.p8 | pbcopy` (복사됨)
+     - 윈도우 PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("AuthKey_XXXX.p8")) | Set-Clipboard`
+  7. GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret 4개
+     - `IOS_TEAM_ID` = 4번 팀 ID · `ASC_KEY_ID` = 키 ID · `ASC_ISSUER_ID` = Issuer ID · `ASC_KEY_P8_BASE64` = 6번에서 복사한 값
+  8. GitHub → Actions → **Build iOS** → Run workflow (약 20분)
+  9. App Store Connect → 앱 → **TestFlight** → 내부 테스트 → `+` 로 본인 추가 → 아이폰에 **TestFlight** 앱 설치 → 초대 메일에서 설치
+  - ⚠️ p8 키와 위 값들은 채팅·코드에 붙여넣지 말고 GitHub Secrets 화면에만 입력하세요.
+
+- [ ] **9. 스토어 등록 전**
   - 안드로이드 출시용 서명: GitHub → Settings → Secrets and variables → Actions 에 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` 등록 (지금은 테스트용 APK 만 만들어짐)
-  - iOS 출시용 서명: Apple 개발자 계정 필요, Secrets 에 `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64` 등록
+  - iOS 출시용 서명: 8번과 같음 (TestFlight 에 올라간 빌드를 그대로 심사 제출)
   - 구글 플레이 "데이터 보안": 계정 삭제 경로 = 프로필 → 계정 → 계정 삭제 (웹도 같은 경로)
   - 개인정보 라벨: 개인정보처리방침 1번 표 그대로 (광고·추적 없음, 사진은 기기 안에서만 처리)
 

@@ -76,9 +76,13 @@ jobs:
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             "${AUTH_ARGS[@]}" archive
 
+          # master 푸시·수동 실행: App Store Connect(TestFlight)로 바로 업로드, PR: IPA 파일만 생성
+          DEST=export
+          if [ "${{ github.event_name }}" != "pull_request" ]; then DEST=upload; fi
           /usr/libexec/PlistBuddy -c "Add :method string app-store-connect" \
             -c "Add :teamID string $IOS_TEAM_ID" \
             -c "Add :signingStyle string automatic" \
+            -c "Add :destination string $DEST" \
             "$RUNNER_TEMP/ExportOptions.plist"
 
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
@@ -91,3 +95,4 @@ jobs:
         with:
           name: app-ios-${{ github.run_number }}
           path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: ignore  # TestFlight 로 업로드한 경우 파일이 남지 않음
