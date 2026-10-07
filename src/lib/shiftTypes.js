@@ -35,6 +35,9 @@ export function mergeShiftTypes(custom = []) {
   return [...byCode.values()];
 }
 
+/** 'Day (데이)' → '데이' (괄호 안 한글 이름만, 없으면 그대로) */
+export const shortLabel = (label = '') => label.match(/\(([^)]+)\)\s*$/)?.[1] || label;
+
 export function findShiftType(types, code) {
   return (types || []).find((t) => t.code === code);
 }

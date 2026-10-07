@@ -40,7 +40,7 @@ export function expandPattern(cycle, startKey, period, { weekdayAligned = false 
   return result;
 }
 
-export default function PatternFill({ startDate, myShifts, onApply, onClose, defaultPeriod = 'month' }) {
+export default function PatternFill({ startDate, myShifts, onApply, onClose, defaultPeriod = '3' }) {
   const shiftTypes = useShiftTypes();
   const [cycle, setCycle] = useState(PRESETS[1].cycle);
   const [weekdayAligned, setWeekdayAligned] = useState(false);
@@ -54,6 +54,8 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
   );
   const entries = Object.entries(generated);
   const conflicts = entries.filter(([k]) => myShifts[k]).length;
+  // 미리보기는 두 줄(2주) 달력: 첫 줄 앞은 시작 요일만큼 비움
+  const previewOffset = entries.length ? new Date(`${entries[0][0]}T00:00:00`).getDay() : 0;
 
   const handleApply = () => {
     const toApply = overwrite ? generated : Object.fromEntries(entries.filter(([k]) => !myShifts[k]));
@@ -155,12 +157,21 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
 
         {entries.length > 0 && (
           <div className="space-y-1">
-            <span className="text-[13px] text-slate-400">미리보기 (처음 14일)</span>
-            <div className="grid grid-cols-7 gap-1">
-              {entries.slice(0, 14).map(([k, code]) => (
-                <div key={k} className="flex flex-col items-center gap-0.5">
+            <span className="text-[13px] text-slate-400">미리보기</span>
+            {/* 달력처럼 요일에 맞춰 두 줄 */}
+            <div className="grid grid-cols-7 gap-1 rounded-2xl bg-slate-50 p-2">
+              {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
+                <span key={d} className={`text-[11px] text-center ${i === 0 ? 'text-rose-400' : i === 6 ? 'text-blue-400' : 'text-slate-400'}`}>
+                  {d}
+                </span>
+              ))}
+              {Array.from({ length: previewOffset }, (_, i) => (
+                <span key={`blank${i}`} />
+              ))}
+              {entries.slice(0, 14 - previewOffset).map(([k, code]) => (
+                <div key={k} className="flex flex-col items-center gap-0.5 py-0.5">
                   <span className="text-[11px] text-slate-400">{Number(k.slice(8))}</span>
-                  <span style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text w-full text-[13px] font-bold text-center truncate">
+                  <span style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text w-full text-[14px] font-bold text-center truncate">
                     {code}
                   </span>
                 </div>

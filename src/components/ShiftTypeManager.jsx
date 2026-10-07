@@ -3,7 +3,7 @@ import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import Modal from './Modal';
 import { X, Plus, ChevronLeft, Trash2, Check } from 'lucide-react';
-import { useShiftTypes, DEFAULT_CODES, shiftTextVars } from '../lib/shiftTypes';
+import { useShiftTypes, DEFAULT_CODES, shiftTextVars, shortLabel } from '../lib/shiftTypes';
 
 // 파스텔 색상 팔레트 (배경 / 글자)
 export const PALETTE = [
@@ -113,7 +113,7 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
                   <span style={shiftTextVars(t)} className="shift-text w-12 shrink-0 text-[17px] font-bold truncate">
                     {t.code}
                   </span>
-                  <span className="flex-1 text-[15px] text-slate-800 truncate">{t.label}</span>
+                  <span className="flex-1 text-[15px] text-slate-800 truncate">{shortLabel(t.label)}</span>
                   <span className="text-[12px] text-slate-400 whitespace-nowrap">
                     {KINDS.find((k) => k.value === t.kind)?.label}
                     {t.kind === 'work' && t.start ? ` · ${t.start}~${t.end}` : ''}
