@@ -18,7 +18,7 @@
     },
     "LocalNotifications": {
       "smallIcon": "ic_stat_shift",
-      "iconColor": "#6366F1"
+      "iconColor": "#2563EB"
     }
   },
   "experimental": {

@@ -17,105 +17,119 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** 월간 근무 달력 → canvas */
-export function renderMonthCanvas({ year, month, myShifts = {}, shiftTypes = [], userName = '' }) {
+const parseKey = (k) => {
+  const [y, m, d] = k.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+/**
+ * 근무 달력 → canvas (흰 바탕, 근무 코드는 색 글자)
+ * start~end 기간을 주 단위로 그림. 달이 바뀌는 날·첫날은 '10/1' 처럼 월을 함께 표시
+ */
+export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts = {}, shiftTypes = [] }) {
   const W = 1080;
   const PAD = 48;
   const cellW = (W - PAD * 2) / 7;
-  const cellH = 150;
-  const first = new Date(year, month - 1, 1).getDay();
-  const last = new Date(year, month, 0).getDate();
-  const weeks = Math.ceil((first + last) / 7);
-  const top = 214;
-  const H = top + weeks * cellH + 200;
+  const cellH = 140;
+  const first = parseKey(start);
+  const days = Math.round((parseKey(end) - first) / 86400000) + 1;
+  const offset = first.getDay();
+  const weeks = Math.ceil((offset + days) / 7);
+  const top = 236;
+  const H = top + weeks * cellH + 190;
 
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#F8FAFC';
+  ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, W, H);
+  ctx.textBaseline = 'alphabetic';
 
   // 제목
   ctx.fillStyle = '#0F172A';
-  ctx.font = `900 52px ${FONT}`;
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText(`${year}년 ${month}월 근무표`, PAD, 92);
-  if (userName) {
-    ctx.fillStyle = '#6366F1';
-    ctx.font = `800 30px ${FONT}`;
-    ctx.fillText(userName, PAD, 138);
+  ctx.font = `700 54px ${FONT}`;
+  ctx.fillText(title, PAD, 96);
+  if (subtitle) {
+    ctx.fillStyle = '#64748B';
+    ctx.font = `500 30px ${FONT}`;
+    ctx.fillText(subtitle, PAD, 146);
   }
 
   // 요일
   const dows = ['일', '월', '화', '수', '목', '금', '토'];
-  ctx.font = `800 26px ${FONT}`;
+  ctx.font = `600 26px ${FONT}`;
   ctx.textAlign = 'center';
   dows.forEach((d, i) => {
-    ctx.fillStyle = i === 0 ? '#F43F5E' : i === 6 ? '#0EA5E9' : '#94A3B8';
-    ctx.fillText(d, PAD + cellW * i + cellW / 2, top - 14);
+    ctx.fillStyle = i === 0 ? '#EF4444' : i === 6 ? '#2563EB' : '#94A3B8';
+    ctx.fillText(d, PAD + cellW * i + cellW / 2, top - 22);
   });
+
+  // 주마다 위쪽에 얇은 선
+  ctx.fillStyle = '#F1F5F9';
+  for (let w = 0; w < weeks; w++) ctx.fillRect(PAD, top + w * cellH, W - PAD * 2, 2);
 
   // 날짜 칸
   const counts = {};
-  for (let d = 1; d <= last; d++) {
-    const idx = first + d - 1;
-    const x = PAD + (idx % 7) * cellW;
+  for (let i = 0; i < days; i++) {
+    const date = new Date(first.getFullYear(), first.getMonth(), first.getDate() + i);
+    const key = toKey(date);
+    const idx = offset + i;
+    const dow = idx % 7;
+    const x = PAD + dow * cellW;
     const y = top + Math.floor(idx / 7) * cellH;
-    const key = `${year}-${pad(month)}-${pad(d)}`;
     const code = myShifts[key];
     const holiday = getHoliday(key);
-    const dow = idx % 7;
+    const d = date.getDate();
 
-    ctx.fillStyle = '#FFFFFF';
-    roundRect(ctx, x + 4, y + 4, cellW - 8, cellH - 8, 22);
-    ctx.fill();
-
-    ctx.textAlign = 'left';
-    ctx.font = `800 26px ${FONT}`;
-    ctx.fillStyle = holiday || dow === 0 ? '#F43F5E' : dow === 6 ? '#0EA5E9' : '#334155';
-    ctx.fillText(String(d), x + 18, y + 40);
+    ctx.textAlign = 'center';
+    ctx.font = `500 26px ${FONT}`;
+    ctx.fillStyle = holiday || dow === 0 ? '#EF4444' : dow === 6 ? '#2563EB' : '#334155';
+    ctx.fillText(i === 0 || d === 1 ? `${date.getMonth() + 1}/${d}` : String(d), x + cellW / 2, y + 40);
     if (holiday) {
-      ctx.font = `700 16px ${FONT}`;
-      ctx.fillText(holiday.length > 6 ? `${holiday.slice(0, 6)}…` : holiday, x + 50, y + 38);
+      ctx.font = `500 17px ${FONT}`;
+      ctx.fillText(holiday.length > 5 ? `${holiday.slice(0, 5)}…` : holiday, x + cellW / 2, y + 128);
     }
 
     if (code) {
       counts[code] = (counts[code] || 0) + 1;
-      const t = findShiftType(shiftTypes, code) || { bg: '#F1F5F9', fg: '#475569' };
-      ctx.fillStyle = t.bg;
-      roundRect(ctx, x + 14, y + 62, cellW - 28, 64, 18);
-      ctx.fill();
+      const t = findShiftType(shiftTypes, code) || { fg: '#475569' };
       ctx.fillStyle = t.fg;
-      ctx.textAlign = 'center';
-      ctx.font = `900 ${code.length > 3 ? 24 : 32}px ${FONT}`;
-      ctx.fillText(code, x + cellW / 2, y + 106);
+      ctx.font = `700 ${code.length > 3 ? 26 : code.length > 1 ? 34 : 44}px ${FONT}`;
+      ctx.fillText(code, x + cellW / 2, y + 98);
     }
   }
 
-  // 근무 요약
+  // 근무 요약: 'D 8' 처럼 코드(색) + 횟수
   let cx = PAD;
-  const cy = top + weeks * cellH + 40;
+  const cy = top + weeks * cellH + 36;
   ctx.textAlign = 'left';
-  ctx.font = `900 28px ${FONT}`;
   shiftTypes
     .filter((t) => counts[t.code])
     .forEach((t) => {
-      const label = `${t.code} ${counts[t.code]}`;
-      const w = ctx.measureText(label).width + 40;
+      ctx.font = `700 28px ${FONT}`;
+      const cw = ctx.measureText(t.code).width;
+      ctx.font = `500 28px ${FONT}`;
+      const nw = ctx.measureText(String(counts[t.code])).width;
+      const w = cw + nw + 50;
       if (cx + w > W - PAD) return;
-      ctx.fillStyle = t.bg;
+      ctx.fillStyle = '#F8FAFC';
       roundRect(ctx, cx, cy, w, 56, 28);
       ctx.fill();
+      ctx.font = `700 28px ${FONT}`;
       ctx.fillStyle = t.fg;
-      ctx.fillText(label, cx + 20, cy + 38);
-      cx += w + 12;
+      ctx.fillText(t.code, cx + 20, cy + 38);
+      ctx.font = `500 28px ${FONT}`;
+      ctx.fillStyle = '#475569';
+      ctx.fillText(String(counts[t.code]), cx + 30 + cw, cy + 38);
+      cx += w + 10;
     });
 
   ctx.fillStyle = '#CBD5E1';
-  ctx.font = `700 22px ${FONT}`;
+  ctx.font = `500 22px ${FONT}`;
   ctx.textAlign = 'right';
-  ctx.fillText('근무표 앱', W - PAD, H - 40);
+  ctx.fillText('근무표 앱', W - PAD, H - 36);
   return canvas;
 }
 
@@ -196,14 +210,31 @@ export async function shareText({ title, text, url }) {
   }
 }
 
-/** 이번 달 근무표 이미지 공유/저장 */
-export async function shareMonthImage(opts) {
-  const canvas = renderMonthCanvas(opts);
+/**
+ * 근무표 이미지 공유/저장
+ * period 가 있으면 정산 기간(예: 9/26~10/25), 없으면 그 달 1일~말일
+ */
+export async function shareMonthImage({ year, month, period, userName = '', ...rest }) {
+  const name = userName ? ` · ${userName}` : '';
+  const opts = period
+    ? {
+        start: period.start,
+        end: period.end,
+        title: `${Number(period.start.slice(5, 7))}.${Number(period.start.slice(8))} ~ ${Number(period.end.slice(5, 7))}.${Number(period.end.slice(8))} 근무표`,
+        subtitle: `${year}년 ${month}월 정산${name}`
+      }
+    : {
+        start: `${year}-${pad(month)}-01`,
+        end: `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`,
+        title: `${month}월 근무표`,
+        subtitle: `${year}년${name}`
+      };
+  const canvas = renderShiftCanvas({ ...rest, ...opts });
   return shareFile({
-    fileName: `shift-${opts.year}-${pad(opts.month)}.png`,
+    fileName: `shift-${year}-${pad(month)}${period ? '-period' : ''}.png`,
     mimeType: 'image/png',
     data: canvas.toDataURL('image/png').split(',')[1],
     isBase64: true,
-    title: `${opts.year}년 ${opts.month}월 근무표`
+    title: opts.title
   });
 }

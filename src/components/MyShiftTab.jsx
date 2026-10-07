@@ -22,6 +22,7 @@ import {
   MAX_REMINDERS
 } from '../lib/localReminders';
 import { shareMonthImage } from '../lib/shareCalendar';
+import { payPeriod } from '../lib/allowance';
 
 /** 근무 하나 바꾸기 (빈 코드 = 그 날짜 삭제, 빈 값을 남기지 않음) */
 const withShift = (prev, dateKey, code) => {
@@ -252,11 +253,17 @@ export default function MyShiftTab({
   }, [alarmSettings?.enabled, alarmSettings?.minutesBefore, myShifts, shiftConfigs.shiftTimes, shiftTypes, userName, dayTick, alarmPerm]);
 
   // 이번 달 근무표 이미지 공유/저장
+  // 정산 시작일이 1일이 아니면 '이번 달 / 정산 기간' 중 고르는 창을 먼저 보여 줌
   const [isSharing, setIsSharing] = useState(false);
-  const handleShareImage = async () => {
+  const [isSharePickOpen, setIsSharePickOpen] = useState(false);
+  const payStartDay = Number(shiftConfigs.startDay || 26);
+  const sharePeriod = payStartDay === 1 ? null : payPeriod(year, month, payStartDay);
+  const shortDate = (k) => `${Number(k.slice(5, 7))}.${Number(k.slice(8))}`;
+  const handleShareImage = async (period = null) => {
+    setIsSharePickOpen(false);
     try {
       setIsSharing(true);
-      await shareMonthImage({ year, month, myShifts, shiftTypes, userName });
+      await shareMonthImage({ year, month, period, myShifts, shiftTypes, userName });
     } catch (err) {
       toast(`이미지 공유 실패\n${errorText(err)}`, 'error');
     } finally {
@@ -585,7 +592,7 @@ export default function MyShiftTab({
         ))}
         <button
           type="button"
-          onClick={handleShareImage}
+          onClick={() => (sharePeriod ? setIsSharePickOpen(true) : handleShareImage())}
           disabled={isSharing}
           aria-label="근무표 이미지 공유"
           className="flex flex-col items-center gap-1 py-2 rounded-xl cursor-pointer active:bg-slate-50"
@@ -722,6 +729,35 @@ export default function MyShiftTab({
       )}
 
       {/* 4. 알람 시간 설정 모달 */}
+      {isSharePickOpen && (
+        <Modal onClose={() => setIsSharePickOpen(false)} label="근무표 공유">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
+            <div className="flex justify-between items-center">
+              <h3 className="text-[20px] font-bold text-slate-900">어느 기간을 보낼까요?</h3>
+              <button type="button" onClick={() => setIsSharePickOpen(false)} aria-label="닫기" className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { key: 'month', name: `${month}월 전체`, range: `${month}.1 ~ ${month}.${new Date(year, month, 0).getDate()}`, period: null },
+                { key: 'period', name: '정산 기간', range: `${shortDate(sharePeriod?.start || '')} ~ ${shortDate(sharePeriod?.end || '')}`, period: sharePeriod }
+              ].map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => handleShareImage(o.period)}
+                  className="flex flex-col items-start gap-1 rounded-2xl bg-slate-50 p-4 text-left cursor-pointer active:bg-slate-100"
+                >
+                  <span className="text-[16px] font-semibold text-slate-900">{o.name}</span>
+                  <span className="text-[14px] text-blue-600 font-medium">{o.range}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {isAlarmModalOpen && (
         <Modal onClose={() => setIsAlarmModalOpen(false)} label="근무 시작 알림 설정">
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">

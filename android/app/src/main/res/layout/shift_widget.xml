@@ -18,7 +18,7 @@
             android:id="@+id/day1_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#4F46E5"
+            android:textColor="#2563EB"
             android:textSize="12sp"
             android:textStyle="bold" />
 
