@@ -506,7 +506,7 @@ export default function ImportTab({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 mt-4">
-            <label className="flex items-center justify-center gap-1.5 h-12 bg-white text-blue-700 font-semibold text-[15px] rounded-xl cursor-pointer">
+            <label className="flex items-center justify-center gap-1.5 h-12 bg-[#ffffff] text-[#1d4ed8] font-semibold text-[15px] rounded-xl cursor-pointer">
               <Camera size={17} /> 촬영하기
               <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
             </label>
