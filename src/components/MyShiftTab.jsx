@@ -436,14 +436,18 @@ export default function MyShiftTab({
             </button>
           </div>
         </div>
-        {/* 이번 달 근무 수: 근무 색 글자 + 숫자 (0건은 흐리게) */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[13px] text-slate-500">
-          {Object.entries(shiftCounts).map(([code, count]) => (
-            <span key={code} className={count === 0 ? 'opacity-40' : ''}>
-              <b style={shiftTextVars(findType(code))} className="shift-text font-bold">{code}</b> {count}
-            </span>
-          ))}
-        </div>
+        {/* 이번 달 근무 수: 이번 달에 있는 근무만 (근무 색 글자 + 숫자) */}
+        {Object.values(shiftCounts).some(Boolean) && (
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[14px] text-slate-500">
+            {Object.entries(shiftCounts)
+              .filter(([, count]) => count > 0)
+              .map(([code, count]) => (
+                <span key={code}>
+                  <b style={shiftTextVars(findType(code))} className="shift-text font-bold">{code}</b> {count}
+                </span>
+              ))}
+          </div>
+        )}
       </section>
 
       {/* 2. 달력 */}
@@ -492,7 +496,7 @@ export default function MyShiftTab({
         {/* 날짜: 숫자 + 근무 코드(근무 색 글자) */}
         <div className="grid grid-cols-7 gap-y-0.5" {...monthSwipe}>
           {calendarDays.map((item, idx) => {
-            if (!item) return <div key={`empty_${idx}`} className="h-[58px]"></div>;
+            if (!item) return <div key={`empty_${idx}`} className="h-[66px]"></div>;
 
             const shift = myShifts[item.dateKey] || '';
             const isSelected = selectedDate === item.dateKey;
@@ -506,7 +510,7 @@ export default function MyShiftTab({
                 onClick={() => handleDayClick(item.dateKey)}
                 aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${dayNotes[item.dateKey] ? ' 메모 있음' : ''}`}
                 aria-pressed={isSelected}
-                className={`relative h-[58px] w-full min-w-0 pt-1 rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-colors ${
+                className={`relative h-[66px] w-full min-w-0 pt-1 rounded-xl flex flex-col items-center gap-1.5 cursor-pointer transition-colors ${
                   isSelected ? 'bg-slate-100' : uncertainSet.has(item.dateKey) ? 'bg-amber-50 ring-2 ring-inset ring-amber-400' : 'active:bg-slate-50'
                 }`}
               >
@@ -521,7 +525,8 @@ export default function MyShiftTab({
                   <span
                     style={shiftTextVars(findType(shift))}
                     className={`shift-text max-w-full px-0.5 font-bold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
-                      [...shift].length >= 3 ? 'text-[10px]' : 'text-[13px]'
+                      // 한눈에 보이게 크게: 1글자 19px, 2글자 16px, 3글자 이상 14px
+                      [...shift].length >= 3 ? 'text-[14px]' : [...shift].length === 2 ? 'text-[16px]' : 'text-[19px]'
                     }`}
                   >
                     {shift}
@@ -529,7 +534,7 @@ export default function MyShiftTab({
                 ) : (
                   holidayShort && <span className="text-[9px] text-rose-400 leading-none whitespace-nowrap overflow-hidden max-w-full">{holidayShort}</span>
                 )}
-                {dayNotes[item.dateKey] && <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-amber-400" title="메모 있음" />}
+                {dayNotes[item.dateKey] && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-amber-400" title="메모 있음" />}
               </button>
             );
           })}
