@@ -521,12 +521,12 @@ export default function ImportTab({
       {/* 나머지 기능: 아이콘 격자 */}
       <section className="mt-3 rounded-3xl bg-slate-50 p-2 grid grid-cols-3 gap-1">
         <label className={tileCls}>
-          {isProcessing ? <Loader2 size={24} className="animate-spin text-emerald-600" /> : <FileSpreadsheet size={24} className="text-emerald-600" />}
+          {isProcessing ? <Loader2 size={24} className="animate-spin text-blue-600" /> : <FileSpreadsheet size={24} className="text-blue-600" />}
           <span className={tileLabel}>엑셀 근무표</span>
           <input type="file" accept=".xlsx, .xls, .csv" onChange={handleExcelUpload} disabled={isProcessing} className="hidden" />
         </label>
         <label className={tileCls}>
-          <Smartphone size={24} className="text-sky-600" />
+          <Smartphone size={24} className="text-blue-600" />
           <span className={tileLabel}>캘린더 파일</span>
           <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
         </label>
@@ -536,7 +536,7 @@ export default function ImportTab({
           aria-label={`화면 테마: ${{ system: '기기 설정', dark: '다크', light: '라이트' }[themePref]} (눌러서 변경)`}
           className={tileCls}
         >
-          {themePref === 'dark' ? <Moon size={24} className="text-violet-600" /> : themePref === 'light' ? <Sun size={24} className="text-amber-500" /> : <SunMoon size={24} className="text-slate-600" />}
+          {themePref === 'dark' ? <Moon size={24} className="text-blue-600" /> : themePref === 'light' ? <Sun size={24} className="text-blue-600" /> : <SunMoon size={24} className="text-blue-600" />}
           <span className={tileLabel}>{{ system: '테마: 자동', dark: '테마: 다크', light: '테마: 밝게' }[themePref]}</span>
         </button>
         <button
@@ -544,9 +544,9 @@ export default function ImportTab({
           onClick={onTogglePrivacy}
           aria-label={privacyBlur ? '보안 모드 끄기 (근무 보이기)' : '보안 모드 (남에게 근무 가리기)'}
           aria-pressed={privacyBlur}
-          className={`${tileCls} ${privacyBlur ? '!bg-amber-100' : ''}`}
+          className={`${tileCls} ${privacyBlur ? '!bg-blue-50' : ''}`}
         >
-          <Shield size={24} className={privacyBlur ? 'text-amber-600' : 'text-slate-600'} />
+          <Shield size={24} className="text-blue-600" />
           <span className={tileLabel}>보안 모드 {privacyBlur ? 'ON' : ''}</span>
         </button>
         <button type="button" onClick={handleBackupSave} className={tileCls}>
@@ -559,11 +559,11 @@ export default function ImportTab({
           <input type="file" accept=".json,application/json" onChange={handleBackupRestore} className="hidden" />
         </label>
         <button type="button" onClick={() => handleExport('csv')} className={tileCls}>
-          <Download size={24} className="text-emerald-600" />
+          <Download size={24} className="text-blue-600" />
           <span className={tileLabel}>엑셀(CSV) 내보내기</span>
         </button>
         <button type="button" onClick={() => handleExport('ics')} className={tileCls}>
-          <CalendarDays size={24} className="text-sky-600" />
+          <CalendarDays size={24} className="text-blue-600" />
           <span className={tileLabel}>캘린더(.ics) 내보내기</span>
         </button>
       </section>
