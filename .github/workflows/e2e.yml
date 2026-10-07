@@ -2,10 +2,16 @@ name: E2E
 
 # 브라우저 E2E 테스트: 빌드한 앱을 띄워 가짜 Supabase 로 주요 흐름 검증
 # (첫 실행·동기화·사진/엑셀/.ics 가져오기·내보내기·백업·그룹 교환·계정 연결·다크 모드)
+# PR 에서 한 번만 실행 (master 머지 후 다시 돌리지 않음 → 비공개 저장소 무료 한도 절약)
 on:
   pull_request:
-  push:
-    branches: [main, master]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'android/**'
+      - 'ios/**'
+      - '.github/workflows/build-apk.yml'
+      - '.github/workflows/build-ios.yml'
   workflow_dispatch:
 
 concurrency:
@@ -26,6 +32,13 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # 린트·단위 테스트도 PR 마다 여기서 (안드로이드 빌드는 master 에서만 돌기 때문)
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
