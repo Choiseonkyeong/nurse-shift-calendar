@@ -457,27 +457,33 @@ export default function MyShiftTab({
             <p className="text-[13px] text-blue-600 font-medium">
               {quickCode === '' ? '지울 날짜를 누르세요' : `날짜를 누르면 ${quickCode} 입력`}
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {shiftTypes.map((t) => (
-                <button
-                  key={t.code}
-                  type="button"
-                  onClick={() => setQuickCode(t.code)}
-                  style={quickCode === t.code ? { backgroundColor: t.fg, color: '#fff' } : shiftTextVars(t)}
-                  className={`shrink-0 min-w-[44px] px-3 h-9 rounded-full text-sm font-bold cursor-pointer ${quickCode === t.code ? '' : 'bg-slate-100 shift-text'}`}
-                >
-                  {t.code}
-                </button>
-              ))}
+            {/* 한 줄: 지우기(고정) + 근무 버튼(가로로 밀기) — 줄이 늘어나 달력이 밀리지 않게 */}
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                aria-label="지우기"
+                aria-pressed={quickCode === ''}
                 onClick={() => setQuickCode('')}
-                className={`shrink-0 px-3 h-9 rounded-full text-sm font-medium flex items-center gap-1 cursor-pointer ${
+                className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer ${
                   quickCode === '' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500'
                 }`}
               >
-                <Eraser size={14} /> 지우기
+                <Eraser size={16} />
               </button>
+              <span className="shrink-0 w-px h-5 bg-slate-200" aria-hidden="true" />
+              <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mr-4 pr-4">
+                {shiftTypes.map((t) => (
+                  <button
+                    key={t.code}
+                    type="button"
+                    onClick={() => setQuickCode(t.code)}
+                    style={quickCode === t.code ? { backgroundColor: t.fg, color: '#fff' } : shiftTextVars(t)}
+                    className={`shrink-0 min-w-[44px] px-3 h-9 rounded-full text-sm font-bold cursor-pointer ${quickCode === t.code ? '' : 'bg-slate-100 shift-text'}`}
+                  >
+                    {t.code}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
