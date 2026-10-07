@@ -66,6 +66,14 @@ body {
 .shift-text {
   color: var(--fg);
 }
+/* 근무 있는 날짜 칸: 근무 바탕색 (다크 모드는 근무 색을 어둡게 섞어서) */
+.shift-cell {
+  background-color: var(--bg);
+}
+.dark .shift-cell {
+  background-color: color-mix(in srgb, var(--fg) 30%, #0f172a);
+}
+
 /* 다크 모드: 근무 색을 밝게 (색끼리 구분은 유지) */
 .dark .shift-text {
   color: color-mix(in srgb, var(--fg) 55%, white);

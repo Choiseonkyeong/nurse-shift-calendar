@@ -24,7 +24,7 @@ const parseKey = (k) => {
 const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 /**
- * 근무 달력 → canvas (흰 바탕, 근무 코드는 색 글자)
+ * 근무 달력 → canvas (흰 바탕, 근무 있는 칸은 근무 색으로 채움)
  * start~end 기간을 주 단위로 그림. 달이 바뀌는 날·첫날은 '10/1' 처럼 월을 함께 표시
  */
 export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts = {}, shiftTypes = [] }) {
@@ -66,10 +66,6 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
     ctx.fillText(d, PAD + cellW * i + cellW / 2, top - 22);
   });
 
-  // 주마다 위쪽에 얇은 선
-  ctx.fillStyle = '#F1F5F9';
-  for (let w = 0; w < weeks; w++) ctx.fillRect(PAD, top + w * cellH, W - PAD * 2, 2);
-
   // 날짜 칸
   const counts = {};
   for (let i = 0; i < days; i++) {
@@ -82,6 +78,14 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
     const code = myShifts[key];
     const holiday = getHoliday(key);
     const d = date.getDate();
+    const t = code ? findShiftType(shiftTypes, code) || { bg: '#F1F5F9', fg: '#475569' } : null;
+
+    // 근무 있는 날은 칸 전체를 근무 바탕색으로 (앱 달력과 같게)
+    if (t) {
+      ctx.fillStyle = t.bg;
+      roundRect(ctx, x + 5, y + 8, cellW - 10, cellH - 12, 22);
+      ctx.fill();
+    }
 
     ctx.textAlign = 'center';
     ctx.font = `500 26px ${FONT}`;
@@ -92,9 +96,8 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
       ctx.fillText(holiday.length > 5 ? `${holiday.slice(0, 5)}…` : holiday, x + cellW / 2, y + 128);
     }
 
-    if (code) {
+    if (t) {
       counts[code] = (counts[code] || 0) + 1;
-      const t = findShiftType(shiftTypes, code) || { fg: '#475569' };
       ctx.fillStyle = t.fg;
       ctx.font = `700 ${code.length > 3 ? 26 : code.length > 1 ? 34 : 44}px ${FONT}`;
       ctx.fillText(code, x + cellW / 2, y + 98);
