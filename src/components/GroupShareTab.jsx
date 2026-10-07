@@ -51,7 +51,7 @@ export default function GroupShareTab({
   const [loading, setLoading] = useState(false);
 
   // 기본 추천 색상 5종 + 무한 커스텀 컬러 선택
-  const DEFAULT_COLORS = ['#6366F1', '#A855F7', '#10B981', '#F43F5E', '#F59E0B', '#0284C7', '#EC4899'];
+  const DEFAULT_COLORS = ['#2563EB', '#A855F7', '#10B981', '#F43F5E', '#F59E0B', '#0284C7', '#EC4899'];
   
   // 아래쪽 '새 그룹' / '코드로 참여' 중 펼친 것 (초대 링크로 코드가 채워져 있으면 참여를 펼침)
   const [formMode, setFormMode] = useState(joinCodeInput ? 'join' : null);
@@ -60,12 +60,13 @@ export default function GroupShareTab({
   }, [joinCodeInput]);
 
   // 새 그룹 생성 시 기본선택 커스텀 색상
-  const [selectedColor, setSelectedColor] = useState('#6366F1');
+  const [selectedColor, setSelectedColor] = useState('#2563EB');
 
   const currentGroup = (groups || []).find((g) => g.id === activeGroupId) || null;
   // 그룹 색상: 내 폰에서 고른 색 → 없으면 그룹을 만든 사람이 정한 기본 색
   const [myColors, setMyColors] = useState(readGroupColors);
-  const colorOf = (g) => myColors[g?.id] || g?.color || '#6366F1';
+  // 예전 기본 색(보라 #6366F1)으로 만든 그룹은 앱 색(파랑)으로 보여 줌
+  const colorOf = (g) => myColors[g?.id] || (g?.color && g.color.toUpperCase() !== '#6366F1' ? g.color : '#2563EB');
   const currentThemeBg = colorOf(currentGroup);
 
   // 이전/다음 달 이동 (앱 전체 선택 날짜와 공유)
@@ -511,11 +512,12 @@ export default function GroupShareTab({
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <button type="button" onClick={() => setMonthPickerOpen(true)} aria-label="년·월 선택" className="flex items-center gap-0.5 cursor-pointer">
-                  <h3 className="text-[17px] font-semibold text-slate-900 text-center whitespace-nowrap">
-                    {year}년 {month}월
-                  </h3>
-                  <ChevronDown size={16} className="text-slate-400" aria-hidden="true" />
+                <button type="button" onClick={() => setMonthPickerOpen(true)} aria-label="년·월 선택" className="flex flex-col items-center cursor-pointer">
+                  <span className="text-[12px] text-slate-400 leading-none">{year}년</span>
+                  <span className="flex items-center gap-0.5">
+                    <h3 className="text-[22px] font-bold text-slate-900 whitespace-nowrap">{month}월</h3>
+                    <ChevronDown size={16} className="text-slate-400" aria-hidden="true" />
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -563,28 +565,30 @@ export default function GroupShareTab({
                       {item.day}
                     </span>
 
-                    <div className="w-full space-y-px mt-1">
-                      {currentGroup.members?.map((member) => {
-                        const shift = getMemberShifts(member)[item.dateKey] || '';
-                        if (!shift) return null; // 미입력 날짜는 표시하지 않음 (OFF 와 구분)
-                        const memberStyle = getMemberBadgeStyle(member, shift);
-                        const displayName = member.name?.length > 2 ? member.name.substring(0, 2) : member.name;
-
-                        return (
-                          <div
-                            key={member.id}
-                            className="flex justify-center items-center gap-1 overflow-hidden whitespace-nowrap tracking-tight text-[10px] leading-tight"
-                          >
-                            {/* 좁은 화면: 이름 첫 글자만 (칸이 좁아 근무 코드가 잘리지 않게) */}
-                            <span className={`min-w-0 truncate text-slate-400 ${blurCls}`}>
-                              <span className="min-[380px]:hidden">{[...(member.name || '')][0]}</span>
-                              <span className="hidden min-[380px]:inline">{displayName}</span>
-                            </span>
-                            <span style={{ '--fg': memberStyle?.color, '--bg': memberStyle?.backgroundColor }} className="shift-text shrink-0 font-bold">{shift}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {/* 근무 있는 사람만, 근무 색 블록(이름 첫 글자 + 근무)으로 최대 3명 */}
+                    {(() => {
+                      const working = (currentGroup.members || [])
+                        .map((member) => ({ member, shift: getMemberShifts(member)[item.dateKey] || '' }))
+                        .filter((x) => x.shift); // 미입력 날짜는 표시하지 않음 (OFF 와 구분)
+                      return (
+                        <div className="w-full space-y-0.5 mt-1">
+                          {working.slice(0, 3).map(({ member, shift }) => {
+                            const memberStyle = getMemberBadgeStyle(member, shift);
+                            return (
+                              <div
+                                key={member.id}
+                                style={{ '--fg': memberStyle?.color, '--bg': memberStyle?.backgroundColor }}
+                                className="shift-cell flex justify-center items-center gap-0.5 rounded-md px-0.5 overflow-hidden whitespace-nowrap text-[11px] leading-[16px]"
+                              >
+                                <span className={`min-w-0 truncate text-slate-500 ${blurCls}`}>{[...(member.name || '')][0]}</span>
+                                <span className="shift-text shrink-0 font-bold">{shift}</span>
+                              </div>
+                            );
+                          })}
+                          {working.length > 3 && <div className="text-[10px] text-slate-400 leading-none">+{working.length - 3}</div>}
+                        </div>
+                      );
+                    })()}
                   </button>
                 );
               })}
