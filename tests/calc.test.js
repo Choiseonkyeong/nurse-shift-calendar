@@ -4,7 +4,7 @@ import { computeYearStats } from '../src/lib/stats';
 import { expandPattern } from '../src/components/PatternFill';
 import { HOLIDAYS, getHoliday, getHolidayShort } from '../src/utils/holidays';
 import { buildWidgetData } from '../src/lib/widgetSync';
-import { DEFAULT_SHIFT_TYPES } from '../src/lib/shiftTypes';
+import { DEFAULT_SHIFT_TYPES, mergeShiftTypes } from '../src/lib/shiftTypes';
 
 describe('연차 기준 기간', () => {
   it('회계연도', () => {
@@ -78,7 +78,7 @@ describe('위젯 데이터', () => {
     const types = DEFAULT_SHIFT_TYPES.map((t) => (t.code === 'D' ? { ...t, start: '07:00', end: '15:00' } : t));
     const data = buildWidgetData({ '2026-09-28': 'D', '2026-09-29': 'N', '2026-12-01': 'E' }, types, new Date(2026, 8, 28));
     expect(Object.keys(data.days)).toEqual(['2026-09-28', '2026-09-29']);
-    expect(data.days['2026-09-28']).toMatchObject({ code: 'D', time: '07:00-15:00', bg: '#FEF08A' });
+    expect(data.days['2026-09-28']).toMatchObject({ code: 'D', time: '07:00-15:00', bg: '#FFEDD5' });
   });
   it('앱을 몇 주 안 열어도 위젯이 비지 않게 두 달치를 넘김', () => {
     const data = buildWidgetData({ '2026-10-20': 'D', '2026-11-27': 'N' }, DEFAULT_SHIFT_TYPES, new Date(2026, 8, 28));
@@ -116,5 +116,18 @@ describe('정산 기간', () => {
     expect(payPeriod(2026, 2, 1)).toEqual({ start: '2026-02-01', end: '2026-02-28' });
     expect(payPeriod(2026, 10, 26)).toEqual({ start: '2026-09-26', end: '2026-10-25' });
     expect(payPeriod(2026, 1, 26)).toEqual({ start: '2025-12-26', end: '2026-01-25' });
+  });
+});
+
+describe('근무 기본 색', () => {
+  it('예전 기본 색(서버 프리셋)은 새 기본 색으로, 직접 고른 색은 그대로', () => {
+    const t = mergeShiftTypes([
+      { code: 'D', label: 'Day (데이)', bg: '#FEF08A', fg: '#854D0E', start: '07:00' },
+      { code: 'E', label: 'Evening (이브닝)', bg: '#000000', fg: '#FFFFFF' },
+      { code: '수술', label: '수술', kind: 'work', bg: '#FEF08A', fg: '#854D0E' }
+    ]);
+    expect(t.find((x) => x.code === 'D')).toMatchObject({ bg: '#FFEDD5', fg: '#C2410C', start: '07:00' });
+    expect(t.find((x) => x.code === 'E')).toMatchObject({ bg: '#000000', fg: '#FFFFFF' });
+    expect(t.find((x) => x.code === '수술')).toMatchObject({ bg: '#FEF08A', fg: '#854D0E' });
   });
 });

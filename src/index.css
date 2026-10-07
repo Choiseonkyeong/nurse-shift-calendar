@@ -66,8 +66,9 @@ body {
 .shift-text {
   color: var(--fg);
 }
+/* 다크 모드: 근무 색을 밝게 (색끼리 구분은 유지) */
 .dark .shift-text {
-  color: var(--bg);
+  color: color-mix(in srgb, var(--fg) 55%, white);
 }
 
 /* 아이콘은 얇은 선 */

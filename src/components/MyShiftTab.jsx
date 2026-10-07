@@ -42,6 +42,9 @@ const importPeriod = ({ keys = [], yearMonth }) => {
   return `${md(first)}~${md(last)}`;
 };
 
+// 'Day (데이)' → '데이' (괄호 안 한글 이름만, 없으면 그대로)
+const shortLabel = (label = '') => label.match(/\(([^)]+)\)\s*$/)?.[1] || label;
+
 export default function MyShiftTab({
   selectedDate,
   setSelectedDate,
@@ -641,6 +644,7 @@ export default function MyShiftTab({
                 return (
                   <button
                     key={item.code}
+                    aria-label={item.label}
                     onClick={() => handleSelectShiftCode(item.code)}
                     className={`relative h-[68px] px-1 rounded-xl flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                       on ? 'bg-blue-50 ring-2 ring-inset ring-blue-500' : 'bg-slate-50 active:bg-slate-100'
@@ -649,7 +653,7 @@ export default function MyShiftTab({
                     <span aria-hidden="true" style={shiftTextVars(item)} className="shift-text text-[18px] font-bold leading-none truncate max-w-full">
                       {item.code}
                     </span>
-                    <span className="text-[11px] text-slate-500 leading-tight truncate max-w-full">{item.label}</span>
+                    <span className="text-[12px] text-slate-500 leading-tight truncate max-w-full">{shortLabel(item.label)}</span>
                     {on && <Check size={14} className="absolute top-1.5 right-1.5 text-blue-600" />}
                   </button>
                 );
@@ -660,7 +664,7 @@ export default function MyShiftTab({
               onClick={() => handleSelectShiftCode('')}
               className="w-full h-11 text-slate-500 text-[14px] rounded-xl bg-slate-50 active:bg-slate-100 cursor-pointer"
             >
-              근무 삭제 (빈 칸으로 설정)
+              근무 비우기
             </button>
 
             <label className="block space-y-1.5">

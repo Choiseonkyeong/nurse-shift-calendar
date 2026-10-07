@@ -7,9 +7,9 @@ import { useShiftTypes, DEFAULT_CODES, shiftTextVars } from '../lib/shiftTypes';
 
 // 파스텔 색상 팔레트 (배경 / 글자)
 export const PALETTE = [
-  ['#FEF08A', '#854D0E'], ['#FFEDD5', '#9A3412'], ['#E0F2FE', '#0369A1'], ['#F3E8FF', '#6B21A8'],
-  ['#F1F5F9', '#475569'], ['#FFE4E6', '#E11D48'], ['#DCFCE7', '#166534'], ['#CCFBF1', '#115E59'],
-  ['#E0E7FF', '#3730A3'], ['#FEF3C7', '#92400E'], ['#ECFCCB', '#3F6212'], ['#FCE7F3', '#9D174D']
+  ['#FFEDD5', '#C2410C'], ['#FCE7F3', '#BE185D'], ['#E0F2FE', '#0369A1'], ['#F3E8FF', '#7E22CE'],
+  ['#F1F5F9', '#64748B'], ['#D1FAE5', '#047857'], ['#FEF9C3', '#A16207'], ['#CCFBF1', '#115E59'],
+  ['#E0E7FF', '#3730A3'], ['#FEF3C7', '#92400E'], ['#ECFCCB', '#3F6212'], ['#FFE4E6', '#E11D48']
 ];
 
 const KINDS = [
