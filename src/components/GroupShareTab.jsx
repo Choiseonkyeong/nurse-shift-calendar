@@ -512,12 +512,13 @@ export default function GroupShareTab({
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <button type="button" onClick={() => setMonthPickerOpen(true)} aria-label="년·월 선택" className="flex flex-col items-center cursor-pointer">
-                  <span className="text-[12px] text-slate-400 leading-none">{year}년</span>
-                  <span className="flex items-center gap-0.5">
-                    <h3 className="text-[22px] font-bold text-slate-900 whitespace-nowrap">{month}월</h3>
-                    <ChevronDown size={16} className="text-slate-400" aria-hidden="true" />
-                  </span>
+                <button type="button" onClick={() => setMonthPickerOpen(true)} aria-label="년·월 선택" className="cursor-pointer">
+                  {/* 내 근무와 같은 모양: 작은 연도 + 큰 월 */}
+                  <h3 className="text-slate-900 leading-none text-center whitespace-nowrap">
+                    <span className="block text-[12px] font-medium text-slate-400 mb-1">{year}년 </span>
+                    <span className="text-[22px] font-bold">{month}월</span>
+                    <ChevronDown size={16} className="inline-block ml-0.5 -mt-1 text-slate-400" aria-hidden="true" />
+                  </h3>
                 </button>
                 <button
                   type="button"
