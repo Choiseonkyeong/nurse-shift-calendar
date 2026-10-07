@@ -499,8 +499,8 @@ export default function MyShiftTab({
           <span className="text-blue-500">토</span>
         </div>
 
-        {/* 날짜: 숫자 + 근무 코드(근무 색 글자) */}
-        <div className="grid grid-cols-7 gap-y-0.5" {...monthSwipe}>
+        {/* 날짜: 근무 있는 날은 칸 전체를 근무 색으로 (한눈에 보이게) */}
+        <div className="grid grid-cols-7 gap-1" {...monthSwipe}>
           {calendarDays.map((item, idx) => {
             if (!item) return <div key={`empty_${idx}`} className="h-[66px]"></div>;
 
@@ -516,8 +516,11 @@ export default function MyShiftTab({
                 onClick={() => handleDayClick(item.dateKey)}
                 aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${dayNotes[item.dateKey] ? ' 메모 있음' : ''}`}
                 aria-pressed={isSelected}
+                style={shift ? shiftTextVars(findType(shift)) : undefined}
                 className={`relative h-[66px] w-full min-w-0 pt-1 rounded-xl flex flex-col items-center gap-1.5 cursor-pointer transition-colors ${
-                  isSelected ? 'bg-slate-100' : uncertainSet.has(item.dateKey) ? 'bg-amber-50 ring-2 ring-inset ring-amber-400' : 'active:bg-slate-50'
+                  shift ? 'shift-cell' : isSelected ? 'bg-slate-100' : 'active:bg-slate-50'
+                } ${
+                  isSelected ? 'ring-2 ring-inset ring-blue-500' : uncertainSet.has(item.dateKey) ? `${shift ? '' : 'bg-amber-50 '}ring-2 ring-inset ring-amber-400` : ''
                 }`}
               >
                 <span
@@ -529,7 +532,6 @@ export default function MyShiftTab({
                 </span>
                 {shift ? (
                   <span
-                    style={shiftTextVars(findType(shift))}
                     className={`shift-text max-w-full px-0.5 font-bold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
                       // 한눈에 보이게 크게: 1글자 19px, 2글자 16px, 3글자 이상 14px
                       [...shift].length >= 3 ? 'text-[14px]' : [...shift].length === 2 ? 'text-[16px]' : 'text-[19px]'
