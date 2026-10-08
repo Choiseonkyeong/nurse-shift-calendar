@@ -26,6 +26,7 @@ import { usesServerPush, registerDevice, saveReminderSettings, toStartTimes } fr
 import { isNativeApp, syncLocalReminders } from './lib/localReminders';
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 import { syncWidget } from './lib/widgetSync';
+import { startAds } from './lib/ads';
 import { applyChanges, mergeWithRemote } from './lib/syncMerge';
 import { queueTypeOp, flushTypeQueue, applyTypeQueue } from './lib/typeSync';
 import { SETTINGS_TS_KEY, decideSettingsSync, fetchMySettings, saveMySettings } from './lib/settingsSync';
@@ -112,6 +113,11 @@ export default function App() {
 
   // 탭을 바꾸면 맨 위부터 보이게
   const scrollAreaRef = useRef(null);
+  // 하단 광고 배너 (앱에서만, /app-config.json 에서 켤 때만): 탭바 바로 위에 표시
+  const tabBarRef = useRef(null);
+  useEffect(() => {
+    startAds(tabBarRef.current?.offsetHeight || 0);
+  }, []);
   const [scrolled, setScrolled] = useState(false); // 내용을 내리면 헤더 아래에 얇은 선
   useEffect(() => {
     if (scrollAreaRef.current) scrollAreaRef.current.scrollTop = 0;
@@ -868,7 +874,7 @@ export default function App() {
           ref={scrollAreaRef}
           className="px-4 pt-1 flex-1 overflow-y-auto bg-page"
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 4)}
-          style={{ paddingBottom: 'calc(5.5rem + var(--safe-bottom))' }}
+          style={{ paddingBottom: 'calc(5.5rem + var(--safe-bottom) + var(--ad-h, 0px))' }}
         >
           <Suspense
             fallback={
@@ -976,6 +982,7 @@ export default function App() {
 
         {/* 3. 프레임 바닥에 완벽 밀착시킨 하단 네비게이션 탭 */}
         <div
+          ref={tabBarRef}
           className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-1px_0_rgb(var(--c-slate-100))] px-2 pt-2 grid grid-cols-4 z-50"
           style={{ paddingBottom: 'calc(0.375rem + var(--safe-bottom))' }}
         >
