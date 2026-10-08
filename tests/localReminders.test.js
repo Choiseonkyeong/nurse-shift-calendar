@@ -24,7 +24,7 @@ const LN = {
 };
 vi.mock('@capacitor/local-notifications', () => ({ LocalNotifications: LN }));
 
-const { buildReminders, syncLocalReminders, syncShiftAlarms, wakeAlarmOf, enableLocalReminders, getAlarmPermission, MAX_REMINDERS, REMINDER_DAYS } = await import(
+const { buildReminders, syncLocalReminders, syncShiftAlarms, wakeAlarmOf, buildWakeAlarms, shiftTime, enableLocalReminders, getAlarmPermission, MAX_REMINDERS, REMINDER_DAYS } = await import(
   '../src/lib/localReminders'
 );
 
@@ -101,10 +101,10 @@ describe('syncLocalReminders', () => {
   it('근무 알람은 알림과 따로 예약·취소, 알림 예약은 건드리지 않음', async () => {
     AL.schedule.mockClear();
     AL.cancelAll.mockClear();
-    const res = await syncShiftAlarms({ enabled: true, myShifts: { '2026-09-29': 'N' }, startTimes: START, shiftTypes: TYPES, minutesBefore: 120, now: NOW });
+    const res = await syncShiftAlarms({ enabled: true, myShifts: { '2026-09-29': 'N' }, byShift: { N: ['18:00'] }, startTimes: START, shiftTypes: TYPES, now: NOW });
     expect(res.supported).toBe(true);
     const sent = AL.schedule.mock.calls[0][0].alarms[0];
-    expect(sent).toMatchObject({ id: 20260929, at: new Date(2026, 8, 29, 19, 30).getTime(), title: '⏰ N 근무 알람' });
+    expect(sent).toMatchObject({ id: 202609290, at: new Date(2026, 8, 29, 18, 0).getTime(), title: '⏰ N 근무 날 알람' });
     expect(LN.schedule).not.toHaveBeenCalled();
     expect(LN.cancel).not.toHaveBeenCalled();
 
@@ -115,10 +115,39 @@ describe('syncLocalReminders', () => {
     expect(await syncShiftAlarms({ enabled: true })).toEqual({ supported: false, count: 0 });
   });
 
-  it('알람 설정: 새 형식 / 예전 ring 스위치 / 없음', () => {
-    expect(wakeAlarmOf({ alarm: { enabled: true, minutesBefore: 90 } })).toEqual({ enabled: true, minutesBefore: 90 });
-    expect(wakeAlarmOf({ enabled: true, minutesBefore: 60, ring: true })).toEqual({ enabled: true, minutesBefore: 60 });
-    expect(wakeAlarmOf({ enabled: true, minutesBefore: 60 })).toEqual({ enabled: false, minutesBefore: 120 });
+  it('알람 설정: 근무별 시각 / 예전 "N분 전" 형식은 근무별 시각으로 바꿈 / 없음', () => {
+    const byShift = { D: ['05:30', '05:40'] };
+    expect(wakeAlarmOf({ alarm: { enabled: true, byShift } }, START)).toEqual({ enabled: true, byShift });
+    expect(wakeAlarmOf({ alarm: { enabled: true, minutesBefore: 90 } }, START)).toEqual({ enabled: true, byShift: { D: ['06:00'], N: ['20:00'] } });
+    expect(wakeAlarmOf({ enabled: true, minutesBefore: 60, ring: true }, START)).toEqual({ enabled: true, byShift: { D: ['06:30'], N: ['20:30'] } });
+    expect(wakeAlarmOf({ enabled: true, minutesBefore: 60 }, START)).toEqual({ enabled: false, byShift: {} });
+  });
+
+  it('시각 계산: 분 더하기·빼기, 자정 넘김, 틀린 형식', () => {
+    expect(shiftTime('07:30', -90)).toBe('06:00');
+    expect(shiftTime('00:30', -60)).toBe('23:30');
+    expect(shiftTime('23:55', 10)).toBe('00:05');
+    expect(shiftTime('', 10)).toBeNull();
+    expect(shiftTime(undefined)).toBeNull();
+  });
+
+  it('모닝콜: 근무마다 여러 시각, 시각 없는 근무 날은 없음, 쉬는 날도 시각을 넣으면 울림, 지난 시각 제외', () => {
+    const list = buildWakeAlarms({
+      myShifts: { '2026-09-28': 'D', '2026-09-29': 'D', '2026-09-30': 'N', '2026-10-01': 'OFF', '2026-10-02': 'E' },
+      byShift: { D: ['05:40', '05:30', '05:30'], OFF: ['09:00'] },
+      startTimes: START,
+      shiftTypes: TYPES,
+      now: NOW,
+      days: 10
+    });
+    expect(list.map((a) => [a.dateKey, a.at.getHours(), a.at.getMinutes()])).toEqual([
+      ['2026-09-29', 5, 30],
+      ['2026-09-29', 5, 40],
+      ['2026-10-01', 9, 0]
+    ]);
+    expect(list[0]).toMatchObject({ id: 202609290, title: '⏰ D 근무 날 알람', body: '오늘 Day (데이) · 07:30 근무 시작' });
+    expect(list[1].id).toBe(202609291);
+    expect(list[2].body).toBe('오늘 휴무');
   });
 
   it('앱을 오래 안 열어도 알림이 이어지도록 90일치(최대 60개)까지 예약', () => {

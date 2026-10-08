@@ -132,15 +132,66 @@ export async function syncLocalReminders({ enabled, askExact = false, ...opts })
   return list.length;
 }
 
-/** 알람 설정: { enabled, minutesBefore } (예전 '알람처럼 울리기' 스위치(ring) 값도 이어받음) */
-export function wakeAlarmOf(alarmSettings = {}) {
-  if (alarmSettings.alarm) return { enabled: Boolean(alarmSettings.alarm.enabled), minutesBefore: alarmSettings.alarm.minutesBefore || 120 };
-  if (alarmSettings.ring) return { enabled: Boolean(alarmSettings.enabled), minutesBefore: alarmSettings.minutesBefore || 120 };
-  return { enabled: false, minutesBefore: 120 };
+/**
+ * 근무 알람(모닝콜) 설정: { enabled, byShift: { 근무코드: ['HH:MM', ...] } }
+ * 예전 형식(근무 시작 N분 전 / '알람처럼 울리기' 스위치)은 근무 시작 시각에서 빼서 근무별 시각으로 바꿔 줌
+ */
+export function wakeAlarmOf(alarmSettings = {}, startTimes = {}) {
+  const a = alarmSettings.alarm;
+  if (a?.byShift) return { enabled: Boolean(a.enabled), byShift: a.byShift };
+  const legacy = a ? { enabled: a.enabled, minutes: a.minutesBefore } : alarmSettings.ring ? { enabled: alarmSettings.enabled, minutes: alarmSettings.minutesBefore } : null;
+  if (!legacy) return { enabled: false, byShift: {} };
+  const byShift = {};
+  Object.entries(startTimes).forEach(([code, hhmm]) => {
+    const t = shiftTime(hhmm, -(legacy.minutes || 120));
+    if (t) byShift[code] = [t];
+  });
+  return { enabled: Boolean(legacy.enabled), byShift };
+}
+
+/** 'HH:MM' 에 분을 더한 시각 (하루를 넘으면 그날 안에서 돌림). 형식이 틀리면 null */
+export function shiftTime(hhmm, deltaMin = 0) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
+  if (!m) return null;
+  const total = (((Number(m[1]) * 60 + Number(m[2]) + deltaMin) % 1440) + 1440) % 1440;
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
 }
 
 /**
- * 근무 알람(알람시계처럼 울림)을 지금 설정에 맞게 다시 예약 — 알림과는 따로
+ * 근무별 모닝콜 알람 목록 (순수 함수: 테스트용)
+ * 그날 근무가 byShift 에 시각이 있는 근무면 그 시각마다 알람 (쉬는 날도 시각을 넣으면 울림)
+ * @returns [{ id, at, title, body, dateKey, code }] 시간순, 최대 MAX_REMINDERS 개
+ */
+export function buildWakeAlarms({ myShifts = {}, byShift = {}, startTimes = {}, shiftTypes = [], now = new Date(), days = REMINDER_DAYS }) {
+  const types = new Map(shiftTypes.map((t) => [t.code, t]));
+  const out = [];
+  for (let i = 0; i <= days && out.length < MAX_REMINDERS; i++) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const dateKey = keyOf(day);
+    const code = myShifts[dateKey];
+    const times = (code && byShift[code]) || [];
+    [...new Set(times)].sort().forEach((hhmm, idx) => {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
+      if (!m || out.length >= MAX_REMINDERS) return;
+      const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number(m[1]), Number(m[2]));
+      if (at <= now) return;
+      const label = types.get(code)?.label || code;
+      const start = startTimes[code];
+      out.push({
+        id: Number(dateKey.replace(/-/g, '')) * 10 + idx, // 날짜·순서마다 하나 (예: 202610050)
+        at,
+        title: `⏰ ${code} 근무 날 알람`,
+        body: start ? `오늘 ${label} · ${start} 근무 시작` : `오늘 ${label}`,
+        dateKey,
+        code
+      });
+    });
+  }
+  return out;
+}
+
+/**
+ * 근무 알람(모닝콜, 알람시계처럼 울림)을 지금 설정에 맞게 다시 예약 — 알림과는 따로
  * @returns { supported, count, authorized } (웹·미지원 폰은 supported: false)
  */
 export async function syncShiftAlarms({ enabled, ...opts }) {
@@ -149,6 +200,5 @@ export async function syncShiftAlarms({ enabled, ...opts }) {
     await cancelAlarms();
     return { supported: true, count: 0 };
   }
-  const list = buildReminders(opts).map((r) => ({ ...r, title: `⏰ ${r.code} 근무 알람` }));
-  return scheduleAlarms(list);
+  return scheduleAlarms(buildWakeAlarms(opts));
 }

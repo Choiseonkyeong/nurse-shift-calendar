@@ -429,7 +429,8 @@ export default function App() {
   }, [alarmSettings.enabled, alarmSettings.minutesBefore, myShifts, shiftConfigs?.shiftTimes, shiftTypes, nameSkipped, userName]);
 
   // 앱: 근무 알람(알람시계처럼 울림)도 따로 다시 예약 — 알림과 별개 설정
-  const wakeAlarm = wakeAlarmOf(alarmSettings);
+  const wakeAlarm = wakeAlarmOf(alarmSettings, toStartTimes(shiftConfigs?.shiftTimes));
+  const wakeAlarmKey = JSON.stringify(wakeAlarm.byShift);
   useEffect(() => {
     if (!isNativeApp()) return undefined;
     const timer = setTimeout(() => {
@@ -438,12 +439,12 @@ export default function App() {
         myShifts: myShifts || {},
         startTimes: toStartTimes(shiftConfigs?.shiftTimes),
         shiftTypes,
-        minutesBefore: wakeAlarm.minutesBefore,
-        userName: nameSkipped ? '' : userName
+        byShift: wakeAlarm.byShift
       }).catch((err) => console.error('근무 알람 예약 실패:', err.message));
     }, 1800);
     return () => clearTimeout(timer);
-  }, [wakeAlarm.enabled, wakeAlarm.minutesBefore, myShifts, shiftConfigs?.shiftTimes, shiftTypes, nameSkipped, userName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- byShift 는 wakeAlarmKey 로 비교
+  }, [wakeAlarm.enabled, wakeAlarmKey, myShifts, shiftConfigs?.shiftTimes, shiftTypes]);
 
   // ---------------- 서버 동기화 ----------------
   // 마지막으로 서버와 일치했던 스냅샷을 기기에 저장해 두고, 그 이후 "이 기기에서 바뀐 것"만 서버에 반영한다.
