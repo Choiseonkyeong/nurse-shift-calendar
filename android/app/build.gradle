@@ -21,6 +21,8 @@ android {
         // CI에서 APP_VERSION_CODE(빌드 번호)/APP_VERSION_NAME 주입, 로컬 기본값 1 / 1.0.0
         versionCode((System.getenv('APP_VERSION_CODE') ?: '1') as int)
         versionName(System.getenv('APP_VERSION_NAME') ?: '1.0.0')
+        // AdMob 앱 ID: GitHub Secret ADMOB_APP_ID, 없으면 구글 공식 테스트 ID (광고는 app-config.json 으로 켤 때만 요청)
+        manifestPlaceholders = [admobAppId: System.getenv('ADMOB_APP_ID') ?: 'ca-app-pub-3940256099942544~3347511713']
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

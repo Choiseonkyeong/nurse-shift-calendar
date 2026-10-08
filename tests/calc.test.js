@@ -4,6 +4,7 @@ import { computeYearStats } from '../src/lib/stats';
 import { expandPattern } from '../src/components/PatternFill';
 import { HOLIDAYS, getHoliday, getHolidayShort } from '../src/utils/holidays';
 import { buildWidgetData } from '../src/lib/widgetSync';
+import { pickBannerId } from '../src/lib/ads';
 import { DEFAULT_SHIFT_TYPES, mergeShiftTypes } from '../src/lib/shiftTypes';
 
 describe('연차 기준 기간', () => {
@@ -129,5 +130,18 @@ describe('근무 기본 색', () => {
     expect(t.find((x) => x.code === 'D')).toMatchObject({ bg: '#FFEDD5', fg: '#C2410C', start: '07:00' });
     expect(t.find((x) => x.code === 'E')).toMatchObject({ bg: '#000000', fg: '#FFFFFF' });
     expect(t.find((x) => x.code === '수술')).toMatchObject({ bg: '#FEF08A', fg: '#854D0E' });
+  });
+});
+
+describe('광고 설정', () => {
+  const on = { ads: { enabled: true, androidBannerId: 'ca-app-pub-1234567890123456/1234567890', iosBannerId: 'bad' } };
+  it('꺼져 있거나 웹·형식 오류면 표시 안 함', () => {
+    expect(pickBannerId({ ads: { ...on.ads, enabled: false } }, 'android')).toBe(null);
+    expect(pickBannerId(on, 'web')).toBe(null);
+    expect(pickBannerId(on, 'ios')).toBe(null);
+    expect(pickBannerId(null, 'android')).toBe(null);
+  });
+  it('켜져 있으면 플랫폼별 광고 단위 ID', () => {
+    expect(pickBannerId(on, 'android')).toBe('ca-app-pub-1234567890123456/1234567890');
   });
 });

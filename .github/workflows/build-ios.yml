@@ -50,6 +50,8 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      # AdMob 앱 ID (없으면 project 의 테스트 ID)
+      ADMOB_APP_ID_IOS: ${{ secrets.ADMOB_APP_ID_IOS }}
 
     steps:
       - uses: actions/checkout@v4
@@ -76,7 +78,7 @@ jobs:
         run: |
           xcodebuild -project ios/App/App.xcodeproj -scheme App \
             -configuration Release -destination 'generic/platform=iOS' \
-            CODE_SIGNING_ALLOWED=NO build
+            CODE_SIGNING_ALLOWED=NO ${ADMOB_APP_ID_IOS:+ADMOB_APP_ID=$ADMOB_APP_ID_IOS} build
 
       - name: Archive & export signed IPA
         if: env.ASC_KEY_P8_BASE64 != ''
@@ -93,6 +95,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             DEVELOPMENT_TEAM="$IOS_TEAM_ID" CODE_SIGN_STYLE=Automatic \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            ${ADMOB_APP_ID_IOS:+ADMOB_APP_ID=$ADMOB_APP_ID_IOS} \
             "${AUTH_ARGS[@]}" archive
 
           # master 푸시·수동 실행: App Store Connect(TestFlight)로 바로 업로드, PR: IPA 파일만 생성

@@ -1,0 +1,7 @@
+{
+  "ads": {
+    "enabled": false,
+    "androidBannerId": "",
+    "iosBannerId": ""
+  }
+}

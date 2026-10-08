@@ -40,6 +40,8 @@ jobs:
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       # Firebase 설정 (android/app/google-services.json 을 커밋하지 않은 경우 base64 로 등록)
       GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+      # AdMob 앱 ID (없으면 build.gradle 의 테스트 ID)
+      ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
 
     steps:
       - uses: actions/checkout@v4

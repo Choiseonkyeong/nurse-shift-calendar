@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { hideAdsWhileOpen } from '../lib/ads';
 import { createPortal } from 'react-dom';
 import { shouldDismissSheet } from '../lib/swipe';
 
@@ -42,10 +43,12 @@ export default function Modal({ onClose, label, children, align = 'sheet', zInde
   useEffect(() => {
     openModals.push(onCloseRef);
     notify();
+    const showAds = hideAdsWhileOpen(); // 광고 배너가 창 아래쪽 버튼을 가리지 않게
     return () => {
       const i = openModals.lastIndexOf(onCloseRef);
       if (i !== -1) openModals.splice(i, 1);
       notify();
+      showAds();
     };
   }, []);
 
