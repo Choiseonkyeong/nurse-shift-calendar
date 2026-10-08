@@ -101,28 +101,14 @@ export async function enableLocalReminders() {
 
 /**
  * 예약된 근무 알림을 지금 설정에 맞게 다시 예약 (끄면 모두 취소)
- * @param ring     true: 알림 대신 알람시계처럼 울리는 알람으로 (안드로이드, 아이폰 iOS 26+). 지원 안 하면 알림으로 대신
  * @param askExact 알림을 켤 때만 true: 안드로이드 '정확한 알람' 허용 화면을 한 번 보여줌 (평소 재예약 때는 묻지 않음)
- * @param onMode   실제로 예약된 방식 'alarm' | 'notification' 을 알려 줌 (알람을 못 쓰면 'notification')
  */
-export async function syncLocalReminders({ enabled, ring = false, askExact = false, onMode, ...opts }) {
+export async function syncLocalReminders({ enabled, askExact = false, ...opts }) {
   if (!isNativeApp()) return 0;
   const { notifications = [] } = await LocalNotifications.getPending();
   const mine = notifications.filter((n) => n.extra?.kind === KIND);
   if (mine.length) await LocalNotifications.cancel({ notifications: mine.map((n) => ({ id: n.id })) });
-  if (!enabled || !ring) await cancelAlarms();
   if (!enabled) return 0;
-
-  if (ring) {
-    const list = buildReminders(opts);
-    const res = await scheduleAlarms(list);
-    if (res?.supported && res.authorized !== false) {
-      onMode?.('alarm');
-      return list.length;
-    }
-    // 알람을 못 쓰는 폰(아이폰 iOS 26 미만, 알람 권한 거부): 일반 알림으로 대신
-  }
-  onMode?.('notification');
 
   const { display } = await LocalNotifications.checkPermissions();
   if (display !== 'granted') return 0;
@@ -144,4 +130,25 @@ export async function syncLocalReminders({ enabled, ring = false, askExact = fal
     }))
   });
   return list.length;
+}
+
+/** 알람 설정: { enabled, minutesBefore } (예전 '알람처럼 울리기' 스위치(ring) 값도 이어받음) */
+export function wakeAlarmOf(alarmSettings = {}) {
+  if (alarmSettings.alarm) return { enabled: Boolean(alarmSettings.alarm.enabled), minutesBefore: alarmSettings.alarm.minutesBefore || 120 };
+  if (alarmSettings.ring) return { enabled: Boolean(alarmSettings.enabled), minutesBefore: alarmSettings.minutesBefore || 120 };
+  return { enabled: false, minutesBefore: 120 };
+}
+
+/**
+ * 근무 알람(알람시계처럼 울림)을 지금 설정에 맞게 다시 예약 — 알림과는 따로
+ * @returns { supported, count, authorized } (웹·미지원 폰은 supported: false)
+ */
+export async function syncShiftAlarms({ enabled, ...opts }) {
+  if (!isNativeApp()) return { supported: false, count: 0 };
+  if (!enabled) {
+    await cancelAlarms();
+    return { supported: true, count: 0 };
+  }
+  const list = buildReminders(opts).map((r) => ({ ...r, title: `⏰ ${r.code} 근무 알람` }));
+  return scheduleAlarms(list);
 }

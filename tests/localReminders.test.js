@@ -24,7 +24,7 @@ const LN = {
 };
 vi.mock('@capacitor/local-notifications', () => ({ LocalNotifications: LN }));
 
-const { buildReminders, syncLocalReminders, enableLocalReminders, getAlarmPermission, MAX_REMINDERS, REMINDER_DAYS } = await import(
+const { buildReminders, syncLocalReminders, syncShiftAlarms, wakeAlarmOf, enableLocalReminders, getAlarmPermission, MAX_REMINDERS, REMINDER_DAYS } = await import(
   '../src/lib/localReminders'
 );
 
@@ -98,28 +98,27 @@ describe('syncLocalReminders', () => {
     expect(await enableLocalReminders()).toBe(false);
   });
 
-  it('알람 모드: 알림 대신 알람으로 예약, 알람을 못 쓰는 폰은 알림으로 대신', async () => {
+  it('근무 알람은 알림과 따로 예약·취소, 알림 예약은 건드리지 않음', async () => {
     AL.schedule.mockClear();
     AL.cancelAll.mockClear();
-    let mode = '';
-    const n = await syncLocalReminders({ enabled: true, ring: true, myShifts: { '2026-09-29': 'N' }, startTimes: START, shiftTypes: TYPES, now: NOW, onMode: (m) => (mode = m) });
-    expect(n).toBe(1);
-    expect(mode).toBe('alarm');
-    expect(AL.schedule.mock.calls[0][0].alarms[0]).toMatchObject({ id: 20260929, at: new Date(2026, 8, 29, 20, 30).getTime() });
-    expect(LN.schedule).not.toHaveBeenCalled(); // 알림은 지우고 다시 예약하지 않음
-    expect(LN.cancel).toHaveBeenCalled();
+    const res = await syncShiftAlarms({ enabled: true, myShifts: { '2026-09-29': 'N' }, startTimes: START, shiftTypes: TYPES, minutesBefore: 120, now: NOW });
+    expect(res.supported).toBe(true);
+    const sent = AL.schedule.mock.calls[0][0].alarms[0];
+    expect(sent).toMatchObject({ id: 20260929, at: new Date(2026, 8, 29, 19, 30).getTime(), title: '⏰ N 근무 알람' });
+    expect(LN.schedule).not.toHaveBeenCalled();
+    expect(LN.cancel).not.toHaveBeenCalled();
 
-    // 아이폰 iOS 26 미만 등: 알람 미지원 → 알림
-    AL.result = { supported: false, count: 0 };
-    await syncLocalReminders({ enabled: true, ring: true, myShifts: { '2026-09-29': 'N' }, startTimes: START, shiftTypes: TYPES, now: NOW, onMode: (m) => (mode = m) });
-    expect(mode).toBe('notification');
-    expect(LN.schedule).toHaveBeenCalled();
-    AL.result = { supported: true, authorized: true, count: 0 };
-
-    // 알람 모드를 끄거나 알림을 끄면 예약된 알람도 취소
-    AL.cancelAll.mockClear();
-    await syncLocalReminders({ enabled: true, ring: false, myShifts: {}, startTimes: START, shiftTypes: TYPES, now: NOW });
+    await syncShiftAlarms({ enabled: false });
     expect(AL.cancelAll).toHaveBeenCalled();
+
+    native.value = false;
+    expect(await syncShiftAlarms({ enabled: true })).toEqual({ supported: false, count: 0 });
+  });
+
+  it('알람 설정: 새 형식 / 예전 ring 스위치 / 없음', () => {
+    expect(wakeAlarmOf({ alarm: { enabled: true, minutesBefore: 90 } })).toEqual({ enabled: true, minutesBefore: 90 });
+    expect(wakeAlarmOf({ enabled: true, minutesBefore: 60, ring: true })).toEqual({ enabled: true, minutesBefore: 60 });
+    expect(wakeAlarmOf({ enabled: true, minutesBefore: 60 })).toEqual({ enabled: false, minutesBefore: 120 });
   });
 
   it('앱을 오래 안 열어도 알림이 이어지도록 90일치(최대 60개)까지 예약', () => {
