@@ -21,7 +21,8 @@ import {
   REMINDER_DAYS,
   MAX_REMINDERS,
   syncShiftAlarms,
-  wakeAlarmOf
+  wakeAlarmOf,
+  buildReminders
 } from '../lib/localReminders';
 import { shareMonthImage } from '../lib/shareCalendar';
 import { alarmStatus, openAlarmSettings } from '../lib/shiftAlarm';
@@ -44,6 +45,88 @@ const importPeriod = ({ keys = [], yearMonth }) => {
   const md = (k) => `${Number(k.slice(5, 7))}월 ${Number(k.slice(8))}일`;
   return `${md(first)}~${md(last)}`;
 };
+
+// 알림·알람 설정 창 공통 모양: [아이콘 · 켜기 스위치] / [근무 시작 몇 분 전 — 알약 버튼] / [다음에 울리는 때]
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+const shortLead = (m) => (m === 90 ? '1시간 반' : m % 60 === 0 ? `${m / 60}시간` : `${m}분`);
+const fmtNext = (r) => {
+  const d = r.at;
+  const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]}) ${hhmm}`;
+};
+function ReminderSheet({ label, title, icon, switchLabel, kind, enabled, minutes, options, disabled, onClose, onToggle, onPick, next, children, footer }) {
+  return (
+    <Modal onClose={onClose} label={label}>
+      <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
+        <div className="flex justify-between items-center">
+          <h3 className="text-[20px] font-bold text-slate-900">{title}</h3>
+          <button onClick={onClose} className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer" aria-label="닫기">
+            <X size={20} />
+          </button>
+        </div>
+
+        {children}
+
+        <div className={`rounded-2xl bg-slate-50 divide-y divide-slate-200/70 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <span className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${enabled ? 'bg-blue-600 text-white' : 'bg-white text-slate-400'}`}>{icon}</span>
+            <span className="flex-1 min-w-0 text-[16px] font-semibold text-slate-900">{switchLabel}</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(enabled)}
+              aria-label={switchLabel}
+              disabled={disabled}
+              onClick={() => onToggle(!enabled)}
+              className={`relative shrink-0 w-12 h-7 rounded-full transition-colors cursor-pointer ${enabled ? 'bg-blue-600' : 'bg-slate-300'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+          <div className="px-4 py-3.5 space-y-2.5">
+            <p className="text-[13px] text-slate-500">근무 시작 몇 분 전에 {kind}할까요?</p>
+            <div className="flex gap-1.5">
+              {options.map((m) => {
+                const on = enabled && minutes === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onPick(m)}
+                    aria-pressed={on}
+                    aria-label={`${shortLead(m)} 전 ${kind}`}
+                    className={`flex-1 h-10 rounded-full text-[14px] font-semibold whitespace-nowrap cursor-pointer transition-colors ${
+                      on ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 ring-1 ring-inset ring-slate-200 active:bg-slate-100'
+                    }`}
+                  >
+                    {shortLead(m)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {enabled && (
+          <div className="flex items-center gap-3 px-1">
+            <span className="text-[13px] text-slate-500 shrink-0">다음 {kind}</span>
+            {next ? (
+              <span className="flex-1 min-w-0 text-right text-[14px] text-slate-900">
+                <b className="font-semibold">{fmtNext(next)}</b>
+                <span className="text-slate-400"> · {next.code} 근무</span>
+              </span>
+            ) : (
+              <span className="flex-1 text-right text-[13px] text-amber-700">근무 시간이 정해진 근무가 없어요 (수당 › 계산 설정)</span>
+            )}
+          </div>
+        )}
+
+        {footer}
+      </div>
+    </Modal>
+  );
+}
 
 export default function MyShiftTab({
   selectedDate,
@@ -179,6 +262,10 @@ export default function MyShiftTab({
       setIsAlarmModalOpen(false);
     }
   };
+
+  // 알림·알람 창의 '다음에 울리는 때' (근무 시간이 정해진 가장 가까운 근무)
+  const nextReminder = (minutesBefore) =>
+    buildReminders({ myShifts, startTimes: toStartTimes(shiftConfigs.shiftTimes), shiftTypes, minutesBefore, days: 60 })[0] || null;
 
   // 근무 알람(알람시계처럼 울림): 알림과 따로. minutes = 켜기/시간 변경, null = 끄기
   const wakeAlarm = wakeAlarmOf(alarmSettings);
@@ -842,154 +929,80 @@ export default function MyShiftTab({
       )}
 
       {isWakeAlarmOpen && (
-        <Modal onClose={() => setIsWakeAlarmOpen(false)} label="근무 알람 설정">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-[20px] font-bold text-slate-900">근무 알람</h3>
-                <p className="text-[13px] text-slate-400 mt-0.5">알람시계처럼 울려요 · 무음 모드에서도</p>
-              </div>
-              <button
-                onClick={() => setIsWakeAlarmOpen(false)}
-                className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer"
-                aria-label="닫기"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {!isNativeApp() ? (
-              <p className="p-3 rounded-2xl bg-slate-50 text-[13px] text-slate-600">
-                근무 알람은 설치한 앱에서만 울릴 수 있어요. 안드로이드 앱, 아이폰 앱(iOS 26 이상)에서 사용해 주세요.
-              </p>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  {[60, 90, 120, 180].map((min) => {
-                    const on = wakeAlarm.enabled && wakeAlarm.minutesBefore === min;
-                    return (
-                      <button
-                        key={min}
-                        onClick={() => handleSetWakeAlarm(min)}
-                        aria-label={`${formatLead(min)} 전 알람`}
-                        aria-pressed={on}
-                        className={`relative h-20 rounded-2xl flex flex-col items-center justify-center cursor-pointer ${
-                          on ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-800 active:bg-slate-100'
-                        }`}
-                      >
-                        <span className="text-[20px] font-bold leading-none">{formatLead(min)}</span>
-                        <span className={`text-[12px] mt-1 ${on ? 'text-blue-100' : 'text-slate-400'}`}>전에 알람</span>
-                        {on && <Check size={16} className="absolute top-2 right-2" />}
-                      </button>
-                    );
-                  })}
-                </div>
-                {ringStatus.supported === false && (
-                  <p className="text-[12px] text-amber-700">이 폰에서는 근무 알람을 쓸 수 없어요. (아이폰은 iOS 26 이상) 대신 알림을 켜 주세요.</p>
-                )}
-                {wakeAlarm.enabled && ringNeedsPermission && (
-                  <button
-                    type="button"
-                    onClick={openAlarmSettings}
-                    className="w-full h-11 rounded-xl bg-amber-100 text-amber-800 text-[14px] font-semibold cursor-pointer"
-                  >
-                    {ringStatus.exact === false ? '정확한 시간에 울리도록 허용하기' : '잠금 화면에 알람 띄우기 허용하기'}
-                  </button>
-                )}
-                <p className="text-[12px] text-slate-400">끄기 버튼(안드로이드는 5분 뒤 다시도)이 나와요. 휴무·연차 날은 울리지 않아요. 알림과 따로 설정돼요.</p>
-                {wakeAlarm.enabled && (
-                  <button
-                    onClick={() => handleSetWakeAlarm(null)}
-                    className="w-full h-11 text-rose-600 text-[14px] font-medium rounded-xl bg-rose-50 cursor-pointer"
-                  >
-                    알람 끄기
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        </Modal>
+        <ReminderSheet
+          label="근무 알람 설정"
+          title="근무 알람"
+          kind="알람"
+          icon={<AlarmClock size={18} />}
+          switchLabel="알람시계처럼 울리기"
+          enabled={wakeAlarm.enabled}
+          minutes={wakeAlarm.minutesBefore}
+          options={[60, 90, 120, 180]}
+          disabled={!isNativeApp()}
+          onClose={() => setIsWakeAlarmOpen(false)}
+          onToggle={(on) => handleSetWakeAlarm(on ? wakeAlarm.minutesBefore : null)}
+          onPick={(m) => handleSetWakeAlarm(m)}
+          next={nextReminder(wakeAlarm.minutesBefore)}
+          footer={
+            <p className="text-[12px] text-slate-400 leading-relaxed">
+              {isNativeApp()
+                ? '무음 모드에서도 알람 소리로 울려요. 끄기 버튼(안드로이드는 5분 뒤 다시도)이 나오고, 휴무·연차 날은 울리지 않아요.'
+                : '근무 알람은 설치한 앱에서만 울릴 수 있어요. (안드로이드 앱, 아이폰 앱 iOS 26 이상)'}
+            </p>
+          }
+        >
+          {isNativeApp() && ringStatus.supported === false && (
+            <p className="p-3 rounded-2xl bg-amber-50 text-[13px] text-amber-800">이 폰에서는 근무 알람을 쓸 수 없어요. (아이폰은 iOS 26 이상) 대신 알림을 켜 주세요.</p>
+          )}
+          {wakeAlarm.enabled && ringNeedsPermission && (
+            <button type="button" onClick={openAlarmSettings} className="w-full h-11 rounded-xl bg-amber-100 text-amber-800 text-[14px] font-semibold cursor-pointer">
+              {ringStatus.exact === false ? '정확한 시간에 울리도록 허용하기' : '잠금 화면에 알람 띄우기 허용하기'}
+            </button>
+          )}
+        </ReminderSheet>
       )}
 
       {isAlarmModalOpen && (
-        <Modal onClose={() => setIsAlarmModalOpen(false)} label="근무 시작 알림 설정">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-[20px] font-bold text-slate-900">근무 시작 알림</h3>
-                <p className="text-[13px] text-slate-400 mt-0.5">근무 시작 얼마 전에 알려 드릴까요?</p>
-              </div>
-              <button
-                onClick={() => setIsAlarmModalOpen(false)}
-                className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer"
-                aria-label="닫기"
-              >
-                <X size={20} />
-              </button>
+        <ReminderSheet
+          label="근무 시작 알림 설정"
+          title="근무 시작 알림"
+          kind="알림"
+          icon={<Bell size={18} />}
+          switchLabel="알림 받기"
+          enabled={alarmSettings.enabled}
+          minutes={alarmSettings.minutesBefore}
+          options={[30, 60, 120, 180]}
+          onClose={() => setIsAlarmModalOpen(false)}
+          onToggle={(on) => handleToggleAlarm(on ? alarmSettings.minutesBefore || 60 : undefined)}
+          onPick={(m) => handleToggleAlarm(m)}
+          next={nextReminder(alarmSettings.minutesBefore || 60)}
+          footer={
+            isNativeApp() ? (
+              <p className="text-[12px] text-slate-400 leading-relaxed">앱을 꺼 둬도 알림이 와요. 앞으로 {REMINDER_DAYS}일(최대 {MAX_REMINDERS}개)을 미리 예약해요.</p>
+            ) : (
+              !usesServerPush() && <p className="text-[12px] text-slate-400 leading-relaxed">웹에서는 이 화면이 열려 있을 때만 알림이 와요. 앱을 설치하면 꺼 둬도 받을 수 있어요.</p>
+            )
+          }
+        >
+          {alarmBlocked && (
+            <div className="p-3 rounded-2xl bg-rose-50 space-y-2">
+              <p className="text-[13px] text-rose-700">
+                {alarmPerm === 'unsupported'
+                  ? '이 브라우저는 알림을 지원하지 않아요. 앱을 설치하면 알림을 받을 수 있어요.'
+                  : '알림이 켜져 있지만 이 기기에서는 알림 권한이 없어서 알림이 오지 않아요.'}
+              </p>
+              {alarmPerm !== 'unsupported' && (
+                <button
+                  type="button"
+                  onClick={() => handleToggleAlarm(alarmSettings.minutesBefore)}
+                  className="w-full h-11 rounded-xl bg-rose-600 text-white text-[14px] font-semibold cursor-pointer"
+                >
+                  이 기기에서 알림 허용하기
+                </button>
+              )}
             </div>
-
-            {alarmBlocked && (
-              <div className="p-3 rounded-2xl bg-rose-50 space-y-2">
-                <p className="text-[13px] text-rose-700">
-                  {alarmPerm === 'unsupported'
-                    ? '이 브라우저는 알림을 지원하지 않아요. 앱을 설치하면 알림을 받을 수 있어요.'
-                    : '알림이 켜져 있지만 이 기기에서는 알림 권한이 없어서 알림이 오지 않아요.'}
-                </p>
-                {alarmPerm !== 'unsupported' && (
-                  <button
-                    type="button"
-                    onClick={() => handleToggleAlarm(alarmSettings.minutesBefore)}
-                    className="w-full h-11 rounded-xl bg-rose-600 text-white text-[14px] font-semibold cursor-pointer"
-                  >
-                    이 기기에서 알림 허용하기
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* 몇 분 전: 큰 칸 4개 */}
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { min: 30, big: '30분', label: '30분 전 알림' },
-                { min: 60, big: '1시간', label: '1시간 전 알림' },
-                { min: 120, big: '2시간', label: '2시간 전 알림' },
-                { min: 180, big: '3시간', label: '3시간 전 알림' }
-              ].map((opt) => {
-                const on = alarmSettings.enabled && alarmSettings.minutesBefore === opt.min;
-                return (
-                  <button
-                    key={opt.min}
-                    onClick={() => handleToggleAlarm(opt.min)}
-                    aria-label={opt.label}
-                    aria-pressed={on}
-                    className={`relative h-20 rounded-2xl flex flex-col items-center justify-center cursor-pointer ${
-                      on ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-800 active:bg-slate-100'
-                    }`}
-                  >
-                    <span className="text-[20px] font-bold leading-none">{opt.big}</span>
-                    <span className={`text-[12px] mt-1 ${on ? 'text-blue-100' : 'text-slate-400'}`}>전에 알림</span>
-                    {on && <Check size={16} className="absolute top-2 right-2" />}
-                  </button>
-                );
-              })}
-            </div>
-
-            {isNativeApp() ? (
-              <p className="text-[12px] text-slate-400">앱을 꺼 둬도 알림이 와요. 앞으로 {REMINDER_DAYS}일(최대 {MAX_REMINDERS}개)을 미리 예약해요.</p>
-            ) : !usesServerPush() && (
-              <p className="text-[12px] text-slate-400">웹에서는 이 화면이 열려 있을 때만 알림이 와요. 앱을 설치하면 꺼 둬도 받을 수 있어요.</p>
-            )}
-
-            {alarmSettings.enabled && (
-              <button
-                onClick={() => handleToggleAlarm()}
-                className="w-full h-11 text-rose-600 text-[14px] font-medium rounded-xl bg-rose-50 cursor-pointer"
-              >
-                알림 끄기 (해제)
-              </button>
-            )}
-          </div>
-        </Modal>
+          )}
+        </ReminderSheet>
       )}
 
     </div>
