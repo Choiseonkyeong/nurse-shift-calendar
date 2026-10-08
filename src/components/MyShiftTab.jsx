@@ -3,7 +3,7 @@ import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
-import { Bell, BellOff, Camera, Check, ChevronDown, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
+import { AlarmClock, AlarmClockOff, Bell, BellOff, Camera, Check, ChevronDown, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useSwipe } from '../lib/swipe';
 import { useShiftTypes, shiftTextVars, findShiftType, shortLabel } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
@@ -19,7 +19,12 @@ import {
   getAlarmPermission,
   webNotificationState,
   REMINDER_DAYS,
-  MAX_REMINDERS
+  MAX_REMINDERS,
+  syncShiftAlarms,
+  wakeAlarmOf,
+  shiftTime,
+  buildWakeAlarms,
+  buildReminders
 } from '../lib/localReminders';
 import { shareMonthImage } from '../lib/shareCalendar';
 import { alarmStatus, openAlarmSettings } from '../lib/shiftAlarm';
@@ -42,6 +47,208 @@ const importPeriod = ({ keys = [], yearMonth }) => {
   const md = (k) => `${Number(k.slice(5, 7))}월 ${Number(k.slice(8))}일`;
   return `${md(first)}~${md(last)}`;
 };
+
+// 알림·알람 설정 창 공통 모양: [아이콘 · 켜기 스위치] / [근무 시작 몇 분 전 — 알약 버튼] / [다음에 울리는 때]
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+const shortLead = (m) => (m === 90 ? '1시간 반' : m % 60 === 0 ? `${m / 60}시간` : `${m}분`);
+const fmtNext = (r) => {
+  const d = r.at;
+  const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]}) ${hhmm}`;
+};
+function ReminderSheet({ label, title, icon, switchLabel, kind, enabled, minutes, options, disabled, onClose, onToggle, onPick, next, children, footer }) {
+  return (
+    <Modal onClose={onClose} label={label}>
+      <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
+        <div className="flex justify-between items-center">
+          <h3 className="text-[20px] font-bold text-slate-900">{title}</h3>
+          <button onClick={onClose} className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer" aria-label="닫기">
+            <X size={20} />
+          </button>
+        </div>
+
+        {children}
+
+        <div className={`rounded-2xl bg-slate-50 divide-y divide-slate-200/70 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <span className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${enabled ? 'bg-blue-600 text-white' : 'bg-white text-slate-400'}`}>{icon}</span>
+            <span className="flex-1 min-w-0 text-[16px] font-semibold text-slate-900">{switchLabel}</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(enabled)}
+              aria-label={switchLabel}
+              disabled={disabled}
+              onClick={() => onToggle(!enabled)}
+              className={`relative shrink-0 w-12 h-7 rounded-full transition-colors cursor-pointer ${enabled ? 'bg-blue-600' : 'bg-slate-300'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+          <div className="px-4 py-3.5 space-y-2.5">
+            <p className="text-[13px] text-slate-500">근무 시작 몇 분 전에 {kind}할까요?</p>
+            <div className="flex gap-1.5">
+              {options.map((m) => {
+                const on = enabled && minutes === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onPick(m)}
+                    aria-pressed={on}
+                    aria-label={`${shortLead(m)} 전 ${kind}`}
+                    className={`flex-1 h-10 rounded-full text-[14px] font-semibold whitespace-nowrap cursor-pointer transition-colors ${
+                      on ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 ring-1 ring-inset ring-slate-200 active:bg-slate-100'
+                    }`}
+                  >
+                    {shortLead(m)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {enabled && (
+          <div className="flex items-center gap-3 px-1">
+            <span className="text-[13px] text-slate-500 shrink-0">다음 {kind}</span>
+            {next ? (
+              <span className="flex-1 min-w-0 text-right text-[14px] text-slate-900">
+                <b className="font-semibold">{fmtNext(next)}</b>
+                <span className="text-slate-400"> · {next.code} 근무</span>
+              </span>
+            ) : (
+              <span className="flex-1 text-right text-[13px] text-amber-700">근무 시간이 정해진 근무가 없어요 (수당 › 계산 설정)</span>
+            )}
+          </div>
+        )}
+
+        {footer}
+      </div>
+    </Modal>
+  );
+}
+
+// 근무 알람(모닝콜) 창: [켜기 스위치] / [근무별 알람 시각 — 시각 알약 + 추가] / [다음 알람]
+const ALARM_KINDS = { work: 0, leave: 1, off: 2 };
+function WakeAlarmSheet({ shiftTypes, startTimes, enabled, byShift, disabled, next, onClose, onToggle, onChange, children, footer }) {
+  const types = [...shiftTypes].sort((a, b) => (ALARM_KINDS[a.kind] ?? 0) - (ALARM_KINDS[b.kind] ?? 0));
+  const setTimes = (code, times) => {
+    const nextBy = { ...byShift };
+    const clean = [...new Set(times.filter(Boolean))].sort();
+    if (clean.length) nextBy[code] = clean;
+    else delete nextBy[code];
+    onChange(nextBy);
+  };
+  const addTime = (code) => {
+    const list = byShift[code] || [];
+    const base = list.length ? shiftTime(list[list.length - 1], 10) : shiftTime(startTimes[code], -90) || '07:00';
+    setTimes(code, [...list, base]);
+  };
+  return (
+    <Modal onClose={onClose} label="근무 알람 설정">
+      <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center">
+          <h3 className="text-[20px] font-bold text-slate-900">근무 알람</h3>
+          <button onClick={onClose} className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer" aria-label="닫기">
+            <X size={20} />
+          </button>
+        </div>
+
+        {children}
+
+        <div className={`rounded-2xl bg-slate-50 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <span className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${enabled ? 'bg-blue-600 text-white' : 'bg-white text-slate-400'}`}>
+              <AlarmClock size={18} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[16px] font-semibold text-slate-900">모닝콜 알람</span>
+              <span className="block text-[12px] text-slate-500">근무마다 울릴 시각을 정해요</span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(enabled)}
+              aria-label="모닝콜 알람"
+              disabled={disabled}
+              onClick={() => onToggle(!enabled)}
+              className={`relative shrink-0 w-12 h-7 rounded-full transition-colors cursor-pointer ${enabled ? 'bg-blue-600' : 'bg-slate-300'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        <ul className={`rounded-2xl ring-1 ring-inset ring-slate-200 divide-y divide-slate-100 ${disabled || !enabled ? 'opacity-50' : ''} ${disabled ? 'pointer-events-none' : ''}`}>
+          {types.map((t) => {
+            const times = byShift[t.code] || [];
+            return (
+              <li key={t.code} className="flex items-start gap-3 px-3 py-2.5">
+                <span className="shift-cell shrink-0 w-11 h-9 rounded-lg flex items-center justify-center text-[13px] font-bold" style={shiftTextVars(t)}>
+                  <span className="shift-text">{t.code}</span>
+                </span>
+                <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
+                  {times.map((hhmm, i) => (
+                    <span key={`${hhmm}-${i}`} className="inline-flex items-center h-9 pl-3 pr-0.5 rounded-full bg-blue-50 text-blue-700">
+                      {/* 24시간 글자로 보여 주고, 위에 겹친 투명 입력칸을 누르면 폰의 시각 고르기가 열림 */}
+                      <label className="relative text-[15px] font-semibold tabular-nums cursor-pointer">
+                        {hhmm}
+                        <input
+                          type="time"
+                          value={hhmm}
+                          aria-label={`${t.code} 알람 시각`}
+                          onClick={(e) => e.currentTarget.showPicker?.()}
+                          onChange={(e) => setTimes(t.code, times.map((x, j) => (j === i ? e.target.value : x)))}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        aria-label={`${t.code} ${hhmm} 알람 지우기`}
+                        onClick={() => setTimes(t.code, times.filter((_, j) => j !== i))}
+                        className="w-8 h-8 flex items-center justify-center rounded-full text-blue-400 active:bg-blue-100 cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                  {times.length < 5 && (
+                    <button
+                      type="button"
+                      aria-label={`${t.code} 알람 추가`}
+                      onClick={() => addTime(t.code)}
+                      className={`h-9 rounded-full text-[13px] font-semibold text-slate-500 ring-1 ring-inset ring-slate-200 active:bg-slate-100 cursor-pointer ${times.length ? 'w-9' : 'px-3'}`}
+                    >
+                      {times.length ? '+' : '+ 시각 추가'}
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+
+        {enabled && (
+          <div className="flex items-center gap-3 px-1">
+            <span className="text-[13px] text-slate-500 shrink-0">다음 알람</span>
+            {next ? (
+              <span className="flex-1 min-w-0 text-right text-[14px] text-slate-900">
+                <b className="font-semibold">{fmtNext(next)}</b>
+                <span className="text-slate-400"> · {next.code} 근무 날</span>
+              </span>
+            ) : (
+              <span className="flex-1 text-right text-[13px] text-amber-700">알람 시각을 넣은 근무가 앞으로 없어요</span>
+            )}
+          </div>
+        )}
+
+        {footer}
+      </div>
+    </Modal>
+  );
+}
 
 export default function MyShiftTab({
   selectedDate,
@@ -84,6 +291,7 @@ export default function MyShiftTab({
   const [editingDateKey, setEditingDateKey] = useState('');
 
   const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
+  const [isWakeAlarmOpen, setIsWakeAlarmOpen] = useState(false); // 근무 알람(알람시계) 창
 
   // 이 기기의 알림 권한 (설정은 다른 기기에서 켜져 동기화됐는데 이 기기엔 권한이 없는 경우 알려 주기 위해)
   const [alarmPerm, setAlarmPerm] = useState('granted');
@@ -100,9 +308,9 @@ export default function MyShiftTab({
   }, [alarmSettings.enabled, isAlarmModalOpen]);
   const alarmBlocked = Boolean(alarmSettings.enabled) && alarmPerm !== 'granted';
   // 알람시계처럼 울리기: 이 폰에서 지원하는지·정확한 알람/잠금 화면 알람 허용 여부 (앱에서만)
-  const [ringStatus, setRingStatus] = useState({ supported: false });
+  const [ringStatus, setRingStatus] = useState({});
   useEffect(() => {
-    if (!isAlarmModalOpen || !isNativeApp()) return undefined;
+    if (!isWakeAlarmOpen || !isNativeApp()) return undefined;
     let alive = true;
     const check = () => alarmStatus().then((st) => alive && setRingStatus(st || { supported: false }));
     check();
@@ -112,7 +320,7 @@ export default function MyShiftTab({
       alive = false;
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [isAlarmModalOpen]);
+  }, [isWakeAlarmOpen]);
   const ringNeedsPermission = ringStatus.supported && (ringStatus.exact === false || ringStatus.fullScreen === false);
 
   const shiftTypes = useShiftTypes();
@@ -158,7 +366,6 @@ export default function MyShiftTab({
         // 켤 때 바로 예약 (안드로이드는 이때만 '정확한 알람' 허용 화면을 보여 줌)
         await syncLocalReminders({
           enabled: true,
-          ring: Boolean(alarmSettings.ring),
           askExact: true,
           myShifts,
           startTimes: toStartTimes(shiftConfigs.shiftTimes),
@@ -178,31 +385,49 @@ export default function MyShiftTab({
     }
   };
 
-  // 알람시계처럼 울리기 켜기/끄기 (앱에서만). 알림이 꺼져 있으면 함께 켬
-  const handleToggleRing = async () => {
-    const ring = !alarmSettings.ring;
-    if (ring && !alarmSettings.enabled && !(await enableLocalReminders())) {
+  // 알림·알람 창의 '다음에 울리는 때' (근무 시간이 정해진 가장 가까운 근무)
+  const nextReminder = (minutesBefore) =>
+    buildReminders({ myShifts, startTimes: toStartTimes(shiftConfigs.shiftTimes), shiftTypes, minutesBefore, days: 60 })[0] || null;
+
+  // 근무 알람(모닝콜, 알람시계처럼 울림): 알림과 따로. 근무마다 울릴 시각을 정함
+  const alarmStartTimes = toStartTimes(shiftConfigs.shiftTimes);
+  const wakeAlarm = wakeAlarmOf(alarmSettings, alarmStartTimes);
+  const nextWakeAlarm = () => buildWakeAlarms({ myShifts, byShift: wakeAlarm.byShift, shiftTypes, days: 60 })[0] || null;
+  // 시각만 바꿀 때: 저장만 하면 App 이 잠시 뒤 다시 예약
+  const handleWakeAlarmTimes = (byShift) => setAlarmSettings({ ...alarmSettings, ring: false, alarm: { enabled: wakeAlarm.enabled, byShift } });
+  const handleToggleWakeAlarm = async (on) => {
+    if (!on) {
+      setAlarmSettings({ ...alarmSettings, ring: false, alarm: { enabled: false, byShift: wakeAlarm.byShift } });
+      await syncShiftAlarms({ enabled: false }).catch(() => {});
+      toast('⏰ 근무 알람을 껐어요.', 'info');
+      return;
+    }
+    // 처음 켤 때 시각이 하나도 없으면: 근무 시간이 정해진 근무는 시작 1시간 반 전으로 채워 줌
+    let byShift = wakeAlarm.byShift;
+    if (!Object.keys(byShift).length) {
+      byShift = {};
+      shiftTypes.forEach((t) => {
+        const at = t.kind === 'work' && shiftTime(alarmStartTimes[t.code], -90);
+        if (at) byShift[t.code] = [at];
+      });
+    }
+    // 알람 화면·알림 표시에 알림 권한이 필요 (안드로이드 13+)
+    if (!(await enableLocalReminders())) {
       toast('알림 권한이 꺼져 있어요. 휴대폰 설정 > 앱 > 근무표 > 알림에서 허용해 주세요.', 'error');
       return;
     }
-    const minutesBefore = alarmSettings.minutesBefore || 60;
-    setAlarmSettings({ ...alarmSettings, enabled: true, minutesBefore, ring });
     try {
-      let mode = 'notification';
-      await syncLocalReminders({
-        enabled: true,
-        ring,
-        askExact: true,
-        myShifts,
-        startTimes: toStartTimes(shiftConfigs.shiftTimes),
-        shiftTypes,
-        minutesBefore,
-        userName,
-        onMode: (m) => (mode = m)
-      });
-      if (!ring) toast('알람을 끄고 일반 알림으로 바꿨어요.', 'info');
-      else if (mode === 'alarm') toast(`⏰ 근무 시작 ${formatLead(minutesBefore)} 전에 알람이 울려요.\n무음 모드에서도 울려요.`, 'success');
-      else toast('이 폰에서는 알람을 쓸 수 없어서 알림으로 대신 울려요. (아이폰은 iOS 26 이상, 알람 권한 허용 필요)', 'info');
+      const res = await syncShiftAlarms({ enabled: true, myShifts, byShift, startTimes: alarmStartTimes, shiftTypes });
+      if (!res?.supported) {
+        toast('이 폰에서는 근무 알람을 쓸 수 없어요. (아이폰은 iOS 26 이상)\n대신 알림을 켜 주세요.', 'error');
+        return;
+      }
+      if (res.authorized === false) {
+        toast('알람 권한이 꺼져 있어요. 설정 > 근무표 > 알람에서 허용해 주세요.', 'error');
+        return;
+      }
+      setAlarmSettings({ ...alarmSettings, ring: false, alarm: { enabled: true, byShift } });
+      toast('⏰ 근무 알람을 켰어요.\n무음 모드에서도 알람 소리로 울려요.', 'success');
       setRingStatus(await alarmStatus());
     } catch (err) {
       toast(`알람 설정 실패\n${errorText(err)}`, 'error');
@@ -634,7 +859,7 @@ export default function MyShiftTab({
       })()}
 
       {/* 4. 도구: 아이콘 + 이름 */}
-      <section className="border-t border-slate-100 pt-3 grid grid-cols-5 text-slate-600">
+      <section className="border-t border-slate-100 pt-3 grid grid-cols-6 text-slate-600">
         {[
           { key: 'type', icon: <Palette size={22} />, label: '근무 종류', onClick: () => setIsTypeManagerOpen(true) },
           { key: 'pattern', icon: <Repeat size={22} />, label: '반복 패턴', onClick: () => setIsPatternOpen(true) },
@@ -670,6 +895,16 @@ export default function MyShiftTab({
         >
           {alarmBlocked ? <AlertTriangle size={22} /> : alarmSettings.enabled ? <Bell size={22} /> : <BellOff size={22} />}
           <span className="text-[11px] font-medium whitespace-nowrap">{alarmBlocked ? '권한 필요' : alarmSettings.enabled ? `${formatLead(alarmSettings.minutesBefore)} 전` : '알림'}</span>
+        </button>
+        {/* 근무 알람: 알람시계처럼 울림 (알림과 따로) */}
+        <button
+          type="button"
+          onClick={() => setIsWakeAlarmOpen(true)}
+          aria-label="근무 알람"
+          className={`flex flex-col items-center gap-1 py-2 rounded-xl cursor-pointer active:bg-slate-50 ${wakeAlarm.enabled ? 'text-blue-600' : ''}`}
+        >
+          {wakeAlarm.enabled ? <AlarmClock size={22} /> : <AlarmClockOff size={22} />}
+          <span className="text-[11px] font-medium whitespace-nowrap">알람</span>
         </button>
       </section>
 
@@ -818,119 +1053,77 @@ export default function MyShiftTab({
         </Modal>
       )}
 
+      {isWakeAlarmOpen && (
+        <WakeAlarmSheet
+          shiftTypes={shiftTypes}
+          startTimes={alarmStartTimes}
+          enabled={wakeAlarm.enabled}
+          byShift={wakeAlarm.byShift}
+          disabled={!isNativeApp()}
+          next={nextWakeAlarm()}
+          onClose={() => setIsWakeAlarmOpen(false)}
+          onToggle={handleToggleWakeAlarm}
+          onChange={handleWakeAlarmTimes}
+          footer={
+            <p className="text-[12px] text-slate-400 leading-relaxed">
+              {isNativeApp()
+                ? '무음 모드에서도 알람 소리로 울려요. 한 근무에 여러 개(최대 5개)를 넣을 수 있고, 시각을 넣지 않은 근무 날은 울리지 않아요.'
+                : '근무 알람은 설치한 앱에서만 울릴 수 있어요. (안드로이드 앱, 아이폰 앱 iOS 26 이상)'}
+            </p>
+          }
+        >
+          {isNativeApp() && ringStatus.supported === false && (
+            <p className="p-3 rounded-2xl bg-amber-50 text-[13px] text-amber-800">이 폰에서는 근무 알람을 쓸 수 없어요. (아이폰은 iOS 26 이상) 대신 알림을 켜 주세요.</p>
+          )}
+          {wakeAlarm.enabled && ringNeedsPermission && (
+            <button type="button" onClick={openAlarmSettings} className="w-full h-11 rounded-xl bg-amber-100 text-amber-800 text-[14px] font-semibold cursor-pointer">
+              {ringStatus.exact === false ? '정확한 시간에 울리도록 허용하기' : '잠금 화면에 알람 띄우기 허용하기'}
+            </button>
+          )}
+        </WakeAlarmSheet>
+      )}
+
       {isAlarmModalOpen && (
-        <Modal onClose={() => setIsAlarmModalOpen(false)} label="근무 시작 알림 설정">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-[20px] font-bold text-slate-900">근무 시작 알림</h3>
-                <p className="text-[13px] text-slate-400 mt-0.5">근무 시작 얼마 전에 알려 드릴까요?</p>
-              </div>
-              <button
-                onClick={() => setIsAlarmModalOpen(false)}
-                className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer"
-                aria-label="닫기"
-              >
-                <X size={20} />
-              </button>
+        <ReminderSheet
+          label="근무 시작 알림 설정"
+          title="근무 시작 알림"
+          kind="알림"
+          icon={<Bell size={18} />}
+          switchLabel="알림 받기"
+          enabled={alarmSettings.enabled}
+          minutes={alarmSettings.minutesBefore}
+          options={[30, 60, 120, 180]}
+          onClose={() => setIsAlarmModalOpen(false)}
+          onToggle={(on) => handleToggleAlarm(on ? alarmSettings.minutesBefore || 60 : undefined)}
+          onPick={(m) => handleToggleAlarm(m)}
+          next={nextReminder(alarmSettings.minutesBefore || 60)}
+          footer={
+            isNativeApp() ? (
+              <p className="text-[12px] text-slate-400 leading-relaxed">앱을 꺼 둬도 알림이 와요. 앞으로 {REMINDER_DAYS}일(최대 {MAX_REMINDERS}개)을 미리 예약해요.</p>
+            ) : (
+              !usesServerPush() && <p className="text-[12px] text-slate-400 leading-relaxed">웹에서는 이 화면이 열려 있을 때만 알림이 와요. 앱을 설치하면 꺼 둬도 받을 수 있어요.</p>
+            )
+          }
+        >
+          {alarmBlocked && (
+            <div className="p-3 rounded-2xl bg-rose-50 space-y-2">
+              <p className="text-[13px] text-rose-700">
+                {alarmPerm === 'unsupported'
+                  ? '이 브라우저는 알림을 지원하지 않아요. 앱을 설치하면 알림을 받을 수 있어요.'
+                  : '알림이 켜져 있지만 이 기기에서는 알림 권한이 없어서 알림이 오지 않아요.'}
+              </p>
+              {alarmPerm !== 'unsupported' && (
+                <button
+                  type="button"
+                  onClick={() => handleToggleAlarm(alarmSettings.minutesBefore)}
+                  className="w-full h-11 rounded-xl bg-rose-600 text-white text-[14px] font-semibold cursor-pointer"
+                >
+                  이 기기에서 알림 허용하기
+                </button>
+              )}
             </div>
-
-            {alarmBlocked && (
-              <div className="p-3 rounded-2xl bg-rose-50 space-y-2">
-                <p className="text-[13px] text-rose-700">
-                  {alarmPerm === 'unsupported'
-                    ? '이 브라우저는 알림을 지원하지 않아요. 앱을 설치하면 알림을 받을 수 있어요.'
-                    : '알림이 켜져 있지만 이 기기에서는 알림 권한이 없어서 알림이 오지 않아요.'}
-                </p>
-                {alarmPerm !== 'unsupported' && (
-                  <button
-                    type="button"
-                    onClick={() => handleToggleAlarm(alarmSettings.minutesBefore)}
-                    className="w-full h-11 rounded-xl bg-rose-600 text-white text-[14px] font-semibold cursor-pointer"
-                  >
-                    이 기기에서 알림 허용하기
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* 몇 분 전: 큰 칸 4개 */}
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { min: 30, big: '30분', label: '30분 전 알림' },
-                { min: 60, big: '1시간', label: '1시간 전 알림' },
-                { min: 120, big: '2시간', label: '2시간 전 알림' },
-                { min: 180, big: '3시간', label: '3시간 전 알림' }
-              ].map((opt) => {
-                const on = alarmSettings.enabled && alarmSettings.minutesBefore === opt.min;
-                return (
-                  <button
-                    key={opt.min}
-                    onClick={() => handleToggleAlarm(opt.min)}
-                    aria-label={opt.label}
-                    aria-pressed={on}
-                    className={`relative h-20 rounded-2xl flex flex-col items-center justify-center cursor-pointer ${
-                      on ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-800 active:bg-slate-100'
-                    }`}
-                  >
-                    <span className="text-[20px] font-bold leading-none">{opt.big}</span>
-                    <span className={`text-[12px] mt-1 ${on ? 'text-blue-100' : 'text-slate-400'}`}>전에 알림</span>
-                    {on && <Check size={16} className="absolute top-2 right-2" />}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* 알람시계처럼 울리기 (앱에서만) */}
-            {isNativeApp() && (
-              <div className="rounded-2xl bg-slate-50 p-4 space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[15px] font-semibold text-slate-900">알람처럼 울리기</p>
-                    <p className="text-[12px] text-slate-500 mt-0.5">무음 모드에서도 알람 소리로 울려요 · 끄기 / 5분 뒤 다시</p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={Boolean(alarmSettings.ring)}
-                    aria-label="알람처럼 울리기"
-                    onClick={handleToggleRing}
-                    className={`relative shrink-0 w-12 h-7 rounded-full transition-colors cursor-pointer ${alarmSettings.ring ? 'bg-blue-600' : 'bg-slate-300'}`}
-                  >
-                    <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${alarmSettings.ring ? 'translate-x-5' : ''}`} />
-                  </button>
-                </div>
-                {alarmSettings.ring && !ringStatus.supported && (
-                  <p className="text-[12px] text-amber-700">이 폰에서는 알람을 쓸 수 없어 알림으로 대신 울려요. (아이폰은 iOS 26 이상)</p>
-                )}
-                {alarmSettings.ring && ringNeedsPermission && (
-                  <button
-                    type="button"
-                    onClick={openAlarmSettings}
-                    className="w-full h-10 rounded-xl bg-amber-100 text-amber-800 text-[13px] font-semibold cursor-pointer"
-                  >
-                    {ringStatus.exact === false ? '정확한 시간에 울리도록 허용하기' : '잠금 화면에 알람 띄우기 허용하기'}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {isNativeApp() ? (
-              <p className="text-[12px] text-slate-400">앱을 꺼 둬도 알림이 와요. 앞으로 {REMINDER_DAYS}일(최대 {MAX_REMINDERS}개)을 미리 예약해요.</p>
-            ) : !usesServerPush() && (
-              <p className="text-[12px] text-slate-400">웹에서는 이 화면이 열려 있을 때만 알림이 와요. 앱을 설치하면 꺼 둬도 받을 수 있어요.</p>
-            )}
-
-            {alarmSettings.enabled && (
-              <button
-                onClick={() => handleToggleAlarm()}
-                className="w-full h-11 text-rose-600 text-[14px] font-medium rounded-xl bg-rose-50 cursor-pointer"
-              >
-                알림 끄기 (해제)
-              </button>
-            )}
-          </div>
-        </Modal>
+          )}
+        </ReminderSheet>
       )}
 
     </div>

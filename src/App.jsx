@@ -23,7 +23,7 @@ import { getThemePref, setThemePref } from './lib/theme';
 import { getTodayDateObj, toDateKey } from './utils/dateUtils';
 import { ensureSession, ensureProfile, updateDisplayName, fetchMyShifts, saveShiftChanges, diffShifts, fetchMyShiftTypes, upsertShiftType, deleteShiftType, fetchMyNotes, saveNoteChanges } from './lib/shiftApi';
 import { usesServerPush, registerDevice, saveReminderSettings, toStartTimes } from './lib/pushNotifications';
-import { isNativeApp, syncLocalReminders } from './lib/localReminders';
+import { isNativeApp, syncLocalReminders, syncShiftAlarms, wakeAlarmOf } from './lib/localReminders';
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 import { syncWidget } from './lib/widgetSync';
 import { startAds } from './lib/ads';
@@ -418,7 +418,6 @@ export default function App() {
     const timer = setTimeout(() => {
       syncLocalReminders({
         enabled: alarmSettings.enabled,
-        ring: Boolean(alarmSettings.ring),
         myShifts: myShifts || {},
         startTimes: toStartTimes(shiftConfigs?.shiftTimes),
         shiftTypes,
@@ -427,7 +426,25 @@ export default function App() {
       }).catch((err) => console.error('근무 알림 예약 실패:', err.message));
     }, 1500);
     return () => clearTimeout(timer);
-  }, [alarmSettings.enabled, alarmSettings.minutesBefore, alarmSettings.ring, myShifts, shiftConfigs?.shiftTimes, shiftTypes, nameSkipped, userName]);
+  }, [alarmSettings.enabled, alarmSettings.minutesBefore, myShifts, shiftConfigs?.shiftTimes, shiftTypes, nameSkipped, userName]);
+
+  // 앱: 근무 알람(알람시계처럼 울림)도 따로 다시 예약 — 알림과 별개 설정
+  const wakeAlarm = wakeAlarmOf(alarmSettings, toStartTimes(shiftConfigs?.shiftTimes));
+  const wakeAlarmKey = JSON.stringify(wakeAlarm.byShift);
+  useEffect(() => {
+    if (!isNativeApp()) return undefined;
+    const timer = setTimeout(() => {
+      syncShiftAlarms({
+        enabled: wakeAlarm.enabled,
+        myShifts: myShifts || {},
+        startTimes: toStartTimes(shiftConfigs?.shiftTimes),
+        shiftTypes,
+        byShift: wakeAlarm.byShift
+      }).catch((err) => console.error('근무 알람 예약 실패:', err.message));
+    }, 1800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- byShift 는 wakeAlarmKey 로 비교
+  }, [wakeAlarm.enabled, wakeAlarmKey, myShifts, shiftConfigs?.shiftTimes, shiftTypes]);
 
   // ---------------- 서버 동기화 ----------------
   // 마지막으로 서버와 일치했던 스냅샷을 기기에 저장해 두고, 그 이후 "이 기기에서 바뀐 것"만 서버에 반영한다.
