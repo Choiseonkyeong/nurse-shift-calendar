@@ -4,6 +4,7 @@
 //  - iOS 는 예약 가능한 알림이 64개까지라 최대 MAX_REMINDERS 개만
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { scheduleAlarms, cancelAlarms } from './shiftAlarm';
 
 export const REMINDER_DAYS = 90; // 앱을 오래 안 열어도 알림이 이어지도록 (개수는 MAX_REMINDERS 까지)
 export const MAX_REMINDERS = 60;
@@ -100,14 +101,28 @@ export async function enableLocalReminders() {
 
 /**
  * 예약된 근무 알림을 지금 설정에 맞게 다시 예약 (끄면 모두 취소)
+ * @param ring     true: 알림 대신 알람시계처럼 울리는 알람으로 (안드로이드, 아이폰 iOS 26+). 지원 안 하면 알림으로 대신
  * @param askExact 알림을 켤 때만 true: 안드로이드 '정확한 알람' 허용 화면을 한 번 보여줌 (평소 재예약 때는 묻지 않음)
+ * @param onMode   실제로 예약된 방식 'alarm' | 'notification' 을 알려 줌 (알람을 못 쓰면 'notification')
  */
-export async function syncLocalReminders({ enabled, askExact = false, ...opts }) {
+export async function syncLocalReminders({ enabled, ring = false, askExact = false, onMode, ...opts }) {
   if (!isNativeApp()) return 0;
   const { notifications = [] } = await LocalNotifications.getPending();
   const mine = notifications.filter((n) => n.extra?.kind === KIND);
   if (mine.length) await LocalNotifications.cancel({ notifications: mine.map((n) => ({ id: n.id })) });
+  if (!enabled || !ring) await cancelAlarms();
   if (!enabled) return 0;
+
+  if (ring) {
+    const list = buildReminders(opts);
+    const res = await scheduleAlarms(list);
+    if (res?.supported && res.authorized !== false) {
+      onMode?.('alarm');
+      return list.length;
+    }
+    // 알람을 못 쓰는 폰(아이폰 iOS 26 미만, 알람 권한 거부): 일반 알림으로 대신
+  }
+  onMode?.('notification');
 
   const { display } = await LocalNotifications.checkPermissions();
   if (display !== 'granted') return 0;

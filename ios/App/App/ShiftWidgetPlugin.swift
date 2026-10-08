@@ -28,5 +28,6 @@ public class ShiftWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
 class MainViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(ShiftWidgetPlugin())
+        bridge?.registerPluginInstance(ShiftAlarmPlugin())
     }
 }

@@ -7,6 +7,8 @@
 	<!-- AdMob 앱 ID: 빌드 설정 ADMOB_APP_ID (기본은 구글 테스트 ID, CI 에서 GitHub Secret ADMOB_APP_ID_IOS 로 교체) -->
 	<key>GADApplicationIdentifier</key>
 	<string>$(ADMOB_APP_ID)</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>근무 시작 전에 알람시계처럼 울려 드리기 위해 알람을 예약합니다.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>근무표를 사진으로 찍어 내 근무표에 등록하기 위해 카메라를 사용합니다. 사진은 기기 안에서만 처리됩니다.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

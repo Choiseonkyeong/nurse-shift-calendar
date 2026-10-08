@@ -1,8 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const native = { value: true, platform: 'android' };
+const AL = {
+  result: { supported: true, authorized: true, count: 0 },
+  schedule: vi.fn(async () => AL.result),
+  cancelAll: vi.fn(async () => {}),
+  status: vi.fn(async () => ({ supported: true })),
+  openSettings: vi.fn(async () => {})
+};
 vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: () => native.value, getPlatform: () => native.platform }
+  Capacitor: { isNativePlatform: () => native.value, getPlatform: () => native.platform },
+  registerPlugin: () => AL
 }));
 const LN = {
   pending: [],
@@ -88,6 +96,30 @@ describe('syncLocalReminders', () => {
     native.value = false;
     expect(await syncLocalReminders({ enabled: true })).toBe(0);
     expect(await enableLocalReminders()).toBe(false);
+  });
+
+  it('알람 모드: 알림 대신 알람으로 예약, 알람을 못 쓰는 폰은 알림으로 대신', async () => {
+    AL.schedule.mockClear();
+    AL.cancelAll.mockClear();
+    let mode = '';
+    const n = await syncLocalReminders({ enabled: true, ring: true, myShifts: { '2026-09-29': 'N' }, startTimes: START, shiftTypes: TYPES, now: NOW, onMode: (m) => (mode = m) });
+    expect(n).toBe(1);
+    expect(mode).toBe('alarm');
+    expect(AL.schedule.mock.calls[0][0].alarms[0]).toMatchObject({ id: 20260929, at: new Date(2026, 8, 29, 20, 30).getTime() });
+    expect(LN.schedule).not.toHaveBeenCalled(); // 알림은 지우고 다시 예약하지 않음
+    expect(LN.cancel).toHaveBeenCalled();
+
+    // 아이폰 iOS 26 미만 등: 알람 미지원 → 알림
+    AL.result = { supported: false, count: 0 };
+    await syncLocalReminders({ enabled: true, ring: true, myShifts: { '2026-09-29': 'N' }, startTimes: START, shiftTypes: TYPES, now: NOW, onMode: (m) => (mode = m) });
+    expect(mode).toBe('notification');
+    expect(LN.schedule).toHaveBeenCalled();
+    AL.result = { supported: true, authorized: true, count: 0 };
+
+    // 알람 모드를 끄거나 알림을 끄면 예약된 알람도 취소
+    AL.cancelAll.mockClear();
+    await syncLocalReminders({ enabled: true, ring: false, myShifts: {}, startTimes: START, shiftTypes: TYPES, now: NOW });
+    expect(AL.cancelAll).toHaveBeenCalled();
   });
 
   it('앱을 오래 안 열어도 알림이 이어지도록 90일치(최대 60개)까지 예약', () => {

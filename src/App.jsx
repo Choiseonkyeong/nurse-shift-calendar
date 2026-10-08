@@ -418,6 +418,7 @@ export default function App() {
     const timer = setTimeout(() => {
       syncLocalReminders({
         enabled: alarmSettings.enabled,
+        ring: Boolean(alarmSettings.ring),
         myShifts: myShifts || {},
         startTimes: toStartTimes(shiftConfigs?.shiftTimes),
         shiftTypes,
@@ -426,7 +427,7 @@ export default function App() {
       }).catch((err) => console.error('근무 알림 예약 실패:', err.message));
     }, 1500);
     return () => clearTimeout(timer);
-  }, [alarmSettings.enabled, alarmSettings.minutesBefore, myShifts, shiftConfigs?.shiftTimes, shiftTypes, nameSkipped, userName]);
+  }, [alarmSettings.enabled, alarmSettings.minutesBefore, alarmSettings.ring, myShifts, shiftConfigs?.shiftTimes, shiftTypes, nameSkipped, userName]);
 
   // ---------------- 서버 동기화 ----------------
   // 마지막으로 서버와 일치했던 스냅샷을 기기에 저장해 두고, 그 이후 "이 기기에서 바뀐 것"만 서버에 반영한다.

@@ -32,6 +32,29 @@
 
         </activity>
 
+        <!-- 근무 알람: 예약 시각에 울림 / 잠금 화면 알람 창 / 재부팅 후 다시 예약 -->
+        <receiver android:name=".ShiftAlarmReceiver" android:exported="false" />
+        <receiver android:name=".ShiftAlarmBootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+        <service
+            android:name=".ShiftAlarmService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <activity
+            android:name=".ShiftAlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+
         <!-- AdMob 앱 ID (build.gradle 의 admobAppId) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
@@ -72,4 +95,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+ 알림 런타임 권한 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 근무 알람: 정시 알람(캘린더 앱 허용), 잠금 화면 알람 창, 알람 소리 재생 서비스, 재부팅 후 재예약, 진동 -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 </manifest>
