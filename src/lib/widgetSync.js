@@ -36,10 +36,31 @@ export function buildWidgetData(myShifts = {}, shiftTypes = [], today = new Date
 }
 
 let lastPayload = '';
+let lastArgs = null;
+
+// 위젯에 일정 보이기 (홈 화면은 남도 볼 수 있어 끌 수 있게, 이 폰에만 저장)
+const NOTES_KEY = 'widget_notes';
+export function getWidgetNotesPref() {
+  try {
+    return localStorage.getItem(NOTES_KEY) !== '0';
+  } catch (e) {
+    return true;
+  }
+}
+export function setWidgetNotesPref(on) {
+  try {
+    if (on) localStorage.removeItem(NOTES_KEY);
+    else localStorage.setItem(NOTES_KEY, '0');
+  } catch (e) {
+    /* 무시 */
+  }
+  if (lastArgs) syncWidget(...lastArgs); // 바로 위젯에 반영
+}
 
 export async function syncWidget(myShifts, shiftTypes, dayNotes = {}) {
   if (!['android', 'ios'].includes(Capacitor.getPlatform())) return;
-  const payload = JSON.stringify(buildWidgetData(myShifts, shiftTypes, new Date(), dayNotes));
+  lastArgs = [myShifts, shiftTypes, dayNotes];
+  const payload = JSON.stringify(buildWidgetData(myShifts, shiftTypes, new Date(), getWidgetNotesPref() ? dayNotes : {}));
   // updatedAt 을 제외한 내용이 같으면 생략
   const body = payload.replace(/"updatedAt":"[^"]*"/, '');
   if (body === lastPayload) return;

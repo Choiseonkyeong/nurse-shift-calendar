@@ -293,6 +293,16 @@ test('일정·메모: 한 날짜에 여러 개 넣으면 달력 칸에 모두 �
 
   // 4번째(택배)를 맨 위로 끌기
   const grips = dialog.getByRole('button', { name: /순서 바꾸기/ });
+  // 입력칸을 누르면 창이 잠시 뒤 스크롤되므로, 위치가 멈춘 뒤에 잼 (느린 CI 에서 엉뚱한 곳을 끌던 것)
+  let last = null;
+  await expect
+    .poll(async () => {
+      const y = (await grips.nth(3).boundingBox())?.y;
+      const still = y === last;
+      last = y;
+      return still;
+    }, { intervals: [250] })
+    .toBe(true);
   const from = await grips.nth(3).boundingBox();
   const to = await grips.nth(0).boundingBox();
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
