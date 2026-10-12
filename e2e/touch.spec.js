@@ -68,7 +68,7 @@ test('키보드가 올라오면(--kb) 아래 창이 그만큼 위로 올라가 �
   expect(Math.round((await panel.boundingBox()).y + (await panel.boundingBox()).height)).toBe(vh);
   await page.evaluate(() => document.documentElement.style.setProperty('--kb', '300px'));
   await expect.poll(async () => Math.round((await panel.boundingBox()).y + (await panel.boundingBox()).height)).toBe(vh - 300);
-  const memo = page.getByPlaceholder(/교육 준비물/);
+  const memo = page.getByRole('textbox', { name: '일정·메모 추가' });
   await memo.evaluate((el) => el.blur());
   await memo.focus(); // 입력칸을 누르면 창 안에서 보이는 곳까지 스크롤
   await expect.poll(async () => {

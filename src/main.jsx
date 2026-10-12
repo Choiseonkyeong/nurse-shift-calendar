@@ -2,9 +2,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx' // 👈 main.jsx와 App.jsx가 둘 다 src 폴더 안에 있을 때
 import ErrorBoundary from './components/ErrorBoundary.jsx'
-import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
+import 'wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.css'
 import './index.css'
 import { applyTheme, watchSystemTheme } from './lib/theme'
+import { applyFont } from './lib/fontPref'
 import { handleWebOAuthReturn, listenNativeOAuth } from './lib/socialAuth'
 import { installUpdateGuard } from './lib/appUpdate'
 import { captureInstallPrompt } from './lib/installHint'
@@ -13,6 +14,7 @@ import { installKeyboardInset, preventIosInputZoom } from './lib/viewport'
 // 첫 화면 전에 테마 적용 (깜빡임 방지)
 applyTheme()
 watchSystemTheme()
+applyFont()
 
 // 폰: 키보드가 아래 창을 가리지 않게, 아이폰 입력칸 자동 확대 방지
 installKeyboardInset()

@@ -186,12 +186,12 @@ test('앱을 켜 둔 채 날짜가 바뀌면 다시 볼 때 오늘(다음 달)�
   await openApp(page);
   await page.clock.setFixedTime(new Date('2026-09-30T23:50:00+09:00'));
   await page.reload();
-  await expect(page.getByText('9월 30일 (수) 메모')).toBeVisible();
+  await expect(page.getByText('9월 30일 (수) 일정·메모')).toBeVisible();
   // 밤 근무 후 아침에 다시 열기
   await page.clock.setFixedTime(new Date('2026-10-01T07:30:00+09:00'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(page.getByText('2026년 10월')).toBeVisible();
-  await expect(page.getByText('10월 1일 (목) 메모')).toBeVisible();
+  await expect(page.getByText('10월 1일 (목) 일정·메모')).toBeVisible();
 
   // 다른 날짜(10/15)를 보고 있었으면 날짜가 바뀌어도 그대로
   await page.getByRole('button', { name: /^10월 15일 (?!\()/ }).click();
@@ -199,7 +199,7 @@ test('앱을 켜 둔 채 날짜가 바뀌면 다시 볼 때 오늘(다음 달)�
   await page.clock.setFixedTime(new Date('2026-10-02T07:30:00+09:00'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForTimeout(300);
-  await expect(page.getByText('10월 15일 (목) 메모')).toBeVisible();
+  await expect(page.getByText('10월 15일 (목) 일정·메모')).toBeVisible();
 });
 
 test('반복 패턴으로 기존 근무를 덮어써도 알림의 되돌리기로 적용 전 그대로 (빈칸이던 날은 다시 빈칸)', async ({ page }) => {
@@ -227,8 +227,8 @@ test('위쪽 제목: 내 근무는 이름, 다른 화면은 화면 이름', asyn
     await tab(page, t).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
   }
-  // 글꼴: Pretendard
-  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/Pretendard/);
+  // 글꼴: 원티드 산스 (설정 › 글꼴에서 바꿀 수 있음)
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/Wanted Sans/);
 });
 
 test('다크 모드에서도 달력 근무 글자가 잘 보임 (밝은 색으로 바뀜)', async ({ page }) => {
@@ -278,4 +278,50 @@ test('수당 화면에서도 달 바꾸기: ‹ › 와 년·월 선택', async 
   // 내 근무 화면도 같은 달로
   await tab(page, '내 근무').click();
   await expect(page.getByRole('heading', { name: '2025년 12월' })).toBeVisible();
+});
+
+test('일정·메모: 한 날짜에 여러 개 넣으면 달력 칸에 모두 보이고, 손잡이를 끌어 순서를 바꿈', async ({ page }) => {
+  await openApp(page, { local: { day_notes: { '2026-09-10': '교육\n회식\n은행\n택배' } } });
+  const cell = page.getByRole('button', { name: /^9월 10일 (?!\()/ });
+  await expect(cell).toHaveAttribute('aria-label', /일정 4개: 교육, 회식, 은행, 택배/);
+
+  await cell.click();
+  const dialog = page.getByRole('dialog', { name: '근무 직접 수정' });
+  await dialog.getByRole('textbox', { name: '일정·메모 추가' }).fill('운동');
+  await dialog.getByRole('textbox', { name: '일정·메모 추가' }).press('Enter');
+  await expect(dialog.getByRole('textbox', { name: '5번째 일정' })).toHaveValue('운동');
+
+  // 4번째(택배)를 맨 위로 끌기
+  const grips = dialog.getByRole('button', { name: /순서 바꾸기/ });
+  const from = await grips.nth(3).boundingBox();
+  const to = await grips.nth(0).boundingBox();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + 4, { steps: 8 });
+  await page.mouse.up();
+  // 키보드로도: 2번째(교육)를 아래로 한 칸
+  await grips.nth(1).focus();
+  await page.keyboard.press('ArrowDown');
+  // 지우기
+  await dialog.getByRole('button', { name: '은행 지우기' }).click();
+  await page.keyboard.press('Escape');
+
+  await expect.poll(async () => (await readLocal(page, 'day_notes'))['2026-09-10']).toBe('택배\n회식\n교육\n운동');
+  await expect(cell).toHaveAttribute('aria-label', /일정 4개: 택배, 회식, 교육, 운동/);
+});
+
+test('설정 › 글꼴: 글꼴·글자 크기를 바꾸면 바로 바뀌고 다시 열어도 유지', async ({ page }) => {
+  await openApp(page);
+  await tab(page, '설정').click();
+  await page.getByRole('button', { name: '글꼴·글자 크기' }).click();
+  const sheet = page.getByRole('dialog', { name: '글꼴 설정' });
+  await sheet.getByRole('radio', { name: /고운바탕/ }).click();
+  await sheet.getByRole('radio', { name: '크게', exact: true }).click();
+  const bodyFont = () => page.evaluate(() => getComputedStyle(document.body).fontFamily);
+  const bodySize = () => page.evaluate(() => getComputedStyle(document.body).fontSize);
+  await expect.poll(bodyFont).toMatch(/^"Gowun Batang"/);
+  await expect.poll(bodySize).toBe('17.28px'); // 16px × 1.08
+  await page.reload();
+  await expect.poll(bodyFont).toMatch(/^"Gowun Batang"/);
+  await expect.poll(bodySize).toBe('17.28px');
 });

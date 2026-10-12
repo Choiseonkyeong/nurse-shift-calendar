@@ -5,8 +5,10 @@ import { readSheet } from '../lib/readSheet';
 import { rosterSheets } from '../lib/sheetPick';
 import { toast } from '../lib/toast';
 import Modal from './Modal';
+import FontSheet from './FontSheet';
+import { FONTS, getFontPref } from '../lib/fontPref';
 import { confirmDialog } from '../lib/confirm';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon, Type } from 'lucide-react';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
@@ -56,6 +58,8 @@ export default function ImportTab({
   privacyBlur = false,
   onTogglePrivacy
 }) {
+  const [isFontOpen, setIsFontOpen] = useState(false);
+  const [fontKey, setFontKey] = useState(getFontPref);
   const shiftTypes = useShiftTypes();
   const [ocrProgress, setOcrProgress] = useState(null); // { p, msg }
   const [sheetChoice, setSheetChoice] = useState(null); // 엑셀 근무표 탭이 여러 개일 때 고를 탭 목록
@@ -379,7 +383,7 @@ export default function ImportTab({
         const next = { ...(prev || {}) };
         Object.entries(notes).forEach(([k, v]) => {
           if (!next[k]) next[k] = v.slice(0, 500);
-          else if (!next[k].includes(v)) next[k] = `${next[k]} / ${v}`.slice(0, 500);
+          else if (!next[k].split('\n').includes(v)) next[k] = `${next[k]}\n${v}`.slice(0, 500);
         });
         return next;
       });
@@ -539,6 +543,10 @@ export default function ImportTab({
           {themePref === 'dark' ? <Moon size={24} className="text-blue-600" /> : themePref === 'light' ? <Sun size={24} className="text-blue-600" /> : <SunMoon size={24} className="text-blue-600" />}
           <span className={tileLabel}>{{ system: '테마: 자동', dark: '테마: 다크', light: '테마: 밝게' }[themePref]}</span>
         </button>
+        <button type="button" onClick={() => setIsFontOpen(true)} aria-label="글꼴·글자 크기" className={tileCls}>
+          <Type size={24} className="text-blue-600" />
+          <span className={tileLabel}>글꼴: {FONTS.find((f) => f.key === fontKey)?.label}</span>
+        </button>
         <button
           type="button"
           onClick={onTogglePrivacy}
@@ -567,6 +575,14 @@ export default function ImportTab({
           <span className={tileLabel}>캘린더(.ics) 내보내기</span>
         </button>
       </section>
+      {isFontOpen && (
+        <FontSheet
+          onClose={() => {
+            setIsFontOpen(false);
+            setFontKey(getFontPref());
+          }}
+        />
+      )}
 
       <div>
         <div className="pt-6 text-center">
