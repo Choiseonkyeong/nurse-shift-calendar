@@ -1,8 +1,9 @@
 import SwiftUI
 import WidgetKit
 
-// 홈 화면 위젯: 오늘 / 내일 근무 (앱이 App Group 에 저장한 JSON 사용)
-// {"days":{"2026-09-28":{"code":"D","label":"...","bg":"#FEF08A","fg":"#854D0E","time":"07:00-15:00"}}}
+// 홈 화면 위젯: 오늘 / 내일 근무 + 그날 일정 (앱이 App Group 에 저장한 JSON 사용)
+// {"days":{"2026-09-28":{"code":"D","label":"...","bg":"#FEF08A","fg":"#854D0E","time":"07:00-15:00","notes":"교육, 회식"}}}
+// (근무 없이 일정만 있는 날은 code 가 "")
 
 private let appGroup = "group.com.nurseshift.app"
 private let dataKey = "shift_widget_data"
@@ -13,6 +14,7 @@ struct DayShift {
     let sub: String
     let bg: Color
     let fg: Color
+    var notes: String = ""
 }
 
 struct ShiftEntry: TimelineEntry {
@@ -59,8 +61,10 @@ private func loadDays(now: Date) -> [DayShift] {
     return [("오늘", 0), ("내일", 1)].map { label, offset in
         let date = cal.date(byAdding: .day, value: offset, to: now) ?? now
         let title = "\(label) \(titleFmt.string(from: date))"
-        guard let day = days[keyFmt.string(from: date)], let code = day["code"], !code.isEmpty else {
-            return DayShift(title: title, code: "-", sub: "근무 미입력", bg: Color(white: 0.95), fg: .gray)
+        let day = days[keyFmt.string(from: date)]
+        let notes = day?["notes"] ?? ""
+        guard let day, let code = day["code"], !code.isEmpty else {
+            return DayShift(title: title, code: "-", sub: "근무 미입력", bg: Color(white: 0.95), fg: .gray, notes: notes)
         }
         let time = day["time"] ?? ""
         return DayShift(
@@ -68,7 +72,8 @@ private func loadDays(now: Date) -> [DayShift] {
             code: code,
             sub: time.isEmpty ? (day["label"] ?? "") : time,
             bg: Color(hex: day["bg"], fallback: Color(white: 0.95)),
-            fg: Color(hex: day["fg"], fallback: .gray)
+            fg: Color(hex: day["fg"], fallback: .gray),
+            notes: notes
         )
     }
 }
@@ -115,6 +120,12 @@ struct DayView: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.gray)
                 .lineLimit(1)
+            if !day.notes.isEmpty {
+                Text(day.notes)
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(red: 0.2, green: 0.25, blue: 0.33))
+                    .lineLimit(1)
+            }
         }
     }
 }

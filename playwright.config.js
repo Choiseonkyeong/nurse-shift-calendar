@@ -7,7 +7,8 @@ export default defineConfig({
   expect: { timeout: 15000 },
   fullyParallel: true,
   workers: process.env.CI ? 2 : 3,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // CI: 실패한 테스트 이름·이유를 PR 체크 화면(주석)에 바로 표시 ('github')
+  reporter: process.env.CI ? [['list'], ['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://localhost:4173',
     viewport: { width: 375, height: 740 },

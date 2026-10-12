@@ -26,7 +26,8 @@ import {
   wakeAlarmOf,
   shiftTime,
   buildWakeAlarms,
-  buildReminders
+  buildReminders,
+  itemsLine
 } from '../lib/localReminders';
 import { shareMonthImage } from '../lib/shareCalendar';
 import { alarmStatus, openAlarmSettings } from '../lib/shiftAlarm';
@@ -398,7 +399,8 @@ export default function MyShiftTab({
           startTimes: toStartTimes(shiftConfigs.shiftTimes),
           shiftTypes,
           minutesBefore,
-          userName
+          userName,
+          dayNotes
         });
         toast(`🔔 근무 시작 ${formatLead(minutesBefore)} 전 알림이 설정되었습니다.\n앱을 꺼 둬도 알림이 도착합니다.`, 'success');
       } else {
@@ -444,7 +446,7 @@ export default function MyShiftTab({
       return;
     }
     try {
-      const res = await syncShiftAlarms({ enabled: true, myShifts, byShift, startTimes: alarmStartTimes, shiftTypes });
+      const res = await syncShiftAlarms({ enabled: true, myShifts, byShift, startTimes: alarmStartTimes, shiftTypes, dayNotes });
       if (!res?.supported) {
         toast('이 폰에서는 근무 알람을 쓸 수 없어요. (아이폰은 iOS 26 이상)\n대신 알림을 켜 주세요.', 'error');
         return;
@@ -543,14 +545,14 @@ export default function MyShiftTab({
 
       timers.push(setTimeout(() => {
         new Notification(userName ? `⏰ [근무 알림] ${userName} 님!` : '⏰ 근무 알림', {
-          body: `잠시 후 (${startTimeStr}) ${code} 근무가 시작됩니다. 준비해 주세요!`,
+          body: `잠시 후 (${startTimeStr}) ${code} 근무가 시작됩니다. 준비해 주세요!${itemsLine(dayNotes, toDateKey(day))}`,
           icon: '/icon-192.png'
         });
       }, delay));
     });
 
     return () => timers.forEach(clearTimeout);
-  }, [alarmSettings?.enabled, alarmSettings?.minutesBefore, myShifts, shiftConfigs.shiftTimes, shiftTypes, userName, dayTick, alarmPerm]);
+  }, [alarmSettings?.enabled, alarmSettings?.minutesBefore, myShifts, shiftConfigs.shiftTimes, shiftTypes, userName, dayTick, alarmPerm, dayNotes]);
 
   // 이번 달 근무표 이미지 공유/저장
   // 정산 시작일이 1일이 아니면 '이번 달 / 정산 기간' 중 고르는 창을 먼저 보여 줌
