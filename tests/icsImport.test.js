@@ -89,6 +89,15 @@ describe('exportData', () => {
     expect(r.notes).toEqual(notes);
   });
 
+  it('일정 여러 개: .ics 는 일정마다 따로(색 표시는 빼고), 다시 가져오면 한 줄씩 / CSV 는 한 칸에 한 줄로', () => {
+    const many = { '2026-10-03': '{{r}}교육\n회식' };
+    const ics = toIcs({}, many, new Date('2026-09-28T00:00:00Z'));
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+    expect(ics).not.toContain('{{r}}');
+    expect(parseIcs(ics).notes).toEqual({ '2026-10-03': '교육\n회식' });
+    expect(toCsv({}, many)).toContain('2026-10-03,토,,,교육 · 회식');
+  });
+
   it('CSV: BOM·요일·따옴표 이스케이프', () => {
     const csv = toCsv(shifts, notes, [{ code: 'D', label: 'Day (데이)' }]);
     expect(csv.startsWith('﻿날짜,요일,근무,근무 이름,메모')).toBe(true);

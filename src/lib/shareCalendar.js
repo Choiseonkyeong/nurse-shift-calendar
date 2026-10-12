@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { findShiftType } from './shiftTypes';
 import { getHoliday } from '../utils/holidays';
 import { fontStack } from './fontPref';
+import { noteItems, parseItem } from './dayItems';
 
 const pad = (n) => String(n).padStart(2, '0');
 // 앱에서 고른 글꼴로 그림 그리기 (설정 › 글꼴)
@@ -28,8 +29,10 @@ const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDat
 /**
  * 근무 달력 → canvas (흰 바탕, 근무 있는 칸은 근무 색으로 채움)
  * start~end 기간을 주 단위로 그림. 달이 바뀌는 날·첫날은 '10/1' 처럼 월을 함께 표시
+ * dayNotes 를 주면 칸 아래에 일정도 그림 (일정이 많은 주는 그만큼 칸이 길어짐)
  */
-export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts = {}, shiftTypes = [] }) {
+const ITEM_H = 32;
+export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts = {}, shiftTypes = [], dayNotes = null }) {
   const W = 1080;
   const PAD = 48;
   const cellW = (W - PAD * 2) / 7;
@@ -39,7 +42,18 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
   const offset = first.getDay();
   const weeks = Math.ceil((offset + days) / 7);
   const top = 236;
-  const H = top + weeks * cellH + 190;
+  // 주마다 높이: 일정이 가장 많은 날에 맞춤
+  const dayKey = (i) => toKey(new Date(first.getFullYear(), first.getMonth(), first.getDate() + i));
+  const itemsOf = (i) => (dayNotes ? noteItems(dayNotes[dayKey(i)]) : []);
+  const itemsTop = (i) => (getHoliday(dayKey(i)) ? 146 : 122);
+  const weekH = Array.from({ length: weeks }, () => cellH);
+  for (let i = 0; i < days; i++) {
+    const n = itemsOf(i).length;
+    if (n) weekH[Math.floor((offset + i) / 7)] = Math.max(weekH[Math.floor((offset + i) / 7)], itemsTop(i) + n * ITEM_H + 12);
+  }
+  const weekY = weekH.reduce((acc, h, w) => [...acc, acc[w] + h], [top]);
+  const gridBottom = weekY[weeks];
+  const H = gridBottom + 190;
 
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -76,7 +90,9 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
     const idx = offset + i;
     const dow = idx % 7;
     const x = PAD + dow * cellW;
-    const y = top + Math.floor(idx / 7) * cellH;
+    const week = Math.floor(idx / 7);
+    const y = weekY[week];
+    const rowH = weekH[week];
     const code = myShifts[key];
     const holiday = getHoliday(key);
     const d = date.getDate();
@@ -85,7 +101,7 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
     // 근무 있는 날은 칸 전체를 근무 바탕색으로 (앱 달력과 같게)
     if (t) {
       ctx.fillStyle = t.bg;
-      roundRect(ctx, x + 5, y + 8, cellW - 10, cellH - 12, 22);
+      roundRect(ctx, x + 5, y + 8, cellW - 10, rowH - 12, 22);
       ctx.fill();
     }
 
@@ -104,11 +120,29 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
       ctx.font = `700 ${code.length > 3 ? 26 : code.length > 1 ? 34 : 44}px ${font()}`;
       ctx.fillText(code, x + cellW / 2, y + 98);
     }
+
+    // 일정: 칸 폭에 맞춰 자른 글자 + 고른 색 바탕
+    itemsOf(i).forEach((line, n) => {
+      const { text, hex } = parseItem(line);
+      const iy = y + itemsTop(i) + n * ITEM_H;
+      ctx.globalAlpha = hex ? 0.16 : 0.07;
+      ctx.fillStyle = hex || '#0F172A';
+      roundRect(ctx, x + 10, iy, cellW - 20, ITEM_H - 4, 8);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = hex || '#334155';
+      ctx.font = `500 19px ${font()}`;
+      ctx.textAlign = 'left';
+      let shown = text;
+      while (shown.length > 1 && ctx.measureText(shown).width > cellW - 32) shown = shown.slice(0, -1);
+      ctx.fillText(shown, x + 16, iy + 21);
+      ctx.textAlign = 'center';
+    });
   }
 
   // 근무 요약: 'D 8' 처럼 코드(색) + 횟수
   let cx = PAD;
-  const cy = top + weeks * cellH + 36;
+  const cy = gridBottom + 36;
   ctx.textAlign = 'left';
   shiftTypes
     .filter((t) => counts[t.code])

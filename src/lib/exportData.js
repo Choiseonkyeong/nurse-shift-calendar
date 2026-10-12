@@ -1,6 +1,8 @@
 // src/lib/exportData.js
 // 근무·메모 내보내기: CSV(엑셀) / iCalendar(.ics, 구글·애플 캘린더) — .ics 는 앱의 가져오기와 호환
 
+import { noteTexts } from './dayItems';
+
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
 const sortedDates = (myShifts, dayNotes) =>
@@ -22,7 +24,7 @@ export function toCsv(myShifts = {}, dayNotes = {}, shiftTypes = []) {
   sortedDates(myShifts, dayNotes).forEach((k) => {
     const [y, m, d] = k.split('-').map(Number);
     const code = myShifts[k] || '';
-    rows.push([k, DOW[new Date(y, m - 1, d).getDay()], code, code ? label(code) : '', dayNotes[k] || '']);
+    rows.push([k, DOW[new Date(y, m - 1, d).getDay()], code, code ? label(code) : '', noteTexts(dayNotes[k]).join(' · ')]); // 일정 여러 개는 한 칸에 한 줄로
   });
   return `\uFEFF${rows.map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`;
 }
@@ -67,7 +69,8 @@ export function toIcs(myShifts = {}, dayNotes = {}, now = new Date()) {
   };
   sortedDates(myShifts, dayNotes).forEach((k) => {
     if (myShifts[k]) event(k, `shift-${k}`, myShifts[k]);
-    if (dayNotes[k]) event(k, `note-${k}`, dayNotes[k]);
+    // 일정마다 따로 (구글·애플 캘린더에서 하나씩 보이게)
+    noteTexts(dayNotes[k]).forEach((text, i) => event(k, i ? `note-${k}-${i}` : `note-${k}`, text));
   });
   lines.push('END:VCALENDAR');
   return `${lines.join('\r\n')}\r\n`;

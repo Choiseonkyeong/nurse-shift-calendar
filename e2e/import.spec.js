@@ -179,6 +179,25 @@ test('근무표 이미지 공유(웹: 파일 저장): 이번 달 전체 또는 �
   expect(img2.suggestedFilename()).toBe('shift-2026-09-period.png');
 });
 
+test('그 달에 일정이 있으면 "일정·메모도 넣기"를 고를 수 있고 (기억함), 넣으면 그림이 더 길어짐', async ({ page }) => {
+  await openApp(page, { local: { shift_configs: { startDay: 1 }, my_shift_data: { '2026-09-10': 'D' }, day_notes: { '2026-09-10': '{{r}}교육\n회식\n은행\n택배' } } });
+  const share = page.getByRole('button', { name: '근무표 이미지 공유' });
+  const pick = page.getByRole('dialog', { name: '근무표 공유' });
+  const download = async () => {
+    const [img] = await Promise.all([page.waitForEvent('download'), pick.getByRole('button', { name: /9월 전체/ }).click()]);
+    return fs.readFileSync(await img.path()).readUInt32BE(20); // PNG 높이
+  };
+  await share.click();
+  await expect(pick.getByRole('switch', { name: '일정·메모도 넣기' })).toHaveAttribute('aria-checked', 'false');
+  const plain = await download();
+  await share.click();
+  await pick.getByRole('switch', { name: '일정·메모도 넣기' }).click();
+  const withNotes = await download();
+  expect(withNotes).toBeGreaterThan(plain + 100);
+  await share.click();
+  await expect(pick.getByRole('switch', { name: '일정·메모도 넣기' })).toHaveAttribute('aria-checked', 'true');
+});
+
 test('정산 시작일이 1일이면 고르는 창 없이 바로 그 달 이미지', async ({ page }) => {
   await openApp(page, { local: { shift_configs: { startDay: 1 } } });
   const [img] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '근무표 이미지 공유' }).click()]);

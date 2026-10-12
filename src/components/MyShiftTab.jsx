@@ -9,7 +9,7 @@ import { useShiftTypes, shiftTextVars, findShiftType, shortLabel } from '../lib/
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
 import DayItemsEditor from './DayItemsEditor';
-import { noteItems } from '../lib/dayItems';
+import { noteItems, parseItem } from '../lib/dayItems';
 import MonthPicker, { monthPickKey } from './MonthPicker';
 import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey, getTodayDateObj } from '../utils/dateUtils';
@@ -294,7 +294,8 @@ export default function MyShiftTab({
   onCloseImportBanner,
   onResolveUncertain,
   onOpenImport,
-  loadingFromServer = false
+  loadingFromServer = false,
+  privacyBlur = false
 }) {
   // 방금 가져온 근무 중 인식이 불확실한 날짜 (달력에 노란 테두리)
   const uncertainSet = new Set(importBanner?.uncertain || []);
@@ -558,11 +559,32 @@ export default function MyShiftTab({
   const payStartDay = Number(shiftConfigs.startDay || 26);
   const sharePeriod = payStartDay === 1 ? null : payPeriod(year, month, payStartDay);
   const shortDate = (k) => `${Number(k.slice(5, 7))}.${Number(k.slice(8))}`;
+  // 이번 달·정산 기간에 일정이 있으면 '일정도 넣기'를 고를 수 있게 창을 보여 줌 (고른 값은 기억)
+  const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+  const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+  const shareFrom = sharePeriod && sharePeriod.start < monthStart ? sharePeriod.start : monthStart;
+  const shareTo = sharePeriod && sharePeriod.end > monthEnd ? sharePeriod.end : monthEnd;
+  const shareHasNotes = Object.keys(dayNotes).some((k) => k >= shareFrom && k <= shareTo && noteItems(dayNotes[k]).length);
+  const [shareNotes, setShareNotes] = useState(() => {
+    try {
+      return localStorage.getItem('share_notes') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
+  const toggleShareNotes = () => {
+    setShareNotes(!shareNotes);
+    try {
+      localStorage.setItem('share_notes', shareNotes ? '0' : '1');
+    } catch (e) {
+      /* 무시 */
+    }
+  };
   const handleShareImage = async (period = null) => {
     setIsSharePickOpen(false);
     try {
       setIsSharing(true);
-      await shareMonthImage({ year, month, period, myShifts, shiftTypes, userName });
+      await shareMonthImage({ year, month, period, myShifts, shiftTypes, userName, dayNotes: shareHasNotes && shareNotes ? dayNotes : null });
     } catch (err) {
       toast(`이미지 공유 실패\n${errorText(err)}`, 'error');
     } finally {
@@ -815,7 +837,7 @@ export default function MyShiftTab({
                 type="button"
                 key={item.dateKey}
                 onClick={() => handleDayClick(item.dateKey)}
-                aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${items.length ? ` 일정 ${items.length}개: ${items.join(', ')}` : ''}`}
+                aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${items.length ? ` 일정 ${items.length}개${privacyBlur ? '' : `: ${items.map((l) => parseItem(l).text).join(', ')}`}` : ''}`}
                 aria-pressed={isSelected}
                 style={shift ? shiftTextVars(findType(shift)) : undefined}
                 className={`relative min-h-[66px] w-full min-w-0 pt-1 ${items.length ? 'pb-1' : ''} rounded-xl flex flex-col items-center gap-1.5 cursor-pointer transition-colors ${
@@ -844,12 +866,21 @@ export default function MyShiftTab({
                   holidayShort && <span className="text-[9px] text-rose-400 leading-none whitespace-nowrap overflow-hidden max-w-full">{holidayShort}</span>
                 )}
                 {items.length > 0 && (
-                  <span className="w-full px-[2px] flex flex-col gap-[2px]" aria-hidden="true">
-                    {items.map((text, i) => (
-                      <span key={i} className="block w-full overflow-hidden whitespace-nowrap rounded-[4px] bg-slate-900/[.07] px-[2px] text-left text-[10px] leading-[14px] tracking-[-0.04em] text-slate-700">
-                        {text}
-                      </span>
-                    ))}
+                  <span className={`w-full px-[2px] flex flex-col gap-[2px] ${privacyBlur ? 'blur-[3px] select-none' : ''}`} aria-hidden="true">
+                    {items.map((line, i) => {
+                      const { text, hex } = parseItem(line);
+                      return (
+                        <span
+                          key={i}
+                          style={hex ? { '--ic': hex } : undefined}
+                          className={`block w-full overflow-hidden whitespace-nowrap rounded-[4px] px-[2px] text-left text-[10px] leading-[14px] tracking-[-0.04em] ${
+                            hex ? 'item-chip' : 'bg-slate-900/[.07] text-slate-700'
+                          }`}
+                        >
+                          {text}
+                        </span>
+                      );
+                    })}
                   </span>
                 )}
               </button>
@@ -886,13 +917,16 @@ export default function MyShiftTab({
                 )}
               </p>
               {items.length ? (
-                <ul className="mt-1.5 space-y-1">
-                  {items.map((text, i) => (
-                    <li key={i} className="flex gap-2 text-[15px] text-slate-700 break-words">
-                      <span className="mt-[9px] w-1 h-1 shrink-0 rounded-full bg-slate-400" aria-hidden="true" />
-                      <span className="min-w-0">{text}</span>
-                    </li>
-                  ))}
+                <ul className={`mt-1.5 space-y-1 ${privacyBlur ? 'blur-[5px] select-none' : ''}`}>
+                  {items.map((line, i) => {
+                    const { text, hex } = parseItem(line);
+                    return (
+                      <li key={i} className="flex gap-2 text-[15px] text-slate-700 break-words">
+                        <span className={`mt-[7px] w-2 h-2 shrink-0 rounded-full ${hex ? '' : 'bg-slate-300'}`} style={hex ? { backgroundColor: hex } : undefined} aria-hidden="true" />
+                        <span className="min-w-0">{text}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="text-sm mt-1 text-slate-300">일정·메모가 없어요. 눌러서 추가하세요.</p>
@@ -923,7 +957,7 @@ export default function MyShiftTab({
         ))}
         <button
           type="button"
-          onClick={() => (sharePeriod ? setIsSharePickOpen(true) : handleShareImage())}
+          onClick={() => (sharePeriod || shareHasNotes ? setIsSharePickOpen(true) : handleShareImage())}
           disabled={isSharing}
           aria-label="근무표 이미지 공유"
           className="flex flex-col items-center gap-1 py-2 rounded-xl cursor-pointer active:bg-slate-50"
@@ -1055,15 +1089,33 @@ export default function MyShiftTab({
         <Modal onClose={() => setIsSharePickOpen(false)} label="근무표 공유">
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl">
             <div className="flex justify-between items-center">
-              <h3 className="text-[20px] font-bold text-slate-900">어느 기간을 보낼까요?</h3>
+              <h3 className="text-[20px] font-bold text-slate-900">{sharePeriod ? '어느 기간을 보낼까요?' : '근무표 공유'}</h3>
               <button type="button" onClick={() => setIsSharePickOpen(false)} aria-label="닫기" className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            {shareHasNotes && (
+              <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[15px] font-semibold text-slate-900">일정·메모도 넣기</span>
+                  <span className="block text-[12px] text-slate-500">끄면 근무만 보여요 (메모는 나만 보기)</span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={shareNotes}
+                  aria-label="일정·메모도 넣기"
+                  onClick={toggleShareNotes}
+                  className={`relative shrink-0 w-12 h-7 rounded-full transition-colors cursor-pointer ${shareNotes ? 'bg-blue-600' : 'bg-slate-300'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${shareNotes ? 'translate-x-5' : ''}`} />
+                </button>
+              </div>
+            )}
+            <div className={`grid gap-2 ${sharePeriod ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {[
                 { key: 'month', name: `${month}월 전체`, range: `${month}.1 ~ ${month}.${new Date(year, month, 0).getDate()}`, period: null },
-                { key: 'period', name: '정산 기간', range: `${shortDate(sharePeriod?.start || '')} ~ ${shortDate(sharePeriod?.end || '')}`, period: sharePeriod }
+                ...(sharePeriod ? [{ key: 'period', name: '정산 기간', range: `${shortDate(sharePeriod.start)} ~ ${shortDate(sharePeriod.end)}`, period: sharePeriod }] : [])
               ].map((o) => (
                 <button
                   key={o.key}
