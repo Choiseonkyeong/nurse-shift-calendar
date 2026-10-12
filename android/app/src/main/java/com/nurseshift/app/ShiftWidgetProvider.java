@@ -8,6 +8,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.view.View;
 import android.widget.RemoteViews;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -15,8 +16,9 @@ import java.util.Locale;
 import org.json.JSONObject;
 
 /**
- * 홈 화면 위젯: 오늘 / 내일 근무.
- * 데이터: SharedPreferences(shift_widget).data = {"days":{"2026-09-28":{"code":"D","label":"...","bg":"#FEF08A","fg":"#854D0E","time":"07:00-15:00"}}}
+ * 홈 화면 위젯: 오늘 / 내일 근무 + 그날 일정.
+ * 데이터: SharedPreferences(shift_widget).data = {"days":{"2026-09-28":{"code":"D","label":"...","bg":"#FEF08A","fg":"#854D0E","time":"07:00-15:00","notes":"교육, 회식"}}}
+ * (근무 없이 일정만 있는 날은 code 가 "")
  * 자정마다 스스로 갱신해 앱을 열지 않아도 날짜가 넘어감.
  */
 public class ShiftWidgetProvider extends AppWidgetProvider {
@@ -92,9 +94,9 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
         }
 
         Calendar cal = Calendar.getInstance();
-        fillDay(views, days, cal, "오늘", R.id.day1_title, R.id.day1_code, R.id.day1_time);
+        fillDay(views, days, cal, "오늘", R.id.day1_title, R.id.day1_code, R.id.day1_time, R.id.day1_notes);
         cal.add(Calendar.DAY_OF_MONTH, 1);
-        fillDay(views, days, cal, "내일", R.id.day2_title, R.id.day2_code, R.id.day2_time);
+        fillDay(views, days, cal, "내일", R.id.day2_title, R.id.day2_code, R.id.day2_time, R.id.day2_notes);
 
         Intent open = new Intent(context, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -103,13 +105,16 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
         return views;
     }
 
-    private static void fillDay(RemoteViews views, JSONObject days, Calendar cal, String label, int titleId, int codeId, int timeId) {
+    private static void fillDay(RemoteViews views, JSONObject days, Calendar cal, String label, int titleId, int codeId, int timeId, int notesId) {
         String key = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.getTime());
         String title = label + " " + (cal.get(Calendar.MONTH) + 1) + "/" + cal.get(Calendar.DAY_OF_MONTH) + " (" + DOW[cal.get(Calendar.DAY_OF_WEEK) - 1] + ")";
         views.setTextViewText(titleId, title);
 
         JSONObject day = days.optJSONObject(key);
-        if (day == null) {
+        String notes = day == null ? "" : day.optString("notes", "");
+        views.setTextViewText(notesId, notes);
+        views.setViewVisibility(notesId, notes.isEmpty() ? View.GONE : View.VISIBLE);
+        if (day == null || day.optString("code", "").isEmpty()) {
             views.setTextViewText(codeId, "-");
             views.setTextColor(codeId, Color.parseColor("#94A3B8"));
             views.setInt(codeId, "setBackgroundColor", Color.parseColor("#F1F5F9"));

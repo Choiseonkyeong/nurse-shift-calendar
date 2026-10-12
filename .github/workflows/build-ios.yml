@@ -28,7 +28,7 @@ concurrency:
 jobs:
   # 비싼 macOS 빌드 전에 실행할지만 우분투에서 판단
   gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       run: ${{ steps.check.outputs.run }}
     steps:
@@ -54,9 +54,9 @@ jobs:
       ADMOB_APP_ID_IOS: ${{ secrets.ADMOB_APP_ID_IOS }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -113,7 +113,7 @@ jobs:
 
       - name: Upload IPA
         if: env.ASC_KEY_P8_BASE64 != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: app-ios-${{ github.run_number }}
           path: ${{ runner.temp }}/export/*.ipa

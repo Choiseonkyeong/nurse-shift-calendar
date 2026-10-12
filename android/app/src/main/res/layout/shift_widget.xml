@@ -26,7 +26,7 @@
             android:id="@+id/day1_code"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="3dp"
             android:minWidth="64dp"
             android:gravity="center"
             android:paddingLeft="10dp"
@@ -40,10 +40,24 @@
             android:id="@+id/day1_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:maxLines="1"
             android:textColor="#64748B"
             android:textSize="11sp" />
+
+        <!-- 그날 일정 (없으면 숨김) -->
+        <TextView
+            android:id="@+id/day1_notes"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:paddingLeft="4dp"
+            android:paddingRight="4dp"
+            android:textColor="#334155"
+            android:textSize="10sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <View
@@ -72,7 +86,7 @@
             android:id="@+id/day2_code"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="3dp"
             android:minWidth="64dp"
             android:gravity="center"
             android:paddingLeft="10dp"
@@ -86,9 +100,23 @@
             android:id="@+id/day2_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:maxLines="1"
             android:textColor="#64748B"
             android:textSize="11sp" />
+
+        <!-- 그날 일정 (없으면 숨김) -->
+        <TextView
+            android:id="@+id/day2_notes"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:paddingLeft="4dp"
+            android:paddingRight="4dp"
+            android:textColor="#334155"
+            android:textSize="10sp"
+            android:visibility="gone" />
     </LinearLayout>
 </LinearLayout>

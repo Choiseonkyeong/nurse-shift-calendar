@@ -85,6 +85,12 @@ describe('위젯 데이터', () => {
     const data = buildWidgetData({ '2026-10-20': 'D', '2026-11-27': 'N' }, DEFAULT_SHIFT_TYPES, new Date(2026, 8, 28));
     expect(Object.keys(data.days)).toEqual(['2026-10-20', '2026-11-27']);
   });
+  it('그날 일정도 함께 (색 표시 빼고), 근무가 없는 날도 일정이 있으면 넣음', () => {
+    const data = buildWidgetData({ '2026-09-28': 'D' }, DEFAULT_SHIFT_TYPES, new Date(2026, 8, 28), { '2026-09-28': '{{r}}교육\n회식', '2026-09-29': '병원' });
+    expect(data.days['2026-09-28']).toMatchObject({ code: 'D', notes: '교육, 회식' });
+    expect(data.days['2026-09-29']).toMatchObject({ code: '', notes: '병원' });
+    expect(data.days['2026-09-28']).not.toHaveProperty('notes', '');
+  });
 });
 
 import { decideSettingsSync } from '../src/lib/settingsSync';

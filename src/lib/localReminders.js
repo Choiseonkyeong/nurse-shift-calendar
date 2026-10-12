@@ -3,6 +3,7 @@
 //  - 앞으로 REMINDER_DAYS 일의 근무를 예약하고, 근무·근무 시간·알림 설정이 바뀌면 다시 예약
 //  - iOS 는 예약 가능한 알림이 64개까지라 최대 MAX_REMINDERS 개만
 import { Capacitor } from '@capacitor/core';
+import { noteTexts } from './dayItems';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { scheduleAlarms, cancelAlarms } from './shiftAlarm';
 
@@ -30,7 +31,7 @@ export function formatLead(minutes) {
  * @param shiftTypes   [{ code, label, kind }] — 근무(work)만 알림
  * @returns [{ id, at: Date, title, body, dateKey, code }]
  */
-export function buildReminders({ myShifts = {}, startTimes = {}, shiftTypes = [], minutesBefore = 60, userName = '', now = new Date(), days = REMINDER_DAYS }) {
+export function buildReminders({ myShifts = {}, startTimes = {}, shiftTypes = [], minutesBefore = 60, userName = '', dayNotes = {}, now = new Date(), days = REMINDER_DAYS }) {
   const types = new Map(shiftTypes.map((t) => [t.code, t]));
   const out = [];
   for (let i = 0; i <= days && out.length < MAX_REMINDERS; i++) {
@@ -48,12 +49,21 @@ export function buildReminders({ myShifts = {}, startTimes = {}, shiftTypes = []
       id: Number(dateKey.replace(/-/g, '')), // 날짜마다 하나 (예: 20261005)
       at,
       title: `⏰ ${formatLead(minutesBefore)} 뒤 ${code} 근무 시작`,
-      body: `${userName ? `${userName} 님, ` : ''}${hhmm}에 ${type.label || code} 근무가 시작됩니다. 준비해 주세요!`,
+      body: `${userName ? `${userName} 님, ` : ''}${hhmm}에 ${type.label || code} 근무가 시작됩니다. 준비해 주세요!${itemsLine(dayNotes, dateKey)}`,
       dateKey,
       code
     });
   }
   return out;
+}
+
+/** 알림 본문에 붙일 그날 일정: '\n오늘 일정: 교육, 회식' (없으면 '') */
+export function itemsLine(dayNotes, dateKey) {
+  const texts = noteTexts(dayNotes?.[dateKey]);
+  if (!texts.length) return '';
+  let line = texts.join(', ');
+  if (line.length > 60) line = `${line.slice(0, 58)}…`;
+  return `\n오늘 일정: ${line}`;
 }
 
 /**
@@ -162,7 +172,7 @@ export function shiftTime(hhmm, deltaMin = 0) {
  * 그날 근무가 byShift 에 시각이 있는 근무면 그 시각마다 알람 (쉬는 날도 시각을 넣으면 울림)
  * @returns [{ id, at, title, body, dateKey, code }] 시간순, 최대 MAX_REMINDERS 개
  */
-export function buildWakeAlarms({ myShifts = {}, byShift = {}, startTimes = {}, shiftTypes = [], now = new Date(), days = REMINDER_DAYS }) {
+export function buildWakeAlarms({ myShifts = {}, byShift = {}, startTimes = {}, shiftTypes = [], dayNotes = {}, now = new Date(), days = REMINDER_DAYS }) {
   const types = new Map(shiftTypes.map((t) => [t.code, t]));
   const out = [];
   for (let i = 0; i <= days && out.length < MAX_REMINDERS; i++) {
@@ -181,7 +191,7 @@ export function buildWakeAlarms({ myShifts = {}, byShift = {}, startTimes = {}, 
         id: Number(dateKey.replace(/-/g, '')) * 10 + idx, // 날짜·순서마다 하나 (예: 202610050)
         at,
         title: `⏰ ${code} 근무 날 알람`,
-        body: start ? `오늘 ${label} · ${start} 근무 시작` : `오늘 ${label}`,
+        body: `${start ? `오늘 ${label} · ${start} 근무 시작` : `오늘 ${label}`}${itemsLine(dayNotes, dateKey)}`,
         dateKey,
         code
       });

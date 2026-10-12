@@ -24,7 +24,7 @@ const LN = {
 };
 vi.mock('@capacitor/local-notifications', () => ({ LocalNotifications: LN }));
 
-const { buildReminders, syncLocalReminders, syncShiftAlarms, wakeAlarmOf, buildWakeAlarms, shiftTime, enableLocalReminders, getAlarmPermission, MAX_REMINDERS, REMINDER_DAYS } = await import(
+const { buildReminders, syncLocalReminders, syncShiftAlarms, wakeAlarmOf, buildWakeAlarms, shiftTime, itemsLine, enableLocalReminders, getAlarmPermission, MAX_REMINDERS, REMINDER_DAYS } = await import(
   '../src/lib/localReminders'
 );
 
@@ -38,6 +38,16 @@ const START = { D: '07:30', N: '21:30' };
 const NOW = new Date(2026, 8, 28, 9, 0); // 9/28 09:00
 
 describe('buildReminders (폰 안에서 예약할 근무 알림)', () => {
+  it('그날 일정이 있으면 알림·알람 본문에 "오늘 일정" (색 표시 빼고, 길면 줄임)', () => {
+    const dayNotes = { '2026-09-29': '{{r}}교육\n회식' };
+    const [r] = buildReminders({ myShifts: { '2026-09-29': 'D' }, startTimes: START, shiftTypes: TYPES, minutesBefore: 60, dayNotes, now: NOW });
+    expect(r.body).toMatch(/근무가 시작됩니다\. 준비해 주세요!\n오늘 일정: 교육, 회식$/);
+    const [a] = buildWakeAlarms({ myShifts: { '2026-09-29': 'D' }, byShift: { D: ['05:30'] }, startTimes: START, shiftTypes: TYPES, dayNotes, now: NOW });
+    expect(a.body).toBe('오늘 Day (데이) · 07:30 근무 시작\n오늘 일정: 교육, 회식');
+    expect(itemsLine({}, '2026-09-29')).toBe('');
+    expect(itemsLine({ k: '가'.repeat(80) }, 'k')).toBe(`\n오늘 일정: ${'가'.repeat(58)}…`);
+  });
+
   it('근무만, 시작 N분 전 시각으로, 이미 지난 알림은 빼고', () => {
     const list = buildReminders({
       myShifts: { '2026-09-28': 'D', '2026-09-29': 'N', '2026-09-30': 'OFF', '2026-10-01': '연차', '2026-10-02': 'D' },
