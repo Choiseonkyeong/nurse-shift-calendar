@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { createFakeState } from './fakeSupabase.js';
 import { openApp, readLocal, tab, waitSaved } from './helpers.js';
 
-const day = (page, label) => page.getByRole('button', { name: new RegExp(`^${label} (?!\\()`) }); // 메모 버튼 "9월 5일 (토) 메모" 제외
+const day = (page, label) => page.getByRole('button', { name: new RegExp(`^${label} (?!\\()`) }); // 아래 일정 목록 버튼 "9월 5일 (토) 일정·메모" 제외
 
 test('첫 실행: 이름 입력 → 서버 연결 → 근무 입력이 서버에 저장', async ({ page }) => {
   const state = await openApp(page, { name: null });
@@ -324,4 +324,23 @@ test('설정 › 글꼴: 글꼴·글자 크기를 바꾸면 바로 바뀌고 다
   await page.reload();
   await expect.poll(bodyFont).toMatch(/^"Gowun Batang"/);
   await expect.poll(bodySize).toBe('17.28px');
+});
+
+test('일정 색 고르기, 보안 모드에서는 달력 칸·목록의 일정을 가림', async ({ page }) => {
+  await openApp(page, { local: { day_notes: { '2026-09-28': '교육\n회식' } } });
+  await page.getByRole('button', { name: /^9월 28일 \(/ }).click();
+  const dialog = page.getByRole('dialog', { name: '근무 직접 수정' });
+  await dialog.getByRole('button', { name: '교육 색 고르기' }).click();
+  await dialog.getByRole('radio', { name: '빨강' }).click();
+  await expect(dialog.getByRole('textbox', { name: '1번째 일정' })).toHaveValue('교육'); // 색 표시는 글자에 안 보임
+  await page.keyboard.press('Escape');
+  await expect.poll(async () => (await readLocal(page, 'day_notes'))['2026-09-28']).toBe('{{r}}교육\n회식');
+  const cell = page.getByRole('button', { name: /^9월 28일 (?!\()/ });
+  await expect(cell).toHaveAttribute('aria-label', /일정 2개: 교육, 회식/);
+
+  await tab(page, '설정').click();
+  await page.getByRole('button', { name: /보안 모드/ }).click();
+  await tab(page, '내 근무').click();
+  await expect(cell).toHaveAttribute('aria-label', /일정 2개$/); // 내용은 읽어 주지 않음
+  await expect(page.locator('ul.blur-\\[5px\\]')).toContainText('교육');
 });

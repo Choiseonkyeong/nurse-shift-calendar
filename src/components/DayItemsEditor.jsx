@@ -1,15 +1,16 @@
 import React, { useRef, useState } from 'react';
 import { GripVertical, Plus, X } from 'lucide-react';
-import { joinItems, moveItem, MAX_NOTE } from '../lib/dayItems';
+import { joinItems, moveItem, parseItem, formatItem, ITEM_COLORS, MAX_NOTE } from '../lib/dayItems';
 
 /**
- * 날짜 일정·메모 목록 편집: 추가 · 고치기 · 지우기 · 손잡이를 끌어 순서 바꾸기
+ * 날짜 일정·메모 목록 편집: 추가 · 고치기 · 지우기 · 색 고르기 · 손잡이를 끌어 순서 바꾸기
  * items 는 이 창 안에서만 들고 있다가 바뀔 때마다 onChange(글 하나) 로 저장
  */
 export default function DayItemsEditor({ initial = [], onChange }) {
   const [items, setItems] = useState(initial);
   const [draft, setDraft] = useState('');
   const [dragIdx, setDragIdx] = useState(null);
+  const [colorIdx, setColorIdx] = useState(null); // 색 고르기를 펼친 일정
   const listRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -24,6 +25,7 @@ export default function DayItemsEditor({ initial = [], onChange }) {
     const text = draft.trim();
     if (!text || text.length > room) return;
     update([...items, text]);
+    setColorIdx(null);
     setDraft('');
     inputRef.current?.focus();
   };
@@ -45,6 +47,7 @@ export default function DayItemsEditor({ initial = [], onChange }) {
       if (i > dragIdx && e.clientY > mid) to = Math.max(to, i);
     });
     if (to !== dragIdx) {
+      setColorIdx(null);
       update(moveItem(items, dragIdx, to));
       setDragIdx(to);
     }
@@ -54,6 +57,7 @@ export default function DayItemsEditor({ initial = [], onChange }) {
     const to = e.key === 'ArrowUp' ? idx - 1 : e.key === 'ArrowDown' ? idx + 1 : null;
     if (to === null || to < 0 || to >= items.length) return;
     e.preventDefault();
+    setColorIdx(null);
     update(moveItem(items, idx, to));
     requestAnimationFrame(() => listRef.current?.querySelectorAll('[data-grip]')[to]?.focus());
   };
@@ -67,47 +71,87 @@ export default function DayItemsEditor({ initial = [], onChange }) {
 
       {items.length > 0 && (
         <ul ref={listRef} className="rounded-xl bg-slate-100 divide-y divide-slate-200/70 overflow-hidden">
-          {items.map((text, i) => (
-            <li
-              key={i}
-              data-item-row
-              className={`flex items-center gap-1 pr-1 transition-colors ${dragIdx === i ? 'bg-blue-50 shadow-inner' : ''}`}
-            >
-              <button
-                type="button"
-                data-grip
-                aria-label={`${i + 1}번째 일정 순서 바꾸기 (위·아래 화살표)`}
-                onPointerDown={(e) => onGripDown(e, i)}
-                onPointerMove={onGripMove}
-                onPointerUp={onGripUp}
-                onPointerCancel={onGripUp}
-                onKeyDown={(e) => onGripKey(e, i)}
-                className="shrink-0 w-10 h-11 flex items-center justify-center text-slate-400 touch-none cursor-grab active:cursor-grabbing"
-              >
-                <GripVertical size={18} />
-              </button>
-              <input
-                value={text}
-                aria-label={`${i + 1}번째 일정`}
-                onChange={(e) => {
-                  const next = [...items];
-                  next[i] = e.target.value;
-                  setItems(next);
-                  onChange(joinItems(next));
-                }}
-                onBlur={() => !text.trim() && update(items.filter((_, j) => j !== i))}
-                className="flex-1 min-w-0 h-11 bg-transparent text-[15px] text-slate-800 outline-none"
-              />
-              <button
-                type="button"
-                aria-label={`${text} 지우기`}
-                onClick={() => update(items.filter((_, j) => j !== i))}
-                className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-200 cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </li>
-          ))}
+          {items.map((line, i) => {
+            const { text, color, hex } = parseItem(line);
+            const setLine = (next) => {
+              const list = [...items];
+              list[i] = next;
+              return list;
+            };
+            return (
+              <li key={i} data-item-row className={`transition-colors ${dragIdx === i ? 'bg-blue-50 shadow-inner' : ''}`}>
+                <div className="flex items-center gap-1 pr-1">
+                  <button
+                    type="button"
+                    data-grip
+                    aria-label={`${i + 1}번째 일정 순서 바꾸기 (위·아래 화살표)`}
+                    onPointerDown={(e) => onGripDown(e, i)}
+                    onPointerMove={onGripMove}
+                    onPointerUp={onGripUp}
+                    onPointerCancel={onGripUp}
+                    onKeyDown={(e) => onGripKey(e, i)}
+                    className="shrink-0 w-9 h-11 flex items-center justify-center text-slate-400 touch-none cursor-grab active:cursor-grabbing"
+                  >
+                    <GripVertical size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${text} 색 고르기`}
+                    aria-expanded={colorIdx === i}
+                    onClick={() => setColorIdx(colorIdx === i ? null : i)}
+                    className="shrink-0 w-7 h-11 flex items-center justify-center cursor-pointer"
+                  >
+                    <span className={`w-3.5 h-3.5 rounded-full ${hex ? '' : 'ring-2 ring-inset ring-slate-300'}`} style={hex ? { backgroundColor: hex } : undefined} />
+                  </button>
+                  <input
+                    value={text}
+                    aria-label={`${i + 1}번째 일정`}
+                    onChange={(e) => {
+                      const next = setLine(formatItem(e.target.value, color));
+                      setItems(next);
+                      onChange(joinItems(next));
+                    }}
+                    onBlur={() => !text.trim() && update(items.filter((_, j) => j !== i))}
+                    className="flex-1 min-w-0 h-11 bg-transparent text-[15px] text-slate-800 outline-none"
+                  />
+                  <button
+                    type="button"
+                    aria-label={`${text} 지우기`}
+                    onClick={() => {
+                      setColorIdx(null);
+                      update(items.filter((_, j) => j !== i));
+                    }}
+                    className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-200 cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                {colorIdx === i && (
+                  <div role="radiogroup" aria-label={`${text} 색`} className="flex items-center gap-2 pl-[4.5rem] pr-3 pb-3">
+                    {[{ key: '', hex: '', name: '색 없음' }, ...ITEM_COLORS].map((c) => (
+                      <button
+                        key={c.key || 'none'}
+                        type="button"
+                        role="radio"
+                        aria-checked={color === c.key}
+                        aria-label={c.name}
+                        onClick={() => {
+                          update(setLine(formatItem(text, c.key)));
+                          setColorIdx(null);
+                        }}
+                        className={`w-7 h-7 rounded-full flex items-center justify-center cursor-pointer ${color === c.key ? 'ring-2 ring-offset-2 ring-slate-400 ring-offset-slate-100' : ''} ${
+                          c.hex ? '' : 'bg-white ring-1 ring-inset ring-slate-300'
+                        }`}
+                        style={c.hex ? { backgroundColor: c.hex } : undefined}
+                      >
+                        {!c.hex && <X size={12} className="text-slate-400" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

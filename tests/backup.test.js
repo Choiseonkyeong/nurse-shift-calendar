@@ -88,9 +88,10 @@ describe('계정 오류 안내', () => {
 });
 
 describe('.ics 특수문자 이스케이프', () => {
-  it('세미콜론·쉼표·역슬래시·줄바꿈', () => {
+  it('세미콜론·쉼표·역슬래시 (줄바꿈은 일정 나누기 → 따로)', () => {
     const ics = toIcs({}, { '2026-10-01': 'a;b,c\\d\ne' });
     const bs = '\\';
-    expect(ics).toContain(`SUMMARY:a${bs};b${bs},c${bs}${bs}d${bs}ne`);
+    expect(ics).toContain(`SUMMARY:a${bs};b${bs},c${bs}${bs}d\r\n`);
+    expect(ics).toContain('SUMMARY:e\r\n');
   });
 });

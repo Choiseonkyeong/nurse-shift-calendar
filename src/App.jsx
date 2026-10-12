@@ -930,6 +930,7 @@ export default function App() {
               onCloseImportBanner={() => setImportBanner(null)}
               onOpenImport={() => setActiveTab('import')}
               loadingFromServer={syncStatus === 'connecting'}
+              privacyBlur={privacyBlur}
               onResolveUncertain={(dateKey) =>
                 setImportBanner((b) => (b && b.uncertain.includes(dateKey) ? { ...b, uncertain: b.uncertain.filter((k) => k !== dateKey) } : b))
               }

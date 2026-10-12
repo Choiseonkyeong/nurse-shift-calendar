@@ -78,6 +78,16 @@ body {
   background-color: color-mix(in srgb, var(--fg) 30%, #0f172a);
 }
 
+/* 달력 칸 일정: 고른 색(--ic)을 옅은 바탕 + 진한 글자로 */
+.item-chip {
+  background-color: color-mix(in srgb, var(--ic) 16%, transparent);
+  color: color-mix(in srgb, var(--ic) 82%, black);
+}
+.dark .item-chip {
+  background-color: color-mix(in srgb, var(--ic) 32%, transparent);
+  color: color-mix(in srgb, var(--ic) 40%, white);
+}
+
 /* 다크 모드: 근무 색을 밝게 (색끼리 구분은 유지) */
 .dark .shift-text {
   color: color-mix(in srgb, var(--fg) 55%, white);
