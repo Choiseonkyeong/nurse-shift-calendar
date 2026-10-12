@@ -3,9 +3,11 @@
 import { Capacitor } from '@capacitor/core';
 import { findShiftType } from './shiftTypes';
 import { getHoliday } from '../utils/holidays';
+import { fontStack } from './fontPref';
 
 const pad = (n) => String(n).padStart(2, '0');
-const FONT = "'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif";
+// 앱에서 고른 글꼴로 그림 그리기 (설정 › 글꼴)
+const font = () => fontStack();
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -49,17 +51,17 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
 
   // 제목
   ctx.fillStyle = '#0F172A';
-  ctx.font = `700 54px ${FONT}`;
+  ctx.font = `700 54px ${font()}`;
   ctx.fillText(title, PAD, 96);
   if (subtitle) {
     ctx.fillStyle = '#64748B';
-    ctx.font = `500 30px ${FONT}`;
+    ctx.font = `500 30px ${font()}`;
     ctx.fillText(subtitle, PAD, 146);
   }
 
   // 요일
   const dows = ['일', '월', '화', '수', '목', '금', '토'];
-  ctx.font = `600 26px ${FONT}`;
+  ctx.font = `600 26px ${font()}`;
   ctx.textAlign = 'center';
   dows.forEach((d, i) => {
     ctx.fillStyle = i === 0 ? '#EF4444' : i === 6 ? '#2563EB' : '#94A3B8';
@@ -88,18 +90,18 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
     }
 
     ctx.textAlign = 'center';
-    ctx.font = `500 26px ${FONT}`;
+    ctx.font = `500 26px ${font()}`;
     ctx.fillStyle = holiday || dow === 0 ? '#EF4444' : dow === 6 ? '#2563EB' : '#334155';
     ctx.fillText(i === 0 || d === 1 ? `${date.getMonth() + 1}/${d}` : String(d), x + cellW / 2, y + 40);
     if (holiday) {
-      ctx.font = `500 17px ${FONT}`;
+      ctx.font = `500 17px ${font()}`;
       ctx.fillText(holiday.length > 5 ? `${holiday.slice(0, 5)}…` : holiday, x + cellW / 2, y + 128);
     }
 
     if (t) {
       counts[code] = (counts[code] || 0) + 1;
       ctx.fillStyle = t.fg;
-      ctx.font = `700 ${code.length > 3 ? 26 : code.length > 1 ? 34 : 44}px ${FONT}`;
+      ctx.font = `700 ${code.length > 3 ? 26 : code.length > 1 ? 34 : 44}px ${font()}`;
       ctx.fillText(code, x + cellW / 2, y + 98);
     }
   }
@@ -111,26 +113,26 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
   shiftTypes
     .filter((t) => counts[t.code])
     .forEach((t) => {
-      ctx.font = `700 28px ${FONT}`;
+      ctx.font = `700 28px ${font()}`;
       const cw = ctx.measureText(t.code).width;
-      ctx.font = `500 28px ${FONT}`;
+      ctx.font = `500 28px ${font()}`;
       const nw = ctx.measureText(String(counts[t.code])).width;
       const w = cw + nw + 50;
       if (cx + w > W - PAD) return;
       ctx.fillStyle = '#F8FAFC';
       roundRect(ctx, cx, cy, w, 56, 28);
       ctx.fill();
-      ctx.font = `700 28px ${FONT}`;
+      ctx.font = `700 28px ${font()}`;
       ctx.fillStyle = t.fg;
       ctx.fillText(t.code, cx + 20, cy + 38);
-      ctx.font = `500 28px ${FONT}`;
+      ctx.font = `500 28px ${font()}`;
       ctx.fillStyle = '#475569';
       ctx.fillText(String(counts[t.code]), cx + 30 + cw, cy + 38);
       cx += w + 10;
     });
 
   ctx.fillStyle = '#CBD5E1';
-  ctx.font = `500 22px ${FONT}`;
+  ctx.font = `500 22px ${font()}`;
   ctx.textAlign = 'right';
   ctx.fillText('근무표 앱', W - PAD, H - 36);
   return canvas;

@@ -218,7 +218,7 @@ export function parseIcs(text, shiftTypes = []) {
   const shifts = {};
   const notes = {};
   const addNote = (dateKey, str) => {
-    notes[dateKey] = notes[dateKey] ? `${notes[dateKey]} / ${str}` : str;
+    notes[dateKey] = notes[dateKey] ? `${notes[dateKey]}\n${str}` : str; // 한 줄 = 일정 하나
   };
 
   events.forEach((e) => {

@@ -8,6 +8,8 @@ import { useSwipe } from '../lib/swipe';
 import { useShiftTypes, shiftTextVars, findShiftType, shortLabel } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
+import DayItemsEditor from './DayItemsEditor';
+import { noteItems } from '../lib/dayItems';
 import MonthPicker, { monthPickKey } from './MonthPicker';
 import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey, getTodayDateObj } from '../utils/dateUtils';
@@ -799,22 +801,24 @@ export default function MyShiftTab({
         {/* 날짜: 근무 있는 날은 칸 전체를 근무 색으로 (한눈에 보이게) */}
         <div className="grid grid-cols-7 gap-1" {...monthSwipe}>
           {calendarDays.map((item, idx) => {
-            if (!item) return <div key={`empty_${idx}`} className="h-[66px]"></div>;
+            if (!item) return <div key={`empty_${idx}`} className="min-h-[66px]"></div>;
 
             const shift = myShifts[item.dateKey] || '';
             const isSelected = selectedDate === item.dateKey;
             const isToday = item.dateKey === todayKey;
             const holidayShort = getHoliday(item.dateKey) ? getHolidayShort(item.dateKey) : '';
+            // 일정은 개수 제한 없이 모두 보여 줌 (칸이 그만큼 길어짐)
+            const items = noteItems(dayNotes[item.dateKey]);
 
             return (
               <button
                 type="button"
                 key={item.dateKey}
                 onClick={() => handleDayClick(item.dateKey)}
-                aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${dayNotes[item.dateKey] ? ' 메모 있음' : ''}`}
+                aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${items.length ? ` 일정 ${items.length}개: ${items.join(', ')}` : ''}`}
                 aria-pressed={isSelected}
                 style={shift ? shiftTextVars(findType(shift)) : undefined}
-                className={`relative h-[66px] w-full min-w-0 pt-1 rounded-xl flex flex-col items-center gap-1.5 cursor-pointer transition-colors ${
+                className={`relative min-h-[66px] w-full min-w-0 pt-1 ${items.length ? 'pb-1' : ''} rounded-xl flex flex-col items-center gap-1.5 cursor-pointer transition-colors ${
                   shift ? 'shift-cell' : isSelected ? 'bg-slate-100' : 'active:bg-slate-50'
                 } ${
                   isSelected ? 'ring-2 ring-inset ring-blue-500' : uncertainSet.has(item.dateKey) ? `${shift ? '' : 'bg-amber-50 '}ring-2 ring-inset ring-amber-400` : ''
@@ -839,7 +843,15 @@ export default function MyShiftTab({
                 ) : (
                   holidayShort && <span className="text-[9px] text-rose-400 leading-none whitespace-nowrap overflow-hidden max-w-full">{holidayShort}</span>
                 )}
-                {dayNotes[item.dateKey] && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-amber-400" title="메모 있음" />}
+                {items.length > 0 && (
+                  <span className="w-full px-[2px] flex flex-col gap-[2px]" aria-hidden="true">
+                    {items.map((text, i) => (
+                      <span key={i} className="block w-full overflow-hidden whitespace-nowrap rounded-[4px] bg-slate-900/[.07] px-[2px] text-left text-[10px] leading-[14px] tracking-[-0.04em] text-slate-700">
+                        {text}
+                      </span>
+                    ))}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -850,7 +862,7 @@ export default function MyShiftTab({
       {!quickMode && (() => {
         const code = myShifts[selectedDate] || '';
         const t = code ? shiftTypes.find((x) => x.code === code) : null;
-        const note = dayNotes[selectedDate];
+        const items = noteItems(dayNotes[selectedDate]);
         return (
           <button
             type="button"
@@ -859,7 +871,7 @@ export default function MyShiftTab({
           >
             <div className="min-w-0">
               <p className="text-[13px] text-slate-400">
-                {formatDateKo(selectedDate)} 메모
+                {formatDateKo(selectedDate)} 일정·메모
                 {getHoliday(selectedDate) && <span className="ml-1.5 text-rose-400">· {getHoliday(selectedDate)}</span>}
               </p>
               <p className="text-[17px] font-semibold text-slate-900 mt-1">
@@ -873,11 +885,20 @@ export default function MyShiftTab({
                   <span className="text-slate-400 font-normal">근무 없음</span>
                 )}
               </p>
-              <p className={`text-sm mt-1 whitespace-pre-wrap break-words ${note ? 'text-slate-600' : 'text-slate-300'}`}>
-                {note || '메모가 없습니다. 눌러서 추가하세요.'}
-              </p>
+              {items.length ? (
+                <ul className="mt-1.5 space-y-1">
+                  {items.map((text, i) => (
+                    <li key={i} className="flex gap-2 text-[15px] text-slate-700 break-words">
+                      <span className="mt-[9px] w-1 h-1 shrink-0 rounded-full bg-slate-400" aria-hidden="true" />
+                      <span className="min-w-0">{text}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm mt-1 text-slate-300">일정·메모가 없어요. 눌러서 추가하세요.</p>
+              )}
             </div>
-            <span className="shrink-0 text-sm font-medium text-blue-600 pt-0.5">{note ? '수정' : '메모 추가'}</span>
+            <span className="shrink-0 text-sm font-medium text-blue-600 pt-0.5">{items.length ? '수정' : '일정 추가'}</span>
           </button>
         );
       })()}
@@ -971,17 +992,7 @@ export default function MyShiftTab({
               근무 비우기
             </button>
 
-            <label className="block space-y-1.5">
-              <span className="text-[13px] text-slate-400">메모 (나만 보기)</span>
-              <textarea
-                value={dayNotes[editingDateKey] || ''}
-                onChange={(e) => setNote(editingDateKey, e.target.value)}
-                rows={2}
-                maxLength={500}
-                placeholder="예: 교육 준비물, 인계 사항, 약속"
-                className="w-full px-3 py-2.5 bg-slate-100 rounded-xl text-[15px] text-slate-800 outline-none focus:ring-2 focus:ring-blue-200 resize-none"
-              />
-            </label>
+            <DayItemsEditor key={editingDateKey} initial={noteItems(dayNotes[editingDateKey])} onChange={(text) => setNote(editingDateKey, text)} />
           </div>
         </Modal>
       )}

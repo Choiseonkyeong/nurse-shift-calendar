@@ -51,7 +51,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"Pretendard Variable"', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'sans-serif']
+        sans: ['var(--font-sans)']
       },
       colors: {
         page: varColor('page'),
