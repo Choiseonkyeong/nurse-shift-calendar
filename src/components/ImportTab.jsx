@@ -7,6 +7,8 @@ import { toast } from '../lib/toast';
 import Modal from './Modal';
 import FontSheet from './FontSheet';
 import { FONTS, getFontPref } from '../lib/fontPref';
+import { Capacitor } from '@capacitor/core';
+import { getWidgetNotesPref, setWidgetNotesPref } from '../lib/widgetSync';
 import { confirmDialog } from '../lib/confirm';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon, Type } from 'lucide-react';
 import { useShiftTypes } from '../lib/shiftTypes';
@@ -60,6 +62,7 @@ export default function ImportTab({
 }) {
   const [isFontOpen, setIsFontOpen] = useState(false);
   const [fontKey, setFontKey] = useState(getFontPref);
+  const [widgetNotes, setWidgetNotes] = useState(getWidgetNotesPref);
   const shiftTypes = useShiftTypes();
   const [ocrProgress, setOcrProgress] = useState(null); // { p, msg }
   const [sheetChoice, setSheetChoice] = useState(null); // 엑셀 근무표 탭이 여러 개일 때 고를 탭 목록
@@ -575,6 +578,28 @@ export default function ImportTab({
           <span className={tileLabel}>캘린더(.ics) 내보내기</span>
         </button>
       </section>
+      {/* 홈 화면 위젯은 앱에서만 */}
+      {Capacitor.isNativePlatform() && (
+        <div className="mt-3 flex items-center gap-3 rounded-3xl bg-slate-50 px-5 py-4">
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-slate-900">홈 화면 위젯에 일정 보이기</span>
+            <span className="block text-[12px] text-slate-500">끄면 위젯에는 근무만 보여요 (남이 볼 수 있는 화면)</span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={widgetNotes}
+            aria-label="홈 화면 위젯에 일정 보이기"
+            onClick={() => {
+              setWidgetNotesPref(!widgetNotes);
+              setWidgetNotes(!widgetNotes);
+            }}
+            className={`relative shrink-0 w-12 h-7 rounded-full transition-colors cursor-pointer ${widgetNotes ? 'bg-blue-600' : 'bg-slate-300'}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${widgetNotes ? 'translate-x-5' : ''}`} />
+          </button>
+        </div>
+      )}
       {isFontOpen && (
         <FontSheet
           onClose={() => {
