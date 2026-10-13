@@ -338,7 +338,7 @@ test('엑셀 제목에 연도가 없고 5월을 보고 있어도 → 요일·공
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'S');
   const file = path.join(os.tmpdir(), `roster-noyear-${Date.now()}.xlsx`);
-  XLSX.writeFile(wb, file);
+  fs.writeFileSync(file, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })); // 0.20 부터 Node 에서는 writeFile 에 fs 를 따로 넘겨야 해서 직접 저장
 
   await openApp(page, { name: '김간호', local: { my_shift_data: { '2026-09-01': 'M' } } });
   for (let i = 0; i < 4; i++) await page.getByRole('button', { name: '이전 달' }).click(); // 5월 보기
