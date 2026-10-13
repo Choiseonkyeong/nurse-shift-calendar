@@ -17,11 +17,7 @@
   - 운영자 이름(또는 앱 이름/상호)과 문의 이메일을 알려 주면 대신 바꿔 드립니다.
   - 스토어에 입력할 주소: `https://nurse-shift-calendar.vercel.app/privacy.html`
 
-- [ ] **3. 엑셀 읽기 라이브러리(SheetJS) 보안 업데이트 허용** (1분)
-  - 지금 쓰는 엑셀 읽기 라이브러리에 보안 경고가 1건 있습니다(조작된 엑셀 파일을 열면 앱이 오래 멈출 수 있음).
-  - 새 버전은 SheetJS 사이트(`cdn.sheetjs.com`)에서만 받을 수 있어, Claude Code 작업 환경에서 이 주소를 허용해야 합니다.
-  - 방법: Claude Code 세션 제목 줄의 클라우드 환경 메뉴 → **Edit** → Network access 의 허용 도메인에 `cdn.sheetjs.com` 추가 → 저장 후 "SheetJS 업데이트해줘"
-  - 참고: https://code.claude.com/docs/en/claude-code-on-the-web
+- [x] **3. 엑셀 읽기 라이브러리(SheetJS) 보안 업데이트** — 완료 (0.20.3, `cdn.sheetjs.com` 허용 없이 GitHub 빌드 서버에서 받아 적용)
 
 - [ ] **4. 실제 폰으로 한 번 써 보기** (20분) — 자동 테스트로는 확인할 수 없는 것
   - **안드로이드 앱(새 APK) 순서대로:**
