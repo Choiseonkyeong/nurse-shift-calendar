@@ -1,0 +1,15 @@
+name: tmp-sheetjs
+on:
+  push:
+    branches: [claude/practical-ptolemy-puoguo]
+    paths: ['.github/workflows/tmp-sheetjs.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fetch SheetJS 0.20.3 and print lock info
+        run: |
+          mkdir p && cd p && npm init -y >/dev/null
+          npm install --no-audit --no-fund https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+          node -e "const l=require('./package-lock.json').packages['node_modules/xlsx'];console.log('::notice title=lock::'+JSON.stringify(l))"
+          node -e "console.log('::notice title=deps::'+JSON.stringify(require('./node_modules/xlsx/package.json').dependencies||{}))"
