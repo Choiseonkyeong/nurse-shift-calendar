@@ -70,7 +70,7 @@ function wardWorkbook(year, month) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Sheet1');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([]), 'Sheet2');
   const file = path.join(os.tmpdir(), `ward-${year}-${month}-${Date.now()}.xlsx`);
-  XLSX.writeFile(wb, file);
+  fs.writeFileSync(file, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })); // 0.20 부터 Node 에서는 writeFile 에 fs 를 따로 넘겨야 해서 직접 저장
   return { file, roster };
 }
 
@@ -279,7 +279,7 @@ function multiSheetWorkbook({ withCover = true, months = [10, 11], activeTab } =
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `${month}월`);
   });
   const file = path.join(os.tmpdir(), `multi-${Date.now()}-${Math.random()}.xlsx`);
-  XLSX.writeFile(wb, file);
+  fs.writeFileSync(file, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })); // 0.20 부터 Node 에서는 writeFile 에 fs 를 따로 넘겨야 해서 직접 저장
   if (activeTab !== undefined) {
     // 엑셀이 저장하는 '마지막으로 보던 탭'(workbookView activeTab) — 라이브러리가 써 주지 않아 직접 넣음
     const zip = XLSX.CFB.read(fs.readFileSync(file), { type: 'buffer' });
