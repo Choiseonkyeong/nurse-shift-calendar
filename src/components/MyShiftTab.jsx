@@ -744,8 +744,76 @@ export default function MyShiftTab({
         </section>
       )}
 
+      {/* 0. 이번 주: 월~일 근무 한 줄 + 오늘 한마디 (누르면 그 날짜로) */}
+      {!quickMode && (() => {
+        const today = getTodayDateObj();
+        const base = new Date(today.year, today.month - 1, today.day);
+        const monday = new Date(base.getFullYear(), base.getMonth(), base.getDate() - ((base.getDay() + 6) % 7));
+        const days = Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+          return { key: toDateKey(d), d, code: myShifts[toDateKey(d)] || '' };
+        });
+        const todayType = myShifts[todayKey] ? findType(myShifts[todayKey]) : null;
+        const firstWork = days.map((x) => x.code && findType(x.code)).find((t) => t?.kind === 'work');
+        const msg = todayType
+          ? todayType.kind === 'work'
+            ? { mood: 'cheer', text: `오늘은 ${shortLabel(todayType.label) || todayType.code} 근무예요. 오늘도 힘내요!` }
+            : { mood: 'sleep', text: '오늘은 쉬는 날! 푹 쉬어요' }
+          : firstWork
+            ? { mood: 'happy', text: `이번 주는 ${shortLabel(firstWork.label) || firstWork.code} 근무로 시작해요!` }
+            : { mood: 'happy', text: '이번 주 근무를 넣어 볼까요?' };
+        const WEEK = ['월', '화', '수', '목', '금', '토', '일'];
+        return (
+          <section className="space-y-3" aria-label="이번 주 근무">
+            <p className="text-[15px] font-medium text-slate-500">
+              {today.year}년 {today.month}월 · 이번 주 스케줄
+            </p>
+            <div className="grid grid-cols-7 gap-1.5">
+              {days.map((x, i) => {
+                const t = x.code ? findType(x.code) : null;
+                const isToday = x.key === todayKey;
+                return (
+                  <button
+                    key={x.key}
+                    type="button"
+                    onClick={() => setSelectedDate(x.key)}
+                    aria-label={`이번 주 ${WEEK[i]}요일 ${x.d.getMonth() + 1}/${x.d.getDate()} ${x.code || '근무 없음'}`}
+                    className="flex flex-col items-center gap-1.5 cursor-pointer"
+                  >
+                    <span className={`text-[13px] font-medium ${isToday ? 'text-blue-600' : i === 5 ? 'text-sky-500' : i === 6 ? 'text-rose-500' : 'text-slate-500'}`}>{WEEK[i]}</span>
+                    <span
+                      style={t ? shiftTextVars(t) : undefined}
+                      className={`w-full aspect-square max-h-12 rounded-2xl flex items-center justify-center text-[15px] font-semibold ${
+                        t ? 'shift-cell shift-text' : 'bg-slate-50 text-slate-300'
+                      } ${[...(x.code || '')].length >= 3 ? 'text-[12px]' : ''} ${isToday ? 'ring-2 ring-inset ring-blue-500' : ''}`}
+                    >
+                      {x.code || '·'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedDate(todayKey);
+                setEditingDateKey(todayKey);
+                setIsEditModalOpen(true);
+              }}
+              className="w-full flex items-center gap-3 rounded-2xl bg-slate-50 pl-2 pr-3 py-2 text-left cursor-pointer active:bg-slate-100"
+            >
+              <span className="w-11 h-11 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center">
+                <Mascot size={36} mood={msg.mood} />
+              </span>
+              <span className="flex-1 min-w-0 text-[15px] text-slate-700">{msg.text}</span>
+              <ChevronRight size={18} className="shrink-0 text-slate-300" />
+            </button>
+          </section>
+        );
+      })()}
+
       {/* 1. 달 제목 · 이번 달 요약 */}
-      <section className="pt-1">
+      <section className={quickMode ? 'pt-1' : 'border-t border-slate-100 pt-4'}>
         <div className="flex items-end justify-between">
           {/* 누르면 년·월 바로 고르기 */}
           <button type="button" onClick={() => setIsMonthPickerOpen(true)} aria-label="년·월 선택" className="text-left cursor-pointer">
@@ -901,21 +969,8 @@ export default function MyShiftTab({
         const code = myShifts[selectedDate] || '';
         const t = code ? shiftTypes.find((x) => x.code === code) : null;
         const items = noteItems(dayNotes[selectedDate]);
-        // 오늘이면 토닥이가 한마디 (근무: 응원, 쉬는 날: 푹 쉬어요)
-        const cheer =
-          selectedDate === todayKey && t
-            ? t.kind === 'work'
-              ? { mood: 'cheer', text: `오늘은 ${shortLabel(t.label) || code} 근무예요. 오늘도 힘내요!` }
-              : { mood: 'sleep', text: '오늘은 쉬는 날! 푹 쉬어요' }
-            : null;
         return (
           <>
-          {cheer && (
-            <div className="flex items-center gap-2 -mb-1">
-              <Mascot size={40} mood={cheer.mood} />
-              <p className="relative rounded-2xl rounded-bl-md bg-blue-50 px-3.5 py-2 text-[14px] text-slate-700">{cheer.text}</p>
-            </div>
-          )}
           <button
             type="button"
             onClick={() => { setEditingDateKey(selectedDate); setIsEditModalOpen(true); }}

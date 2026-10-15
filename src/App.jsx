@@ -840,9 +840,9 @@ export default function App() {
                 }}
                 aria-label="이름 수정"
               >
-                <h1 className="text-[15px] font-medium text-slate-500 leading-tight truncate">
+                <h1 className="text-[26px] font-bold text-slate-900 tracking-tight leading-tight truncate">
                   {nameSkipped || !userName ? (
-                    '내 근무표'
+                    '나의 근무표'
                   ) : (
                     <>
                       {userName}
@@ -850,7 +850,7 @@ export default function App() {
                     </>
                   )}
                 </h1>
-                <Pencil size={14} className="shrink-0 text-slate-300" />
+                <Pencil size={16} className="shrink-0 text-slate-300" />
               </button>
             )}
             <SyncBadge status={syncStatus} />
@@ -860,7 +860,7 @@ export default function App() {
             <button
               onClick={handleGoToday}
               aria-label="오늘"
-              className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100"
+              className="w-11 h-11 mr-1.5 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-700 cursor-pointer active:bg-slate-100"
             >
               <CalendarCheck size={22} />
             </button>

@@ -197,7 +197,7 @@ test('앱을 켜 둔 채 날짜가 바뀌면 다시 볼 때 오늘(다음 달)�
   // 밤 근무 후 아침에 다시 열기
   await page.clock.setFixedTime(new Date('2026-10-01T07:30:00+09:00'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect(page.getByText('2026년 10월')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '2026년 10월' })).toBeVisible();
   await expect(page.getByText('10월 1일 (목) 일정·메모')).toBeVisible();
 
   // 다른 날짜(10/15)를 보고 있었으면 날짜가 바뀌어도 그대로
@@ -365,4 +365,19 @@ test('일정 색 고르기, 보안 모드에서는 달력 칸·목록의 일정�
   await tab(page, '내 근무').click();
   await expect(cell).toHaveAttribute('aria-label', /일정 2개$/); // 내용은 읽어 주지 않음
   await expect(page.locator('ul.blur-\\[5px\\]')).toContainText('교육');
+});
+
+test('이번 주 스케줄: 월~일 근무 한 줄, 오늘 한마디, 누르면 그 날짜로', async ({ page }) => {
+  await openApp(page, { local: { my_shift_data: { '2026-09-28': 'N', '2026-09-29': 'OFF', '2026-10-03': 'D' } } });
+  const week = page.getByRole('region', { name: '이번 주 근무' });
+  await expect(week).toContainText('2026년 9월 · 이번 주 스케줄');
+  await expect(week.getByRole('button', { name: /^이번 주/ })).toHaveCount(7);
+  await expect(week.getByRole('button', { name: '이번 주 월요일 9/28 N' })).toBeVisible();
+  await expect(week).toContainText('오늘은 나이트 근무예요. 오늘도 힘내요!');
+  // 다음 달 날짜를 누르면 달력도 그 달로
+  await week.getByRole('button', { name: '이번 주 토요일 10/3 D' }).click();
+  await expect(page.getByRole('heading', { name: '2026년 10월' })).toBeVisible();
+  // 한마디를 누르면 오늘 근무 수정 창
+  await week.getByRole('button', { name: /오늘은 나이트/ }).click();
+  await expect(page.getByRole('dialog', { name: '근무 직접 수정' })).toContainText('9월 28일');
 });

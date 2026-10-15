@@ -142,7 +142,7 @@ test('이름 없이 시작 → 그룹 만들 때만 이름을 묻고 이어서 �
   const state = createFakeState();
   await openApp(page, { state, name: null });
   await page.getByRole('button', { name: '이름 없이 시작하기' }).click();
-  await expect(page.getByRole('heading', { name: '내 근무표' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '나의 근무표' })).toBeVisible();
   await waitSaved(page);
 
   await tab(page, '그룹').click();
