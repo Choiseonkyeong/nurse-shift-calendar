@@ -250,7 +250,7 @@ export default function AllowanceTab({
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[13px] text-slate-500">
             {leaveTypes.map((t) => (
               <span key={t.code} className={leaveUsage[t.code] ? '' : 'opacity-40'}>
-                <b style={shiftTextVars(t)} className="shift-text font-bold">{t.code}</b> {leaveUsage[t.code]}회
+                <b style={shiftTextVars(t)} className="shift-text font-semibold">{t.code}</b> {leaveUsage[t.code]}회
                 {(t.leaveDays ?? 1) !== 1 && ` · ${leaveUsage[t.code] * (t.leaveDays ?? 1)}일`}
               </span>
             ))}
@@ -295,7 +295,7 @@ export default function AllowanceTab({
               <div className="rounded-2xl bg-slate-50 px-4 divide-y divide-slate-200/60">
                 {workTypes.map((t) => (
                   <label key={t.code} className="flex items-center gap-3 py-2.5">
-                    <span className="shift-text w-9 text-[15px] font-bold truncate" style={shiftTextVars(t)}>
+                    <span className="shift-text w-9 text-[15px] font-semibold truncate" style={shiftTextVars(t)}>
                       {t.code}
                     </span>
                     <span className="flex-1 min-w-0 text-[15px] text-slate-800 truncate">{shortLabel(t.label)} 수당</span>
@@ -339,7 +339,7 @@ export default function AllowanceTab({
                   const [start, end] = splitTime(shiftTimes[t.code]?.time);
                   return (
                     <div key={t.code} className="flex items-center gap-2 py-2.5">
-                      <span className="shift-text w-9 text-[15px] font-bold truncate" style={shiftTextVars(t)}>
+                      <span className="shift-text w-9 text-[15px] font-semibold truncate" style={shiftTextVars(t)}>
                         {t.code}
                       </span>
                       <div className="flex-1 min-w-0 flex items-center gap-1 bg-white rounded-lg px-2 h-9">

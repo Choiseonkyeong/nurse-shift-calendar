@@ -15,13 +15,13 @@ const PALETTES = {
 };
 
 export const ACCENTS = [
+  { key: 'blue', label: '블루', hex: '#3b82f6' },
   { key: 'pink', label: '벚꽃 핑크', hex: '#ec4899' },
   { key: 'violet', label: '라벤더', hex: '#8b5cf6' },
   { key: 'teal', label: '민트', hex: '#14b8a6' },
-  { key: 'sky', label: '하늘', hex: '#0ea5e9' },
-  { key: 'blue', label: '블루', hex: '#3b82f6' }
+  { key: 'sky', label: '하늘', hex: '#0ea5e9' }
 ];
-export const DEFAULT_ACCENT = 'pink';
+export const DEFAULT_ACCENT = 'blue';
 
 export function getAccentPref() {
   try {

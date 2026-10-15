@@ -771,7 +771,7 @@ export default function MyShiftTab({
               .filter(([, count]) => count > 0)
               .map(([code, count]) => (
                 <span key={code}>
-                  <b style={shiftTextVars(findType(code))} className="shift-text font-bold">{code}</b> {count}
+                  <b style={shiftTextVars(findType(code))} className="shift-text font-semibold">{code}</b> {count}
                 </span>
               ))}
           </div>
@@ -806,7 +806,7 @@ export default function MyShiftTab({
                     type="button"
                     onClick={() => setQuickCode(t.code)}
                     style={quickCode === t.code ? { backgroundColor: t.fg, color: '#fff' } : shiftTextVars(t)}
-                    className={`shrink-0 min-w-[44px] px-3 h-9 rounded-full text-sm font-bold cursor-pointer ${quickCode === t.code ? '' : 'bg-slate-100 shift-text'}`}
+                    className={`shrink-0 min-w-[44px] px-3 h-9 rounded-full text-sm font-semibold cursor-pointer ${quickCode === t.code ? '' : 'bg-slate-100 shift-text'}`}
                   >
                     {t.code}
                   </button>
@@ -862,7 +862,7 @@ export default function MyShiftTab({
                 </span>
                 {shift ? (
                   <span
-                    className={`shift-text max-w-full px-0.5 font-bold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
+                    className={`shift-text max-w-full px-0.5 font-semibold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
                       // 한눈에 보이게 크게: 1글자 19px, 2글자 16px, 3글자 이상 14px
                       [...shift].length >= 3 ? 'text-[14px]' : [...shift].length === 2 ? 'text-[16px]' : 'text-[19px]'
                     }`}
@@ -1031,7 +1031,7 @@ export default function MyShiftTab({
                       on ? 'bg-blue-50 ring-2 ring-inset ring-blue-500' : 'bg-slate-50 active:bg-slate-100'
                     }`}
                   >
-                    <span aria-hidden="true" style={shiftTextVars(item)} className="shift-text text-[18px] font-bold leading-none truncate max-w-full">
+                    <span aria-hidden="true" style={shiftTextVars(item)} className="shift-text text-[18px] font-semibold leading-none truncate max-w-full">
                       {item.code}
                     </span>
                     <span className="text-[12px] text-slate-500 leading-tight truncate max-w-full">{shortLabel(item.label)}</span>

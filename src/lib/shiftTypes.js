@@ -4,12 +4,13 @@ import { createContext, useContext } from 'react';
 
 // kind: work(근무) | off(휴무) | leave(휴가, leaveDays 만큼 연차 차감)
 export const DEFAULT_SHIFT_TYPES = [
-  { code: 'D', label: 'Day (데이)', kind: 'work', bg: '#FFEDD5', fg: '#C2410C' },
-  { code: 'E', label: 'Evening (이브닝)', kind: 'work', bg: '#FCE7F3', fg: '#BE185D' },
-  { code: 'N', label: 'Night (나이트)', kind: 'work', bg: '#E0F2FE', fg: '#0369A1' },
-  { code: 'M', label: 'Mid (미드)', kind: 'work', bg: '#F3E8FF', fg: '#7E22CE' },
+  // 파스텔: 데이 파랑 · 이브닝 초록 · 나이트 보라 · 미드 주황 · 휴무 회색 · 연차 분홍
+  { code: 'D', label: 'Day (데이)', kind: 'work', bg: '#DBEAFE', fg: '#1D4ED8' },
+  { code: 'E', label: 'Evening (이브닝)', kind: 'work', bg: '#DCFCE7', fg: '#15803D' },
+  { code: 'N', label: 'Night (나이트)', kind: 'work', bg: '#EDE9FE', fg: '#6D28D9' },
+  { code: 'M', label: 'Mid (미드)', kind: 'work', bg: '#FFEDD5', fg: '#C2410C' },
   { code: 'OFF', label: 'OFF (휴무)', kind: 'off', bg: '#F1F5F9', fg: '#64748B' },
-  { code: '연차', label: '연차 (휴가)', kind: 'leave', bg: '#D1FAE5', fg: '#047857', leaveDays: 1 }
+  { code: '연차', label: '연차 (휴가)', kind: 'leave', bg: '#FCE7F3', fg: '#BE185D', leaveDays: 1 }
 ];
 
 // 예전 기본 색 (D·E 가 둘 다 갈색이라 구분이 어려웠음). 서버 프리셋·저장된 설정에 이 색이 그대로 있으면 새 기본 색으로 보여 줌

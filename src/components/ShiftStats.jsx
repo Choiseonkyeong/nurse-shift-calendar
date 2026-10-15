@@ -48,7 +48,7 @@ export default function ShiftStats({ myShifts = {}, initialYear }) {
                 <th className="px-1 text-left">월</th>
                 {usedTypes.map((t) => (
                   <th key={t.code} className="px-1">
-                    <span style={shiftTextVars(t)} className="shift-text font-bold">
+                    <span style={shiftTextVars(t)} className="shift-text font-semibold">
                       {t.code}
                     </span>
                   </th>

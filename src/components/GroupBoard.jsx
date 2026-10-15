@@ -132,7 +132,7 @@ export default function GroupBoard({ group, profile, themeColor, privacyBlur, de
 
   const chip = (code) =>
     code ? (
-      <span style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text font-bold">
+      <span style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text font-semibold">
         {code}
       </span>
     ) : (
