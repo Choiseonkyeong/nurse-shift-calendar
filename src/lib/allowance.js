@@ -31,19 +31,20 @@ export function leaveYearRange(selectedDate, basis = 'calendar', hireDate = '') 
 }
 
 /**
- * 근무 시간('HH:MM - HH:MM')에서 야간(22시~다음날 6시)에 걸친 시간 수
- * 시간이 없거나 형식이 틀리면 null → 예전에 직접 입력한 값 사용
+ * 근무 수당: 근무 종류마다 1회 수당 × 정산 기간 안 근무 횟수 (예: 나이트 1회 130,000원 × 5회)
+ * @param amounts { 근무코드: 1회 수당(원) } — 0·빈 값인 근무는 빼고
+ * @returns { items: [{ code, count, amount, total }], total }
  */
-export function nightHoursFromTime(time) {
-  const m = String(time || '').match(/^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$/);
-  if (!m) return null;
-  const start = Number(m[1]) * 60 + Number(m[2]);
-  let end = Number(m[3]) * 60 + Number(m[4]);
-  if (end <= start) end += 24 * 60; // 밤을 넘기는 근무
-  // 전날 22시~6시, 당일 22시~다음날 6시 두 구간과 겹치는 분
-  const overlap = (a, b) => Math.max(0, Math.min(end, b) - Math.max(start, a));
-  const mins = overlap(-120, 360) + overlap(1320, 1800);
-  return Math.round((mins / 60) * 100) / 100;
+export function shiftAllowance(myShifts = {}, start, end, amounts = {}) {
+  const counts = {};
+  Object.entries(myShifts || {}).forEach(([k, code]) => {
+    if (code && k >= start && k <= end) counts[code] = (counts[code] || 0) + 1;
+  });
+  const items = Object.entries(amounts || {})
+    .map(([code, amount]) => ({ code, amount: Number(amount) || 0, count: counts[code] || 0 }))
+    .filter((it) => it.amount > 0)
+    .map((it) => ({ ...it, total: it.amount * it.count }));
+  return { items, total: items.reduce((sum, it) => sum + it.total, 0) };
 }
 
 /**

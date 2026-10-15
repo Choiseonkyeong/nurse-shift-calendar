@@ -196,13 +196,12 @@ export default function App() {
     try {
       const saved = localStorage.getItem('shift_configs');
       return saved ? JSON.parse(saved) || {} : {
-        hourlyWage: 13000,
         vacation: { total: 15, used: 0 },
         shiftTimes: {
           D: { time: '07:30 - 15:30' },
-          M: { time: '09:00 - 17:00', nightHours: 0 },
-          E: { time: '14:30 - 22:30', nightHours: 0.5 },
-          N: { time: '21:30 - 08:00', nightHours: 8 }
+          M: { time: '09:00 - 17:00' },
+          E: { time: '14:30 - 22:30' },
+          N: { time: '21:30 - 08:00' }
         }
       };
     } catch (e) {

@@ -60,11 +60,11 @@ test('오프라인에서 지운 근무 종류는 연결 후에도 되살아나�
   await expect(page.getByRole('button', { name: /야간당직/ })).toHaveCount(0);
 });
 
-test('설정(시급·연차)이 서버에 저장되고 새 폰 로그인 시 복원', async ({ page, browser }) => {
+test('설정(근무 수당·연차)이 서버에 저장되고 새 폰 로그인 시 복원', async ({ page, browser }) => {
   const state = createFakeState();
   const { profile } = seedAccount(state, { email: 'me@example.com', password: 'secret12', name: '최간호' });
 
-  // 기존 폰: 계정으로 로그인 후 시급·연차 입력
+  // 기존 폰: 계정으로 로그인 후 나이트 수당 입력
   await openApp(page, { state, name: null });
   await page.getByRole('button', { name: /이미 계정이 있어요/ }).click();
   await page.getByPlaceholder('이메일 주소').fill('me@example.com');
@@ -73,8 +73,8 @@ test('설정(시급·연차)이 서버에 저장되고 새 폰 로그인 시 복
   await waitSaved(page);
   await tab(page, '수당').click();
   await page.getByRole('button', { name: /계산 설정/ }).click(); // 설정은 접혀 있음
-  await page.getByPlaceholder('시급 입력').fill('15000');
-  await expect.poll(() => state.settings[profile.id]?.settings?.shift_configs?.hourlyWage).toBe(15000);
+  await page.getByLabel('N 1회 수당').fill('130000');
+  await expect.poll(() => state.settings[profile.id]?.settings?.shift_configs?.allowance).toEqual({ N: 130000 });
 
   // 새 폰
   const other = await browser.newPage();
@@ -86,7 +86,7 @@ test('설정(시급·연차)이 서버에 저장되고 새 폰 로그인 시 복
   await waitSaved(other);
   await tab(other, '수당').click();
   await other.getByRole('button', { name: /계산 설정/ }).click();
-  await expect(other.getByPlaceholder('시급 입력')).toHaveValue('15000');
+  await expect(other.getByLabel('N 1회 수당')).toHaveValue('130,000');
   await other.close();
 });
 
