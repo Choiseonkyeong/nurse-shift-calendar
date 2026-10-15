@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { useShiftTypes, shiftTextVars } from '../lib/shiftTypes';
-import { getHoliday } from '../utils/holidays';
+import { useShiftTypes, shiftTextVars, shortLabel } from '../lib/shiftTypes';
 import { getTodayDateObj, addMonthsKey } from '../utils/dateUtils';
-import { leaveYearRange, nightHoursFromTime, payPeriod } from '../lib/allowance';
+import { leaveYearRange, shiftAllowance, payPeriod } from '../lib/allowance';
 import ShiftStats from './ShiftStats';
-import { Moon, PartyPopper, SlidersHorizontal, ChevronLeft, ChevronRight, ChevronDown, X, Minus, Plus, Pencil } from 'lucide-react';
+import { SlidersHorizontal, ChevronLeft, ChevronRight, ChevronDown, X, Minus, Plus, Pencil } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './MonthPicker';
 import Modal from './Modal';
 
@@ -27,20 +26,6 @@ const SheetHeader = ({ title, onClose }) => (
       <X size={20} />
     </button>
   </div>
-);
-
-// 켜기/끄기 스위치
-const Switch = ({ label, on, onChange }) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={on}
-    aria-label={label}
-    onClick={() => onChange(!on)}
-    className={`relative w-12 h-7 rounded-full transition-colors cursor-pointer ${on ? 'bg-blue-600' : 'bg-slate-300'}`}
-  >
-    <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : ''}`} />
-  </button>
 );
 
 // − 숫자 + (손가락으로 누르기 쉽게, 숫자는 직접 입력도 가능)
@@ -93,7 +78,7 @@ export default function AllowanceTab({
   setShiftConfigs,
   privacyBlur = false
 }) {
-  // 보안 모드: 시급·수당 금액 가리기
+  // 보안 모드: 수당 금액 가리기
   const blurCls = privacyBlur ? 'blur-[5px] select-none' : '';
   const shiftTypes = useShiftTypes();
   const workTypes = shiftTypes.filter((t) => t.kind === 'work');
@@ -106,15 +91,8 @@ export default function AllowanceTab({
   // 정산 기간 (예: 26일 → 전달 26일 ~ 이번 달 25일)
   const { start: startDateStr, end: endDateStr } = payPeriod(year, month, startDay);
 
-  // 2. 근무별 시간 및 야간 인정시간 (D -> M -> E -> N)
-  const [shiftTimes, setShiftTimes] = useState(
-    shiftConfigs.shiftTimes || {
-      D: { time: '' },
-      M: { time: '', nightHours: 0 },
-      E: { time: '', nightHours: 0 },
-      N: { time: '', nightHours: 0 }
-    }
-  );
+  // 2. 근무 시간 (알림·알람의 근무 시작 시각에 쓰임)
+  const [shiftTimes, setShiftTimes] = useState(shiftConfigs.shiftTimes || { D: { time: '' }, M: { time: '' }, E: { time: '' }, N: { time: '' } });
 
   // 3. 연차 현황 상태
   const [vacation, setVacation] = useState(
@@ -124,8 +102,15 @@ export default function AllowanceTab({
     }
   );
 
-  // 4. 통상 시급 상태
-  const [hourlyWage, setHourlyWage] = useState(shiftConfigs.hourlyWage || 0);
+  // 4. 근무 1회 수당 { 근무코드: 원 } (예: N 130,000 · E 10,000) — 병원·사람마다 다른 '나이트 몇 개 기준' 계산은 하지 않음
+  const [amounts, setAmounts] = useState(shiftConfigs.allowance || {});
+  const setAmount = (code, value) => {
+    const next = { ...amounts };
+    if (value > 0) next[code] = value;
+    else delete next[code];
+    setAmounts(next);
+    setShiftConfigs?.({ ...shiftConfigs, allowance: next });
+  };
   const [openSettings, setOpenSettings] = useState(false); // 계산 설정 창
   const [pickerOpen, setPickerOpen] = useState(false); // 년·월 선택 창
   const [openLeave, setOpenLeave] = useState(false); // 연차 설정 창
@@ -158,38 +143,16 @@ export default function AllowanceTab({
     };
     setShiftTimes(updated);
     if (setShiftConfigs) {
-      setShiftConfigs({ ...shiftConfigs, shiftTimes: updated, vacation, hourlyWage, startDay });
+      setShiftConfigs({ ...shiftConfigs, shiftTimes: updated, vacation, startDay });
     }
   };
 
-  // 5. 계산된 정산 범위 내 근무 횟수 정밀 집계
-  const shiftCounts = Object.fromEntries(shiftTypes.map((t) => [t.code, 0]));
-
-  Object.entries(myShifts || {}).forEach(([dateKey, code]) => {
-    if (dateKey >= startDateStr && dateKey <= endDateStr && code) {
-      if (shiftCounts[code] !== undefined) {
-        shiftCounts[code] += 1;
-      }
-    }
-  });
-
-  // 야간 가산수당 계산: 근무 시간이 있으면 22시~6시에 걸친 시간을 자동 계산, 없으면 예전에 입력한 값
-  const nightHoursOf = (code) => nightHoursFromTime(shiftTimes[code]?.time) ?? (Number(shiftTimes[code]?.nightHours) || 0);
-  const totalNightHours = workTypes.reduce((sum, t) => sum + (shiftCounts[t.code] || 0) * nightHoursOf(t.code), 0);
-
-  const totalNightPay = Math.round(totalNightHours * Number(hourlyWage || 0) * 0.5);
-
-  // 휴일근무 가산수당: 공휴일(선택 시 일요일 포함)에 근무한 횟수 × 인정 시간 × 시급 × 50%
-  const holidayPay = shiftConfigs.holidayPay || { hours: 8, includeSunday: false };
-  const workCodes = new Set(workTypes.map((t) => t.code));
-  const holidayWorkDays = Object.entries(myShifts || {}).filter(([dateKey, code]) => {
-    if (dateKey < startDateStr || dateKey > endDateStr || !workCodes.has(code)) return false;
-    const [y, m, d] = dateKey.split('-').map(Number);
-    return Boolean(getHoliday(dateKey)) || (holidayPay.includeSunday && new Date(y, m - 1, d).getDay() === 0);
-  });
-  const holidayHours = holidayWorkDays.length * (Number(holidayPay.hours) || 0);
-  const totalHolidayPay = Math.round(holidayHours * Number(hourlyWage || 0) * 0.5);
-  const setHolidayPay = (patch) => setShiftConfigs?.({ ...shiftConfigs, holidayPay: { ...holidayPay, ...patch } });
+  // 5. 정산 기간 근무 수당 (근무 종류 순서대로)
+  const allowance = shiftAllowance(myShifts, startDateStr, endDateStr, amounts);
+  const order = new Map(workTypes.map((t, i) => [t.code, i]));
+  const allowanceItems = [...allowance.items].sort((a, b) => (order.get(a.code) ?? 99) - (order.get(b.code) ?? 99));
+  const typeOf = (code) => shiftTypes.find((t) => t.code === code);
+  const won = (n) => Number(n || 0).toLocaleString();
   // 연차 사용: 달력에 기록한 올해 연차를 자동 집계 + 앱 사용 전 이미 쓴 연차(수동 입력)
   // 휴가 종류별 차감 일수 적용 (연차 1, 반차 0.5, 병가 0 ...)
   // 연차 기준: 회계연도(1/1~12/31) 또는 입사일 기준(입사 기념일~다음 기념일 전날)
@@ -215,11 +178,10 @@ export default function AllowanceTab({
 
   const leaveTotal = Number(vacation.total) || 0;
   const usedPct = leaveTotal ? Math.min(100, Math.round((totalUsed / leaveTotal) * 100)) : 0;
-  const nightCount = workTypes.filter((t) => nightHoursOf(t.code) > 0).reduce((n, t) => n + (shiftCounts[t.code] || 0), 0);
 
   return (
     <div className="max-w-md mx-auto pb-12 text-slate-800 space-y-3">
-      {/* 1. 이번 달 가산수당: 숫자만 크게 */}
+      {/* 1. 이번 달 근무 수당: 숫자만 크게 */}
       <section className="rounded-3xl bg-blue-600 text-white p-5">
         {/* 달 바꾸기: ‹ › 또는 제목을 눌러 년·월 선택 */}
         <div className="flex items-center justify-between -mt-1 -mx-2">
@@ -228,7 +190,7 @@ export default function AllowanceTab({
           </button>
           <button type="button" aria-label="년·월 선택" onClick={() => setPickerOpen(true)} className="flex items-center gap-0.5 text-[13px] text-blue-100 cursor-pointer">
             {year !== getTodayDateObj().year && `${year}년 `}
-            {month}월 가산수당 · {startDateStr.slice(5).replace('-', '.')}~{endDateStr.slice(5).replace('-', '.')}
+            {month}월 근무 수당 · {startDateStr.slice(5).replace('-', '.')}~{endDateStr.slice(5).replace('-', '.')}
             <ChevronDown size={14} aria-hidden="true" />
           </button>
           <button type="button" aria-label="다음 달" onClick={() => setSelectedDate?.(addMonthsKey(selectedDate, 1))} className="w-9 h-9 flex items-center justify-center rounded-full text-blue-100 active:bg-white/15 cursor-pointer">
@@ -236,25 +198,30 @@ export default function AllowanceTab({
           </button>
         </div>
         <p className={`mt-1 text-[36px] font-bold tracking-tight leading-tight ${blurCls}`}>
-          {(totalNightPay + totalHolidayPay).toLocaleString()}
+          {won(allowance.total)}
           <span className="text-[22px] font-semibold ml-0.5">원</span>
         </p>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="rounded-2xl bg-white/15 p-3">
-            <p className="flex items-center gap-1 text-[12px] text-blue-100">
-              <Moon size={14} /> 야간 가산수당
-            </p>
-            <p className={`text-[17px] font-semibold mt-0.5 ${blurCls}`}>{totalNightPay.toLocaleString()} 원</p>
-            <p className="text-[11px] text-blue-100 mt-0.5">야간 근무 {nightCount}회</p>
+        {allowanceItems.length ? (
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {allowanceItems.map((it) => (
+              <div key={it.code} className="rounded-2xl bg-white/15 p-3">
+                <p className="text-[12px] text-blue-100">{shortLabel(typeOf(it.code)?.label || it.code)} 수당</p>
+                <p className={`text-[17px] font-semibold mt-0.5 ${blurCls}`}>{won(it.total)} 원</p>
+                <p className={`text-[11px] text-blue-100 mt-0.5 ${blurCls}`}>
+                  {it.code} {it.count}회 × {won(it.amount)}원
+                </p>
+              </div>
+            ))}
           </div>
-          <div className="rounded-2xl bg-white/15 p-3">
-            <p className="flex items-center gap-1 text-[12px] text-blue-100">
-              <PartyPopper size={14} /> 휴일 가산수당
-            </p>
-            <p className={`text-[17px] font-semibold mt-0.5 ${blurCls}`}>{totalHolidayPay.toLocaleString()} 원</p>
-            <p className="text-[11px] text-blue-100 mt-0.5">휴일 근무 {holidayWorkDays.length}회</p>
-          </div>
-        </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpenSettings(true)}
+            className="mt-4 w-full rounded-2xl bg-white/15 px-4 py-3 text-left text-[14px] text-white cursor-pointer active:bg-white/25"
+          >
+            나이트·이브닝 1회 수당을 넣으면 이번 달 수당이 계산돼요 ›
+          </button>
+        )}
       </section>
 
       {/* 2. 연차: 남은 개수 + 막대 */}
@@ -299,7 +266,9 @@ export default function AllowanceTab({
       >
         <SlidersHorizontal size={20} className="text-slate-500 shrink-0" />
         <span className="flex-1 text-[15px] font-medium text-slate-900">계산 설정</span>
-        <span className={`text-[13px] text-slate-400 ${blurCls}`}>시급 {hourlyWage ? hourlyWage.toLocaleString() : '-'}원</span>
+        <span className={`text-[13px] text-slate-400 truncate max-w-[55%] ${blurCls}`}>
+          {allowanceItems.length ? allowanceItems.map((it) => `${it.code} ${won(it.amount)}`).join(' · ') : '수당 금액 넣기'}
+        </span>
         <ChevronRight size={18} className="text-slate-300" />
       </button>
 
@@ -320,25 +289,32 @@ export default function AllowanceTab({
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-5 shadow-xl max-h-[85dvh] overflow-y-auto">
             <SheetHeader title="계산 설정" onClose={() => setOpenSettings(false)} />
 
-            {/* 시급: 가장 중요한 값 하나만 크게 */}
-            <label className="block rounded-2xl bg-slate-50 px-4 py-3">
-              <span className="block text-[13px] text-slate-500">통상 시급</span>
-              <span className="flex items-baseline gap-1">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="시급 입력"
-                  value={hourlyWage || ''}
-                  onChange={(e) => {
-                    const val = Number(e.target.value) || 0;
-                    setHourlyWage(val);
-                    if (setShiftConfigs) setShiftConfigs({ ...shiftConfigs, hourlyWage: val, startDay });
-                  }}
-                  className={`w-full min-w-0 bg-transparent text-[28px] font-bold text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-semibold ${blurCls}`}
-                />
-                <span className="text-[17px] font-semibold text-slate-500">원</span>
-              </span>
-            </label>
+            {/* 근무 1회 수당: 나이트·이브닝 등 (0 이면 계산에서 빠짐) */}
+            <section>
+              <h4 className="px-1 mb-1 text-[13px] font-medium text-slate-400">근무 1회 수당</h4>
+              <div className="rounded-2xl bg-slate-50 px-4 divide-y divide-slate-200/60">
+                {workTypes.map((t) => (
+                  <label key={t.code} className="flex items-center gap-3 py-2.5">
+                    <span className="shift-text w-9 text-[15px] font-bold truncate" style={shiftTextVars(t)}>
+                      {t.code}
+                    </span>
+                    <span className="flex-1 min-w-0 text-[15px] text-slate-800 truncate">{shortLabel(t.label)} 수당</span>
+                    <span className="flex items-center gap-1 rounded-lg bg-white px-3 h-10">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        aria-label={`${t.code} 1회 수당`}
+                        placeholder="0"
+                        value={amounts[t.code] ? won(amounts[t.code]) : ''}
+                        onChange={(e) => setAmount(t.code, Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
+                        className={`w-24 bg-transparent text-right text-[16px] font-semibold text-slate-900 outline-none placeholder:text-slate-300 ${blurCls}`}
+                      />
+                      <span className="text-[14px] text-slate-500">원</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
 
             <div className="rounded-2xl bg-slate-50 px-4 divide-y divide-slate-200/60">
               <Row label="정산 기간">
@@ -351,20 +327,16 @@ export default function AllowanceTab({
                   ))}
                 </select>
               </Row>
-              <Row label="일요일도 휴일로">
-                <Switch label="일요일도 휴일로" on={Boolean(holidayPay.includeSunday)} onChange={(v) => setHolidayPay({ includeSunday: v })} />
-              </Row>
             </div>
 
             <section>
               <div className="flex items-center justify-between px-1 mb-1">
                 <h4 className="text-[13px] font-medium text-slate-400">근무 시간</h4>
-                <span className="text-[12px] text-slate-400">야간(22~6시)은 자동</span>
+                <span className="text-[12px] text-slate-400">알림·알람에 쓰여요</span>
               </div>
               <div className="rounded-2xl bg-slate-50 px-4 divide-y divide-slate-200/60">
                 {workTypes.map((t) => {
                   const [start, end] = splitTime(shiftTimes[t.code]?.time);
-                  const night = nightHoursOf(t.code);
                   return (
                     <div key={t.code} className="flex items-center gap-2 py-2.5">
                       <span className="shift-text w-9 text-[15px] font-bold truncate" style={shiftTextVars(t)}>
@@ -375,16 +347,13 @@ export default function AllowanceTab({
                         <span className="text-slate-300 text-xs">~</span>
                         <TimeInput label={`${t.code} 종료 시각`} value={end} onChange={(v) => updateTimePart(t.code, 1, v)} />
                       </div>
-                      <span className={`shrink-0 w-14 text-right text-[13px] ${night ? 'text-blue-600 font-medium' : 'text-slate-300'}`}>
-                        {night ? `야간 ${night}h` : '야간 0'}
-                      </span>
                     </div>
                   );
                 })}
               </div>
             </section>
             <p className="text-[12px] text-slate-400 leading-relaxed">
-              야간 시간 × 시급 × 50%, 휴일 근무 1회 {Number(holidayPay.hours) || 0}시간 × 시급 × 50%로 계산한 예상 금액이에요.
+              정산 기간에 한 근무 횟수 × 1회 수당으로 계산한 예상 금액이에요. 계약한 나이트 개수 기준·기본급은 병원마다 달라 넣지 않았어요.
             </p>
           </div>
         </Modal>

@@ -132,32 +132,39 @@ test('다크 모드 전환', async ({ page }) => {
   await expect(page.locator('html')).not.toHaveClass(/dark/);
 });
 
-test('수당 탭: 휴일·야간 가산, 입사일 기준 연차, 통계', async ({ page }) => {
+test('수당 탭: 근무 1회 수당 × 횟수 (나이트·이브닝), 입사일 기준 연차, 통계', async ({ page }) => {
   await openApp(page, {
     local: {
       my_shift_data: { '2026-10-03': 'D', '2026-10-09': 'N', '2026-10-11': 'E', '2026-10-12': 'N', '2026-10-13': 'N', '2026-10-14': '연차' },
       shift_configs: {
-        hourlyWage: 10000,
         startDay: 1,
-        shiftTimes: { D: { time: '07:00 - 15:00' }, N: { time: '22:00 - 07:00', nightHours: 8 }, E: { time: '14:00 - 22:00' } },
+        shiftTimes: { D: { time: '07:00 - 15:00' }, N: { time: '22:00 - 07:00' }, E: { time: '14:00 - 22:00' } },
         vacation: { total: 15, used: 2 }
       }
     }
   });
   await page.getByRole('button', { name: '다음 달' }).first().click();
   await tab(page, '수당').click();
-  await expect(page.getByText('휴일 근무 2회')).toBeVisible(); // 위쪽 카드에 바로 보임
-  await expect(page.getByText('휴일 가산수당').locator('..')).toContainText('80,000 원');
-  await expect(page.getByText('야간 가산수당').locator('..')).toContainText('120,000 원');
-  await page.getByRole('button', { name: /계산 설정/ }).click(); // 설정은 아래 창에서
+  // 수당을 아직 안 넣었으면 넣으라는 안내
+  await page.getByRole('button', { name: /1회 수당을 넣으면/ }).click();
   const calc = page.getByRole('dialog', { name: '계산 설정' });
-  await expect(calc.getByText('야간 8h')).toBeVisible(); // N 22:00~07:00 → 22~6시 8시간 자동
-  await calc.getByRole('switch', { name: '일요일도 휴일로' }).click();
-  await expect(page.getByText('휴일 근무 3회')).toBeAttached();
-  await calc.getByLabel('E 종료 시각').fill('23:00'); // E 14:00~23:00 → 야간 1시간 자동, E 1회 → +5,000원
-  await expect(calc.getByText('야간 1h')).toBeVisible();
+  await calc.getByLabel('N 1회 수당').fill('130000');
+  await expect(calc.getByLabel('N 1회 수당')).toHaveValue('130,000'); // 쉼표 자동
+  await calc.getByLabel('E 1회 수당').fill('10,000');
   await calc.getByRole('button', { name: '닫기' }).click();
-  await expect(page.getByText('야간 가산수당').locator('..')).toContainText('125,000 원');
+  await expect(page.getByText('나이트 수당').locator('..')).toContainText('390,000 원');
+  await expect(page.getByText('나이트 수당').locator('..')).toContainText('N 3회 × 130,000원');
+  await expect(page.getByText('이브닝 수당').locator('..')).toContainText('10,000 원');
+  await expect(page.getByText('400,000원', { exact: true })).toBeVisible(); // 합계
+  await expect(page.getByRole('button', { name: /계산 설정/ })).toContainText('E 10,000 · N 130,000') // 근무 종류 순서;
+  await expect.poll(async () => (await readLocal(page, 'shift_configs')).allowance).toEqual({ N: 130000, E: 10000 });
+
+  // 0 으로 지우면 계산에서 빠짐
+  await page.getByRole('button', { name: /계산 설정/ }).click();
+  await calc.getByLabel('E 1회 수당').fill('');
+  await calc.getByRole('button', { name: '닫기' }).click();
+  await expect(page.getByText('이브닝 수당')).toHaveCount(0);
+  await expect(page.getByText('390,000원', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: '연차 설정' }).click();
   const leave = page.getByRole('dialog', { name: '연차 설정' });
@@ -267,14 +274,14 @@ test('년·월 바로 고르기: 제목을 눌러 다른 해·달로 한 번에 
 test('수당 화면에서도 달 바꾸기: ‹ › 와 년·월 선택', async ({ page }) => {
   await openApp(page);
   await tab(page, '수당').click();
-  await expect(page.getByText(/^9월 가산수당/)).toBeVisible();
+  await expect(page.getByText(/^9월 근무 수당/)).toBeVisible();
   await page.getByRole('button', { name: '다음 달' }).click();
-  await expect(page.getByText(/^10월 가산수당/)).toBeVisible();
+  await expect(page.getByText(/^10월 근무 수당/)).toBeVisible();
   await page.getByRole('button', { name: '년·월 선택' }).click();
   const picker = page.getByRole('dialog', { name: '년·월 선택' });
   await picker.getByRole('button', { name: '이전 해' }).click();
   await picker.getByRole('button', { name: '2025년 12월' }).click();
-  await expect(page.getByText(/^2025년 12월 가산수당/)).toBeVisible();
+  await expect(page.getByText(/^2025년 12월 근무 수당/)).toBeVisible();
   // 내 근무 화면도 같은 달로
   await tab(page, '내 근무').click();
   await expect(page.getByRole('heading', { name: '2025년 12월' })).toBeVisible();

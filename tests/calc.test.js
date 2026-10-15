@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { leaveYearRange, nightHoursFromTime, payPeriod } from '../src/lib/allowance';
+import { leaveYearRange, shiftAllowance, payPeriod } from '../src/lib/allowance';
 import { computeYearStats } from '../src/lib/stats';
 import { expandPattern } from '../src/components/PatternFill';
 import { HOLIDAYS, getHoliday, getHolidayShort } from '../src/utils/holidays';
@@ -107,14 +107,16 @@ describe('설정 동기화 방향', () => {
   });
 });
 
-describe('야간 시간 자동 계산 (22시~6시)', () => {
-  it('근무별', () => {
-    expect(nightHoursFromTime('07:00 - 15:00')).toBe(0);
-    expect(nightHoursFromTime('14:30 - 22:30')).toBe(0.5);
-    expect(nightHoursFromTime('21:30 - 08:00')).toBe(8);
-    expect(nightHoursFromTime('22:00 - 07:00')).toBe(8);
-    expect(nightHoursFromTime('05:00 - 13:00')).toBe(1);
-    expect(nightHoursFromTime('')).toBe(null);
+describe('근무 수당 (1회 수당 × 근무 횟수)', () => {
+  it('정산 기간 안 근무만, 수당을 넣은 근무만, 합계', () => {
+    const shifts = { '2026-09-25': 'N', '2026-09-26': 'N', '2026-10-01': 'N', '2026-10-02': 'E', '2026-10-03': 'D', '2026-10-26': 'N' };
+    const r = shiftAllowance(shifts, '2026-09-26', '2026-10-25', { N: 130000, E: 10000, D: 0, M: '' });
+    expect(r.items).toEqual([
+      { code: 'N', amount: 130000, count: 2, total: 260000 },
+      { code: 'E', amount: 10000, count: 1, total: 10000 }
+    ]);
+    expect(r.total).toBe(270000);
+    expect(shiftAllowance(shifts, '2026-09-26', '2026-10-25', undefined)).toEqual({ items: [], total: 0 });
   });
 });
 
