@@ -546,9 +546,10 @@ export default function ImportTab({
           {themePref === 'dark' ? <Moon size={24} className="text-blue-600" /> : themePref === 'light' ? <Sun size={24} className="text-blue-600" /> : <SunMoon size={24} className="text-blue-600" />}
           <span className={tileLabel}>{{ system: '테마: 자동', dark: '테마: 다크', light: '테마: 밝게' }[themePref]}</span>
         </button>
-        <button type="button" onClick={() => setIsFontOpen(true)} aria-label="글꼴·글자 크기" className={tileCls}>
+        <button type="button" onClick={() => setIsFontOpen(true)} aria-label="꾸미기 (색·글꼴·글자 크기)" className={tileCls}>
           <Type size={24} className="text-blue-600" />
-          <span className={tileLabel}>글꼴: {FONTS.find((f) => f.key === fontKey)?.label}</span>
+          <span className={tileLabel}>꾸미기</span>
+          <span className="text-[11px] text-slate-400 leading-tight">{FONTS.find((f) => f.key === fontKey)?.label}</span>
         </button>
         <button
           type="button"

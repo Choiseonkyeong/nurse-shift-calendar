@@ -2,11 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import Modal from './Modal';
 import { FONTS, FONT_SIZES, fontStack, getFontPref, getFontSizePref, setFontPref, setFontSizePref } from '../lib/fontPref';
+import { ACCENTS, getAccentPref, setAccentPref } from '../lib/accentPref';
+import Mascot from './Mascot';
 
-/** 설정 › 글꼴: 글꼴 고르기(각 이름을 그 글꼴로 보여 줌) + 글자 크기 4단계 */
+/** 설정 › 꾸미기: 앱 색 + 글꼴 고르기(각 이름을 그 글꼴로 보여 줌) + 글자 크기 4단계 */
 export default function FontSheet({ onClose }) {
   const [font, setFont] = useState(getFontPref);
   const [size, setSize] = useState(getFontSizePref);
+  const [accent, setAccent] = useState(getAccentPref);
+  const pickAccent = (key) => {
+    setAccentPref(key);
+    setAccent(key);
+  };
   const pickFont = (key) => {
     setFontPref(key);
     setFont(key);
@@ -19,15 +26,40 @@ export default function FontSheet({ onClose }) {
   useEffect(() => FONTS.forEach((f) => f.load?.().catch(() => {})), []);
 
   return (
-    <Modal onClose={onClose} label="글꼴 설정">
+    <Modal onClose={onClose} label="꾸미기">
       <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center">
-          <h3 className="text-[20px] font-bold text-slate-900">글꼴</h3>
+          <h3 className="text-[20px] font-bold text-slate-900">꾸미기</h3>
           <button onClick={onClose} className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer" aria-label="닫기">
             <X size={20} />
           </button>
         </div>
 
+        <div className="space-y-2">
+          <p className="text-[13px] text-slate-500 px-1">앱 색</p>
+          <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+            <Mascot size={52} />
+            <div role="radiogroup" aria-label="앱 색" className="flex-1 flex flex-wrap gap-2.5">
+              {ACCENTS.map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={accent === a.key}
+                  aria-label={a.label}
+                  title={a.label}
+                  onClick={() => pickAccent(a.key)}
+                  className={`w-9 h-9 rounded-full cursor-pointer flex items-center justify-center ${accent === a.key ? 'ring-[3px] ring-offset-2 ring-slate-300' : ''}`}
+                  style={{ backgroundColor: a.hex }}
+                >
+                  {accent === a.key && <Check size={18} className="text-white" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="text-[13px] text-slate-500 px-1 -mb-2">글꼴</p>
         <div role="radiogroup" aria-label="글꼴" className="rounded-2xl bg-slate-50 divide-y divide-slate-200/70 overflow-hidden">
           {FONTS.map((f) => {
             const on = font === f.key;

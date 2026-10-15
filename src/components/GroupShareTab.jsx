@@ -541,7 +541,7 @@ export default function GroupShareTab({
               <span className="text-slate-400">수</span>
               <span className="text-slate-400">목</span>
               <span className="text-slate-400">금</span>
-              <span className="text-blue-500">토</span>
+              <span className="text-sky-500">토</span>
             </div>
 
             <div className="grid grid-cols-7 gap-0.5" {...monthSwipe}>
