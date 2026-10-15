@@ -172,6 +172,17 @@ export default function AccountModal({ online, userName, initialMode = 'link', i
           ))}
         </div>
 
+        {(status === 'linked' || status === 'needs_password') && !deleteOpen && (
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={busy}
+            className="w-full h-11 rounded-xl bg-slate-100 text-[14px] font-medium text-slate-700 flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+          >
+            <LogOut size={13} /> 로그아웃
+          </button>
+        )}
+
         {!online && mode === 'link' ? (
           <p className="text-[13px] text-amber-700 bg-amber-50 rounded-xl p-3">
             서버에 연결되지 않았어요. 인터넷 연결 후 다시 열어 주세요.
@@ -296,16 +307,6 @@ export default function AccountModal({ online, userName, initialMode = 'link', i
 
         {online && mode === 'link' && (
           <div className="pt-3 border-t border-slate-100 space-y-2">
-            {status === 'linked' && !deleteOpen && (
-              <button
-                type="button"
-                onClick={handleSignOut}
-                disabled={busy}
-                className="w-full h-11 rounded-xl bg-slate-100 text-[14px] font-medium text-slate-700 flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
-              >
-                <LogOut size={13} /> 이 폰에서 로그아웃
-              </button>
-            )}
             {!deleteOpen ? (
               <button
                 type="button"
