@@ -7,10 +7,11 @@ export const TODAY = new Date('2026-09-28T09:00:00+09:00');
  * 앱 열기: 가짜 서버 + 고정 날짜 + (처음 한 번만) 기기 저장값 주입
  * @param local  localStorage 초기값 { key: value(객체면 JSON) }
  */
-export async function openApp(page, { state = createFakeState(), local = {}, name = '김간호' } = {}) {
+export async function openApp(page, { state = createFakeState(), local = {}, name = '김간호', intro = false } = {}) {
   await installFakeSupabase(page.context(), state);
   await page.clock.setFixedTime(TODAY);
-  const init = { ...(name ? { shift_user_name: name } : {}), ...local };
+  // 첫 화면(시작 화면)은 이미 본 것으로 (intro: true 면 처음 사용자처럼 보여 줌)
+  const init = { ...(intro ? {} : { intro_seen: '1' }), ...(name ? { shift_user_name: name } : {}), ...local };
   await page.addInitScript((values) => {
     if (sessionStorage.getItem('__seeded')) return;
     sessionStorage.setItem('__seeded', '1');

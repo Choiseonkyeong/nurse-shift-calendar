@@ -10,6 +10,8 @@ const AllowanceTab = lazy(lazyImport(() => import('./components/AllowanceTab')))
 const GroupShareTab = lazy(lazyImport(() => import('./components/GroupShareTab')));
 const ImportTab = lazy(lazyImport(() => import('./components/ImportTab')));
 import NameSetup from './components/NameSetup';
+import IntroScreen from './components/IntroScreen';
+import { introSeen, markIntroSeen, introEveryLaunch } from './lib/introPref';
 import InstallHint from './components/InstallHint';
 import { moveImportedMonth } from './lib/importMonth';
 import Toaster from './components/Toaster';
@@ -174,6 +176,8 @@ export default function App() {
     return true;
   };
   // 예전 버전 기본 이름('최수민')이 그대로 저장된 사용자: 한 번 이름 확인
+  // 첫 화면: 처음 쓰는 사람 한 번 (설정에서 '열 때마다 보기'를 켜면 매번)
+  const [showIntro, setShowIntro] = useState(() => (!localStorage.getItem('shift_user_name') && !introSeen()) || introEveryLaunch());
   const [needsNameConfirm, setNeedsNameConfirm] = useState(
     () => localStorage.getItem('shift_user_name') === LEGACY_DEFAULT_NAME && !localStorage.getItem(NAME_CONFIRMED_KEY)
   );
@@ -744,7 +748,15 @@ export default function App() {
 
   return (
     <ShiftTypesContext.Provider value={shiftTypes}>
-    {!userName && !accountModal && (
+    {showIntro && (
+      <IntroScreen
+        onStart={() => {
+          markIntroSeen();
+          setShowIntro(false);
+        }}
+      />
+    )}
+    {!userName && !accountModal && !showIntro && (
       <NameSetup
         onSubmit={(name) => {
           const finalName = name || DEFAULT_NAME;
