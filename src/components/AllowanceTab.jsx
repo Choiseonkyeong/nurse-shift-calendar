@@ -182,32 +182,32 @@ export default function AllowanceTab({
   return (
     <div className="max-w-md mx-auto pb-12 text-slate-800 space-y-3">
       {/* 1. 이번 달 근무 수당: 숫자만 크게 */}
-      <section className="rounded-3xl bg-blue-600 text-white p-5">
+      <section className="relative overflow-hidden rounded-3xl bg-blue-50 p-5">
         {/* 달 바꾸기: ‹ › 또는 제목을 눌러 년·월 선택 */}
         <div className="flex items-center justify-between -mt-1 -mx-2">
-          <button type="button" aria-label="이전 달" onClick={() => setSelectedDate?.(addMonthsKey(selectedDate, -1))} className="w-9 h-9 flex items-center justify-center rounded-full text-blue-100 active:bg-white/15 cursor-pointer">
+          <button type="button" aria-label="이전 달" onClick={() => setSelectedDate?.(addMonthsKey(selectedDate, -1))} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 active:bg-white cursor-pointer">
             <ChevronLeft size={20} />
           </button>
-          <button type="button" aria-label="년·월 선택" onClick={() => setPickerOpen(true)} className="flex items-center gap-0.5 text-[13px] text-blue-100 cursor-pointer">
+          <button type="button" aria-label="년·월 선택" onClick={() => setPickerOpen(true)} className="flex items-center gap-0.5 text-[13px] text-slate-500 cursor-pointer">
             {year !== getTodayDateObj().year && `${year}년 `}
             {month}월 근무 수당 · {startDateStr.slice(5).replace('-', '.')}~{endDateStr.slice(5).replace('-', '.')}
             <ChevronDown size={14} aria-hidden="true" />
           </button>
-          <button type="button" aria-label="다음 달" onClick={() => setSelectedDate?.(addMonthsKey(selectedDate, 1))} className="w-9 h-9 flex items-center justify-center rounded-full text-blue-100 active:bg-white/15 cursor-pointer">
+          <button type="button" aria-label="다음 달" onClick={() => setSelectedDate?.(addMonthsKey(selectedDate, 1))} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 active:bg-white cursor-pointer">
             <ChevronRight size={20} />
           </button>
         </div>
-        <p className={`mt-1 text-[36px] font-bold tracking-tight leading-tight ${blurCls}`}>
+        <p className={`mt-1 text-[36px] font-bold tracking-tight leading-tight text-slate-900 ${blurCls}`}>
           {won(allowance.total)}
-          <span className="text-[22px] font-semibold ml-0.5">원</span>
+          <span className="text-[22px] font-semibold ml-0.5 text-blue-600">원</span>
         </p>
         {allowanceItems.length ? (
           <div className="mt-4 grid grid-cols-2 gap-2">
             {allowanceItems.map((it) => (
-              <div key={it.code} className="rounded-2xl bg-white/15 p-3">
-                <p className="text-[12px] text-blue-100">{shortLabel(typeOf(it.code)?.label || it.code)} 수당</p>
-                <p className={`text-[17px] font-semibold mt-0.5 ${blurCls}`}>{won(it.total)} 원</p>
-                <p className={`text-[11px] text-blue-100 mt-0.5 ${blurCls}`}>
+              <div key={it.code} className="rounded-2xl bg-white p-3">
+                <p className="text-[12px] text-slate-500">{shortLabel(typeOf(it.code)?.label || it.code)} 수당</p>
+                <p className={`text-[17px] font-semibold mt-0.5 text-slate-900 ${blurCls}`}>{won(it.total)} 원</p>
+                <p className={`text-[11px] text-slate-400 mt-0.5 ${blurCls}`}>
                   {it.code} {it.count}회 × {won(it.amount)}원
                 </p>
               </div>
@@ -217,7 +217,7 @@ export default function AllowanceTab({
           <button
             type="button"
             onClick={() => setOpenSettings(true)}
-            className="mt-4 w-full rounded-2xl bg-white/15 px-4 py-3 text-left text-[14px] text-white cursor-pointer active:bg-white/25"
+            className="mt-4 w-full rounded-2xl bg-white px-4 py-3 text-left text-[14px] text-slate-700 cursor-pointer active:bg-slate-50"
           >
             나이트·이브닝 1회 수당을 넣으면 이번 달 수당이 계산돼요 ›
           </button>

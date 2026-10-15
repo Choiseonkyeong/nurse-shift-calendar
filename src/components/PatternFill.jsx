@@ -161,7 +161,7 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
             {/* 달력처럼 요일에 맞춰 두 줄 */}
             <div className="grid grid-cols-7 gap-1 rounded-2xl bg-slate-50 p-2">
               {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
-                <span key={d} className={`text-[11px] text-center ${i === 0 ? 'text-rose-400' : i === 6 ? 'text-blue-400' : 'text-slate-400'}`}>
+                <span key={d} className={`text-[11px] text-center ${i === 0 ? 'text-rose-400' : i === 6 ? 'text-sky-400' : 'text-slate-400'}`}>
                   {d}
                 </span>
               ))}

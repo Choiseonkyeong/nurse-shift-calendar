@@ -6,6 +6,7 @@ import 'wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.css'
 import './index.css'
 import { applyTheme, watchSystemTheme } from './lib/theme'
 import { applyFont } from './lib/fontPref'
+import { applyAccent } from './lib/accentPref'
 import { handleWebOAuthReturn, listenNativeOAuth } from './lib/socialAuth'
 import { installUpdateGuard } from './lib/appUpdate'
 import { captureInstallPrompt } from './lib/installHint'
@@ -15,6 +16,7 @@ import { installKeyboardInset, preventIosInputZoom } from './lib/viewport'
 applyTheme()
 watchSystemTheme()
 applyFont()
+applyAccent()
 
 // 폰: 키보드가 아래 창을 가리지 않게, 아이폰 입력칸 자동 확대 방지
 installKeyboardInset()

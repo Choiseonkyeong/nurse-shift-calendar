@@ -9,6 +9,7 @@ import { useShiftTypes, shiftTextVars, findShiftType, shortLabel } from '../lib/
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
 import DayItemsEditor from './DayItemsEditor';
+import Mascot from './Mascot';
 import { noteItems, parseItem } from '../lib/dayItems';
 import MonthPicker, { monthPickKey } from './MonthPicker';
 import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
@@ -718,8 +719,12 @@ export default function MyShiftTab({
       {/* 처음 쓰는 사용자: 근무 등록 방법 안내 (근무가 하나라도 생기면 사라짐)
           서버에서 근무를 불러오는 동안은 숨김 → 새 폰 로그인 직후 안내가 잠깐 떴다 사라지지 않게 */}
       {!importBanner && !loadingFromServer && Object.keys(myShifts || {}).length === 0 && (
-        <section className="flex items-center gap-2 rounded-2xl bg-blue-50 pl-4 pr-2 py-2">
-          <p className="flex-1 min-w-0 text-[14px] text-slate-700">아직 등록된 근무가 없어요</p>
+        <section className="flex items-center gap-2 rounded-3xl bg-blue-50 pl-2 pr-2 py-2">
+          <Mascot size={44} mood="cheer" />
+          <p className="flex-1 min-w-0 text-[14px] leading-snug text-slate-700">
+            아직 근무가 없어요
+            <span className="block text-[12px] text-slate-500">근무표 사진으로 한 번에 넣어 볼까요?</span>
+          </p>
           <button
             type="button"
             onClick={onOpenImport}
@@ -819,7 +824,7 @@ export default function MyShiftTab({
           <span className="text-slate-400">수</span>
           <span className="text-slate-400">목</span>
           <span className="text-slate-400">금</span>
-          <span className="text-blue-500">토</span>
+          <span className="text-sky-500">토</span>
         </div>
 
         {/* 날짜: 근무 있는 날은 칸 전체를 근무 색으로 (한눈에 보이게) */}
@@ -896,7 +901,21 @@ export default function MyShiftTab({
         const code = myShifts[selectedDate] || '';
         const t = code ? shiftTypes.find((x) => x.code === code) : null;
         const items = noteItems(dayNotes[selectedDate]);
+        // 오늘이면 토닥이가 한마디 (근무: 응원, 쉬는 날: 푹 쉬어요)
+        const cheer =
+          selectedDate === todayKey && t
+            ? t.kind === 'work'
+              ? { mood: 'cheer', text: `오늘은 ${shortLabel(t.label) || code} 근무예요. 오늘도 힘내요!` }
+              : { mood: 'sleep', text: '오늘은 쉬는 날! 푹 쉬어요' }
+            : null;
         return (
+          <>
+          {cheer && (
+            <div className="flex items-center gap-2 -mb-1">
+              <Mascot size={40} mood={cheer.mood} />
+              <p className="relative rounded-2xl rounded-bl-md bg-blue-50 px-3.5 py-2 text-[14px] text-slate-700">{cheer.text}</p>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => { setEditingDateKey(selectedDate); setIsEditModalOpen(true); }}
@@ -936,6 +955,7 @@ export default function MyShiftTab({
             </div>
             <span className="shrink-0 text-sm font-medium text-blue-600 pt-0.5">{items.length ? '수정' : '일정 추가'}</span>
           </button>
+          </>
         );
       })()}
 
