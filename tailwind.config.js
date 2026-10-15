@@ -27,15 +27,10 @@ const darkVars = {
 };
 // 포인트 색: 코드에서 쓰던 indigo 도 blue 와 같게. 실제 색은 설정에서 고른 색으로 바뀜(src/lib/accentPref.js)
 const source = (p) => (p === 'indigo' ? colors.blue : colors[p]);
-// 밝은 화면의 회색: 차가운 청회색(slate) 대신 살짝 따뜻한 회색 (딱딱한 느낌 줄이기). 다크 모드는 slate 그대로
-const WARM_GRAY = {
-  50: '#faf7f7', 100: '#f4efef', 200: '#e9e2e3', 300: '#d6cdcf', 400: '#a99fa2', 500: '#7c7275',
-  600: '#5c5356', 700: '#443c3f', 800: '#2c2628', 900: '#1d181a', 950: '#110d0e'
-};
 PALETTES.forEach((p) => {
   const map = p === 'slate' ? SLATE_DARK : ACCENT_DARK;
   SHADES.forEach((s) => {
-    lightVars[`--c-${p}-${s}`] = rgb(p === 'slate' ? WARM_GRAY[s] : source(p)[s]);
+    lightVars[`--c-${p}-${s}`] = rgb(source(p)[s]);
     darkVars[`--c-${p}-${s}`] = rgb(source(p)[map[s]]);
   });
 });
@@ -44,15 +39,15 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   darkMode: 'class',
   theme: {
-    // 글씨 굵기를 한 단계씩 가볍게 (굵은 글씨가 너무 많아 복잡해 보이던 것)
+    // 글씨 굵기: 제목 Bold 700 · 근무 코드 SemiBold 600 · 날짜 Medium 500 · 본문 Regular 400 (Pretendard)
     fontWeight: {
       light: '300',
       normal: '400',
       medium: '500',
       semibold: '600',
-      bold: '500',
-      extrabold: '600',
-      black: '700'
+      bold: '700',
+      extrabold: '800',
+      black: '900'
     },
     extend: {
       fontFamily: {

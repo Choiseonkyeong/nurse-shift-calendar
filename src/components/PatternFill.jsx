@@ -108,7 +108,7 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
           <div className="min-h-[3rem] px-3 py-2.5 rounded-2xl bg-slate-50 flex flex-wrap items-center gap-x-2 gap-y-1">
             {cycle.length === 0 && <span className="text-[13px] text-slate-400">아래 근무를 순서대로 눌러 패턴을 만드세요</span>}
             {cycle.map((code, i) => (
-              <span key={i} style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text text-[17px] font-bold">
+              <span key={i} style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text text-[17px] font-semibold">
                 {code}
               </span>
             ))}
@@ -120,7 +120,7 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
                 type="button"
                 onClick={() => { setCycle((c) => [...c, t.code]); setWeekdayAligned(false); }}
                 style={shiftTextVars(t)}
-                className="shift-text h-10 min-w-[48px] px-3 rounded-xl bg-white ring-1 ring-inset ring-slate-200 text-[15px] font-bold cursor-pointer active:bg-slate-50"
+                className="shift-text h-10 min-w-[48px] px-3 rounded-xl bg-white ring-1 ring-inset ring-slate-200 text-[15px] font-semibold cursor-pointer active:bg-slate-50"
               >
                 + {t.code}
               </button>
@@ -171,7 +171,7 @@ export default function PatternFill({ startDate, myShifts, onApply, onClose, def
               {entries.slice(0, 14 - previewOffset).map(([k, code]) => (
                 <div key={k} className="flex flex-col items-center gap-0.5 py-0.5">
                   <span className="text-[11px] text-slate-400">{Number(k.slice(8))}</span>
-                  <span style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text w-full text-[14px] font-bold text-center truncate">
+                  <span style={shiftTextVars(findShiftType(shiftTypes, code))} className="shift-text w-full text-[14px] font-semibold text-center truncate">
                     {code}
                   </span>
                 </div>

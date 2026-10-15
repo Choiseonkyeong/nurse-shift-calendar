@@ -7,7 +7,8 @@ import { useShiftTypes, DEFAULT_CODES, shiftTextVars, shortLabel } from '../lib/
 
 // 파스텔 색상 팔레트 (배경 / 글자)
 export const PALETTE = [
-  ['#FFEDD5', '#C2410C'], ['#FCE7F3', '#BE185D'], ['#E0F2FE', '#0369A1'], ['#F3E8FF', '#7E22CE'],
+  ['#DBEAFE', '#1D4ED8'], ['#DCFCE7', '#15803D'], ['#EDE9FE', '#6D28D9'], ['#FFEDD5', '#C2410C'], ['#FCE7F3', '#BE185D'],
+  ['#E0F2FE', '#0369A1'], ['#F3E8FF', '#7E22CE'],
   ['#F1F5F9', '#64748B'], ['#D1FAE5', '#047857'], ['#FEF9C3', '#A16207'], ['#CCFBF1', '#115E59'],
   ['#E0E7FF', '#3730A3'], ['#FEF3C7', '#92400E'], ['#ECFCCB', '#3F6212'], ['#FFE4E6', '#E11D48']
 ];
@@ -110,7 +111,7 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
                   onClick={() => openEdit(t)}
                   className="w-full flex items-center gap-3 py-3 cursor-pointer text-left"
                 >
-                  <span style={shiftTextVars(t)} className="shift-text w-12 shrink-0 text-[17px] font-bold truncate">
+                  <span style={shiftTextVars(t)} className="shift-text w-12 shrink-0 text-[17px] font-semibold truncate">
                     {t.code}
                   </span>
                   <span className="flex-1 text-[15px] text-slate-800 truncate">{shortLabel(t.label)}</span>

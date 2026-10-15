@@ -582,7 +582,7 @@ export default function GroupShareTab({
                                 className="shift-cell flex justify-center items-center gap-0.5 rounded-md px-0.5 overflow-hidden whitespace-nowrap text-[11px] leading-[16px]"
                               >
                                 <span className={`min-w-0 truncate text-slate-500 ${blurCls}`}>{[...(member.name || '')][0]}</span>
-                                <span className="shift-text shrink-0 font-bold">{shift}</span>
+                                <span className="shift-text shrink-0 font-semibold">{shift}</span>
                               </div>
                             );
                           })}
@@ -614,7 +614,7 @@ export default function GroupShareTab({
                     <span className={`min-w-0 truncate text-[15px] text-slate-800 ${blurCls}`}>{member.name} 쌤</span>
                     <span
                       style={shift ? { '--fg': memberStyle?.color, '--bg': memberStyle?.backgroundColor } : undefined}
-                      className={`shrink-0 whitespace-nowrap text-[15px] font-bold ${shift ? 'shift-text' : 'text-slate-300 font-normal'}`}
+                      className={`shrink-0 whitespace-nowrap text-[15px] font-semibold ${shift ? 'shift-text' : 'text-slate-300 font-normal'}`}
                     >
                       {shift || '없음'}
                     </span>

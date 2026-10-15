@@ -234,8 +234,8 @@ test('위쪽 제목: 내 근무는 이름, 다른 화면은 화면 이름', asyn
     await tab(page, t).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
   }
-  // 글꼴: 원티드 산스 (설정 › 글꼴에서 바꿀 수 있음)
-  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/Wanted Sans/);
+  // 글꼴: 프리텐다드 (설정 › 꾸미기에서 바꿀 수 있음)
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/^"Pretendard Variable"/);
 });
 
 test('다크 모드에서도 달력 근무 글자가 잘 보임 (밝은 색으로 바뀜)', async ({ page }) => {
@@ -327,10 +327,10 @@ test('일정·메모: 한 날짜에 여러 개 넣으면 달력 칸에 모두 �
   await expect(cell).toHaveAttribute('aria-label', /일정 4개: 택배, 회식, 교육, 운동/);
 });
 
-test('설정 › 꾸미기: 앱 색(기본 핑크)·글꼴·글자 크기를 바꾸면 바로 바뀌고 다시 열어도 유지', async ({ page }) => {
+test('설정 › 꾸미기: 앱 색(기본 블루)·글꼴·글자 크기를 바꾸면 바로 바뀌고 다시 열어도 유지', async ({ page }) => {
   await openApp(page);
   const accent = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--c-blue-600').trim());
-  expect(await accent()).toBe('219 39 119'); // 기본: 핑크(#db2777)
+  expect(await accent()).toBe('37 99 235'); // 기본: 블루(#2563eb)
   await tab(page, '설정').click();
   await page.getByRole('button', { name: /꾸미기/ }).click();
   const sheet = page.getByRole('dialog', { name: '꾸미기' });
