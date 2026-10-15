@@ -383,3 +383,33 @@ test('달력: 날짜 아래 근무 칩, 오늘은 은은한 상자, 아래 이�
   await page.getByRole('button', { name: /오늘은 나이트 근무예요/ }).click();
   await expect(page.getByRole('dialog', { name: '근무 직접 수정' })).toContainText('9월 28일');
 });
+
+test('첫 화면: 처음 쓰는 사람에게 한 번, 시작하기 → 이름 입력 / 꾸미기에서 배경 바꾸기·내 사진·열 때마다 보기', async ({ page }) => {
+  await openApp(page, { name: null, intro: true });
+  const intro = page.getByRole('dialog', { name: '시작 화면' });
+  await expect(intro).toContainText('나의근무표');
+  await expect(intro).toContainText('일하는 날도,쉬는 날도나답게');
+  await intro.getByRole('button', { name: /시작하기/ }).click();
+  await expect(page.getByText('환영합니다!')).toBeVisible();
+  await page.getByPlaceholder('예: 김간호 (선택)').fill('김간호');
+  await page.getByRole('button', { name: '시작하기' }).click();
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: '시작 화면' })).toHaveCount(0); // 한 번만
+
+  await tab(page, '설정').click();
+  await page.getByRole('button', { name: /꾸미기/ }).click();
+  const sheet = page.getByRole('dialog', { name: '꾸미기' });
+  await sheet.getByRole('radio', { name: '밤 근무' }).click();
+  expect(await page.evaluate(() => localStorage.getItem('intro_bg'))).toBe('night');
+  // 내 사진 (작은 PNG)
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAIAAAA2iEnWAAAAFElEQVR4nGP4z8DAwMDAxMDAwMAAACEAAvvWw2kAAAAASUVORK5CYII=', 'base64');
+  await sheet.getByLabel('내 사진으로 첫 화면 배경').setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: png });
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('intro_bg'))).toBe('photo');
+  expect(await page.evaluate(() => localStorage.getItem('intro_photo'))).toMatch(/^data:image\/jpeg/);
+  await sheet.getByRole('button', { name: '미리 보기' }).click();
+  await expect(page.getByRole('dialog', { name: '시작 화면' }).locator('img')).toBeVisible();
+  await page.getByRole('dialog', { name: '시작 화면' }).getByRole('button', { name: /시작하기/ }).click();
+  await sheet.getByRole('switch').check();
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: '시작 화면' })).toBeVisible(); // 열 때마다
+});

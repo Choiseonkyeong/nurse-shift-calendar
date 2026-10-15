@@ -109,7 +109,10 @@ test('팝업: Esc·바깥 누르면 닫힘, 포커스는 팝업 안에서만 이
 
   // 첫 실행 이름 입력 창은 필수라 Esc 로 닫히지 않음
   const fresh = await page.context().newPage();
-  await fresh.addInitScript(() => localStorage.clear());
+  await fresh.addInitScript(() => {
+    localStorage.clear();
+    localStorage.setItem('intro_seen', '1'); // 첫 화면(시작 화면)은 지나간 상태
+  });
   await fresh.goto('/');
   await fresh.keyboard.press('Escape');
   await expect(fresh.getByText('환영합니다!')).toBeVisible();

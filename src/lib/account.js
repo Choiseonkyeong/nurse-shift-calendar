@@ -132,6 +132,20 @@ export function authRedirectType() {
  * 계정 삭제: 서버의 계정과 모든 데이터(근무·메모·설정·그룹 멤버십·게시글·교환 요청·알림 토큰) 삭제 후
  * 이 기기 데이터도 전부 지움. 호출 후 새로고침 필요
  */
+// 이 폰의 화면 설정(첫 화면·배경·테마·글꼴·색)은 계정과 상관없어서 지우지 않음
+const DEVICE_PREF_KEYS = ['intro_seen', 'intro_bg', 'intro_photo', 'intro_every_launch', 'theme_pref', 'font_pref', 'font_size_pref', 'accent_pref'];
+function clearKeepingDevicePrefs() {
+  const keep = DEVICE_PREF_KEYS.map((k) => [k, localStorage.getItem(k)]).filter(([, v]) => v !== null);
+  localStorage.clear();
+  keep.forEach(([k, v]) => {
+    try {
+      localStorage.setItem(k, v);
+    } catch (e) {
+      /* 무시 */
+    }
+  });
+}
+
 export async function deleteMyAccount() {
   const supabase = await getSupabase();
   const { error } = await supabase.rpc('delete_my_account');
@@ -142,12 +156,12 @@ export async function deleteMyAccount() {
     throw error;
   }
   await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-  localStorage.clear();
+  clearKeepingDevicePrefs();
 }
 
 /** 이 폰에서 로그아웃: 서버 데이터는 그대로 두고 이 기기의 로그인·데이터만 지움. 호출 후 새로고침 필요 */
 export async function signOutThisDevice() {
   const supabase = await getSupabase();
   await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-  localStorage.clear();
+  clearKeepingDevicePrefs();
 }
