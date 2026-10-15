@@ -158,7 +158,7 @@ test('내보내기(CSV·.ics) + 전체 백업 저장 → 다른 기기에서 복
   await expect(other.getByRole('dialog', { name: '백업을 복원할까요?' })).toContainText('근무 2일 · 메모 1건');
   await confirmOk(other);
   await other.waitForLoadState('load');
-  await expect(other.getByRole('heading', { name: '김간호 님의 근무표' })).toBeVisible();
+  await expect(other.getByTitle('김간호', { exact: true })).toBeVisible();
   expect(await readLocal(other, 'my_shift_data')).toMatchObject({ '2026-10-01': 'D', '2026-10-02': 'N' });
   expect((await readLocal(other, 'shift_configs')).hourlyWage).toBe(12345);
   await other.close();

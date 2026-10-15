@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { Calendar, CalendarCheck, Wallet, Users, Settings, Shield, Pencil, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { Calendar, CalendarCheck, Wallet, Users, Settings, Shield, Cloud, CloudOff, Loader2, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import MonthPicker, { monthPickKey } from './components/MonthPicker';
+import { addMonthsKey } from './utils/dateUtils';
 import MyShiftTab from './components/MyShiftTab';
 import { lazyImport, consumeResume, setResumeTab } from './lib/appUpdate';
 // 첫 화면(내 근무) 외 탭은 누를 때 불러옴 → 첫 실행 속도 개선
@@ -179,8 +181,9 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [profile, setProfile] = useState(null);
   const syncedShiftsRef = useRef(null); // 서버에 반영된 마지막 근무 스냅샷 (null = 아직 동기화 전)
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [tempUserName, setTempUserName] = useState(userName);
+  // 내 근무 머리글의 '2026년 10월' → 년·월 고르기
+  const [headerPickerOpen, setHeaderPickerOpen] = useState(false);
+  const [headerYear, headerMonth] = selectedDate.split('-').map(Number);
 
   const [myShifts, setMyShifts] = useState(() => {
     try {
@@ -711,12 +714,14 @@ export default function App() {
     setImportBanner(null);
   };
 
-  const handleSaveName = () => {
-    if (tempUserName.trim()) {
-      localStorage.setItem(NAME_CONFIRMED_KEY, '1');
-      setUserName(tempUserName.trim().slice(0, 30));
-      setIsEditingName(false);
-    }
+  // 설정 탭에서 이름 바꾸기
+  const handleRename = (name) => {
+    const next = String(name || '').trim().slice(0, 30);
+    if (!next) return;
+    localStorage.setItem(NAME_CONFIRMED_KEY, '1');
+    nameSkippedRef.current = false;
+    setNameSkipped(false);
+    setUserName(next);
   };
 
   const handleGoToday = () => {
@@ -747,7 +752,6 @@ export default function App() {
           setNameSkipped(!name);
           nameSkippedRef.current = !name;
           setUserName(finalName);
-          setTempUserName(finalName);
         }}
         onLogin={() => setAccountModal('login')}
       />
@@ -776,13 +780,23 @@ export default function App() {
           setNameSkipped(false);
           localStorage.setItem(NAME_CONFIRMED_KEY, '1');
           setUserName(name);
-          setTempUserName(name);
           // 그룹 멤버 목록에 바로 새 이름이 보이도록 서버 프로필 먼저 반영
           if (profile) {
             await updateDisplayName(profile.id, name).catch(() => {});
             setProfile((p) => (p ? { ...p, display_name: name } : p));
           }
           then();
+        }}
+      />
+    )}
+    {headerPickerOpen && (
+      <MonthPicker
+        year={headerYear}
+        month={headerMonth}
+        onClose={() => setHeaderPickerOpen(false)}
+        onPick={(y, m) => {
+          setSelectedDate(monthPickKey(y, m));
+          setHeaderPickerOpen(false);
         }}
       />
     )}
@@ -794,7 +808,6 @@ export default function App() {
           localStorage.setItem(NAME_CONFIRMED_KEY, '1');
           setNeedsNameConfirm(false);
           setUserName(name);
-          setTempUserName(name);
         }}
       />
     )}
@@ -811,56 +824,33 @@ export default function App() {
           <div className="min-w-0 flex-1">
             {activeTab !== 'myShift' ? (
               <h1 className="text-[26px] font-bold text-slate-900 tracking-tight leading-tight truncate">{TAB_TITLES[activeTab]}</h1>
-            ) : isEditingName ? (
-              <div className="flex items-center gap-1.5 min-w-0 h-[33px]">
-                <input
-                  type="text"
-                  value={tempUserName}
-                  autoFocus
-                  maxLength={30}
-                  aria-label="이름"
-                  placeholder="이름"
-                  onChange={(e) => setTempUserName(e.target.value)}
-                  className="min-w-0 flex-1 max-w-[10rem] px-3 py-1.5 text-base text-slate-800 font-medium rounded-xl bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-200"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveName();
-                    if (e.key === 'Escape') setIsEditingName(false);
-                  }}
-                />
-                <button onClick={handleSaveName} className="shrink-0 whitespace-nowrap text-sm bg-indigo-600 text-white px-3 py-1.5 rounded-xl font-semibold cursor-pointer">저장</button>
-              </div>
             ) : (
-              <button
-                type="button"
-                className="flex items-center gap-1.5 cursor-pointer group max-w-full"
-                onClick={() => {
-                  // 이름 없이 시작한 경우 기본 이름('나')을 지우고 빈 칸으로
-                  setTempUserName(nameSkipped ? '' : userName);
-                  setIsEditingName(true);
-                }}
-                aria-label="이름 수정"
-              >
-                <h1 className="text-[15px] font-medium text-slate-500 leading-tight truncate">
-                  {nameSkipped || !userName ? (
-                    '내 근무표'
-                  ) : (
-                    <>
-                      {userName}
-                      <span> 님의</span> 근무표
-                    </>
-                  )}
+              // 내 근무: 이름 제목 없이 바로 '2026년 10월' (누르면 년·월 고르기). 이름은 설정 탭에서 바꿈
+              <button type="button" onClick={() => setHeaderPickerOpen(true)} aria-label="년·월 선택" className="flex items-center gap-1 cursor-pointer max-w-full">
+                <h1 className="text-[24px] font-bold text-slate-900 tracking-tight leading-tight truncate">
+                  {headerYear}년 {headerMonth}월
                 </h1>
-                <Pencil size={14} className="shrink-0 text-slate-300" />
+                <ChevronDown size={20} className="shrink-0 text-slate-500" aria-hidden="true" />
               </button>
             )}
             <SyncBadge status={syncStatus} />
           </div>
 
           <div className="flex items-center shrink-0 text-slate-600">
+            {activeTab === 'myShift' && (
+              <>
+                <button type="button" aria-label="이전 달" onClick={() => setSelectedDate(addMonthsKey(selectedDate, -1))} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-700 cursor-pointer active:bg-slate-100">
+                  <ChevronLeft size={22} />
+                </button>
+                <button type="button" aria-label="다음 달" onClick={() => setSelectedDate(addMonthsKey(selectedDate, 1))} className="w-9 h-9 mr-1 flex items-center justify-center rounded-full text-slate-700 cursor-pointer active:bg-slate-100">
+                  <ChevronRight size={22} />
+                </button>
+              </>
+            )}
             <button
               onClick={handleGoToday}
               aria-label="오늘"
-              className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100"
+              className="w-11 h-11 mr-1.5 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-700 cursor-pointer active:bg-slate-100"
             >
               <CalendarCheck size={22} />
             </button>
@@ -878,6 +868,7 @@ export default function App() {
               type="button"
               onClick={() => setAccountModal('link')}
               aria-label={accountStatus === 'linked' ? '계정' : '계정 (연결 필요)'}
+              title={nameSkipped || !userName ? '나' : userName}
               className="relative ml-1 w-9 h-9 shrink-0 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-semibold text-sm cursor-pointer"
             >
               {userName.substring(0, 1)}
@@ -975,6 +966,7 @@ export default function App() {
 
           {activeTab === 'import' && (
             <ImportTab
+              onRename={handleRename}
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
               myShifts={myShifts || {}}

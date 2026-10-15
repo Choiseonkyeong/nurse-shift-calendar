@@ -104,9 +104,9 @@ test("이름이 예전 기본 이름('최수민')과 같아도 직접 입력했�
   await openApp(page, { name: null });
   await page.getByPlaceholder('예: 김간호 (선택)').fill('최수민');
   await page.getByRole('button', { name: '시작하기' }).click();
-  await expect(page.getByRole('heading', { name: /최수민/ })).toBeVisible();
+  await expect(page.getByTitle('최수민', { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: /최수민/ })).toBeVisible();
+  await expect(page.getByTitle('최수민', { exact: true })).toBeVisible();
   await expect(page.getByText('이름을 확인해 주세요')).toHaveCount(0);
 });
 

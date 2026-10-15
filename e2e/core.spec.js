@@ -9,7 +9,7 @@ test('첫 실행: 이름 입력 → 서버 연결 → 근무 입력이 서버에
   await expect(page.getByText('환영합니다!')).toBeVisible();
   await page.getByPlaceholder('예: 김간호').fill('이간호');
   await page.getByRole('button', { name: '시작하기' }).click();
-  await expect(page.getByRole('heading', { name: '이간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('이간호', { exact: true })).toBeVisible();
   await waitSaved(page);
 
   await day(page, '9월 10일').click();
@@ -22,7 +22,7 @@ test('예전 기본 이름 사용자는 한 번 이름 확인', async ({ page })
   await expect(page.getByText('이름을 확인해 주세요')).toBeVisible();
   await page.getByPlaceholder('예: 김간호').fill('박간호');
   await page.getByRole('button', { name: '확인', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '박간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('박간호', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText('이름을 확인해 주세요')).toHaveCount(0);
 });
@@ -197,7 +197,7 @@ test('앱을 켜 둔 채 날짜가 바뀌면 다시 볼 때 오늘(다음 달)�
   // 밤 근무 후 아침에 다시 열기
   await page.clock.setFixedTime(new Date('2026-10-01T07:30:00+09:00'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect(page.getByText('2026년 10월')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '2026년 10월' })).toBeVisible();
   await expect(page.getByText('10월 1일 (목) 일정·메모')).toBeVisible();
 
   // 다른 날짜(10/15)를 보고 있었으면 날짜가 바뀌어도 그대로
@@ -227,13 +227,18 @@ test('반복 패턴으로 기존 근무를 덮어써도 알림의 되돌리기�
   expect(await readLocal(page, 'my_shift_data')).toEqual(before);
 });
 
-test('위쪽 제목: 내 근무는 이름, 다른 화면은 화면 이름', async ({ page }) => {
+test('위쪽 제목: 내 근무는 바로 년·월(이름 없이), 다른 화면은 화면 이름 / 이름은 설정에서 바꿈', async ({ page }) => {
   await openApp(page);
-  await expect(page.getByRole('heading', { level: 1, name: '김간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('2026년 9월');
+  await expect(page.getByTitle('김간호', { exact: true })).toBeVisible(); // 계정 버튼
   for (const [t, title] of [['수당', '연차 · 수당'], ['그룹', '그룹'], ['설정', '설정']]) {
     await tab(page, t).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
   }
+  await page.getByRole('button', { name: '이름 수정' }).click();
+  await page.getByRole('textbox', { name: '이름' }).fill('최간호');
+  await page.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(page.getByTitle('최간호', { exact: true })).toBeVisible();
   // 글꼴: 프리텐다드 (설정 › 꾸미기에서 바꿀 수 있음)
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/^"Pretendard Variable"/);
 });
@@ -365,4 +370,16 @@ test('일정 색 고르기, 보안 모드에서는 달력 칸·목록의 일정�
   await tab(page, '내 근무').click();
   await expect(cell).toHaveAttribute('aria-label', /일정 2개$/); // 내용은 읽어 주지 않음
   await expect(page.locator('ul.blur-\\[5px\\]')).toContainText('교육');
+});
+
+test('달력: 날짜 아래 근무 칩, 오늘은 은은한 상자, 아래 이번 달 근무 수 카드와 오늘 한마디', async ({ page }) => {
+  await openApp(page, { local: { my_shift_data: { '2026-09-28': 'N', '2026-09-29': 'N', '2026-09-30': 'D' } } });
+  const today = page.getByRole('button', { name: /^9월 28일 N 근무/ });
+  await expect(today).toHaveAttribute('aria-current', 'date');
+  await expect(today).toHaveClass(/today-cell/);
+  const counts = page.getByRole('region', { name: '이번 달 근무 수' });
+  await expect(counts).toContainText('N2일');
+  await expect(counts).toContainText('D1일');
+  await page.getByRole('button', { name: /오늘은 나이트 근무예요/ }).click();
+  await expect(page.getByRole('dialog', { name: '근무 직접 수정' })).toContainText('9월 28일');
 });

@@ -13,7 +13,7 @@ const cachedTitle = (page, path) =>
 
 test('개인정보처리방침을 열어도 오프라인용 앱 첫 화면 캐시가 바뀌지 않음', async ({ page }) => {
   await openApp(page);
-  await expect(page.getByRole('heading', { name: '김간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('김간호', { exact: true })).toBeVisible();
   await page.waitForFunction(() => navigator.serviceWorker?.controller, null, { timeout: 15000 });
   await expect.poll(() => cachedTitle(page, '/')).toBe('근무표');
 
