@@ -49,7 +49,7 @@ test('새 폰 첫 화면: 카카오로 시작 → 기존 계정의 이름·근�
   await openApp(page, { state, name: null });
 
   await page.getByRole('button', { name: '카카오로 시작' }).click();
-  await expect(page.getByRole('heading', { name: '최간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('최간호', { exact: true })).toBeVisible();
   await waitSaved(page);
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-15': 'N' });
   await expect(page.getByRole('button', { name: '계정', exact: true })).toBeVisible();
@@ -60,7 +60,7 @@ test('처음 쓰는 카카오 계정으로 시작 → 카카오 이름으로 새
   await openApp(page, { state, name: null });
 
   await page.getByRole('button', { name: '카카오로 시작' }).click();
-  await expect(page.getByRole('heading', { name: '카카오간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('카카오간호', { exact: true })).toBeVisible();
   await waitSaved(page);
   expect(Object.values(state.profiles).map((p) => p.display_name)).toEqual(['카카오간호']);
 });
@@ -77,7 +77,7 @@ test('쓰던 기기에서 기존 카카오 계정으로 로그인: 확인 후 �
   await expect(page.getByRole('dialog', { name: '기존 계정으로 로그인할까요?' })).toBeVisible();
   await confirmOk(page);
 
-  await expect(page.getByRole('heading', { name: '최간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('최간호', { exact: true })).toBeVisible();
   await waitSaved(page);
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-15': 'N' });
 });

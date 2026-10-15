@@ -55,7 +55,7 @@ test('새 폰: 첫 화면에서 기존 계정으로 로그인 → 계정 데이�
 
   await page.getByPlaceholder('비밀번호').fill('secret12');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '최간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('최간호', { exact: true })).toBeVisible();
   await waitSaved(page);
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-15': 'N' });
 });
@@ -66,7 +66,7 @@ test('인증 메일 링크로 열린 웹 페이지: 완료 안내 후 앱 데이
   await page.goto('/?from=mail#access_token=abc&type=email_change&refresh_token=r');
   await expect(page.getByText('이메일 인증 완료')).toBeVisible();
   await page.getByRole('button', { name: '웹에서 근무표 열기' }).click();
-  await expect(page.getByRole('heading', { name: '김간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('김간호', { exact: true })).toBeVisible();
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-01': 'D' });
   expect(page.url()).not.toContain('access_token');
 });

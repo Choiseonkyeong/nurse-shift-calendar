@@ -142,7 +142,7 @@ test('이름 없이 시작 → 그룹 만들 때만 이름을 묻고 이어서 �
   const state = createFakeState();
   await openApp(page, { state, name: null });
   await page.getByRole('button', { name: '이름 없이 시작하기' }).click();
-  await expect(page.getByRole('heading', { name: '나의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('나', { exact: true })).toBeVisible();
   await waitSaved(page);
 
   await tab(page, '그룹').click();
@@ -155,7 +155,7 @@ test('이름 없이 시작 → 그룹 만들 때만 이름을 묻고 이어서 �
 
   await expect(page.getByText(/'7병동' 그룹이 생성되었습니다/)).toBeVisible();
   await tab(page, '내 근무').click(); // 위쪽 제목은 화면마다 다르고, 내 근무 화면에 이름이 나옴
-  await expect(page.getByRole('heading', { name: '박간호 님의 근무표' })).toBeVisible();
+  await expect(page.getByTitle('박간호', { exact: true })).toBeVisible();
   const me = Object.values(state.profiles)[0];
   expect(me.display_name).toBe('박간호');
   expect(state.groups[0].members).toEqual([me.id]);

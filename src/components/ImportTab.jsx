@@ -10,7 +10,7 @@ import { FONTS, getFontPref } from '../lib/fontPref';
 import { Capacitor } from '@capacitor/core';
 import { getWidgetNotesPref, setWidgetNotesPref } from '../lib/widgetSync';
 import { confirmDialog } from '../lib/confirm';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon, Type } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon, Type, Pencil } from 'lucide-react';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
@@ -58,8 +58,11 @@ export default function ImportTab({
   themePref = 'system',
   onCycleTheme,
   privacyBlur = false,
-  onTogglePrivacy
+  onTogglePrivacy,
+  onRename
 }) {
+  // 이름 바꾸기 (예전엔 내 근무 화면 제목을 눌러 바꿨음)
+  const [editingName, setEditingName] = useState(null);
   const [isFontOpen, setIsFontOpen] = useState(false);
   const [fontKey, setFontKey] = useState(getFontPref);
   const [widgetNotes, setWidgetNotes] = useState(getWidgetNotesPref);
@@ -476,20 +479,57 @@ export default function ImportTab({
           </div>
         ))}
 
-      {/* 계정 */}
-      <button type="button" onClick={onOpenAccount} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
-        <span className="relative w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-lg font-semibold shrink-0">
-          {(userName || '나').substring(0, 1)}
-          {accountStatus !== 'linked' && <span className="absolute top-0 right-0 w-3 h-3 rounded-full bg-amber-400 ring-2 ring-white" />}
-        </span>
-        <span className="flex-1 min-w-0">
-          <span className="block text-[17px] font-semibold text-slate-900 truncate">{userName || '나'}</span>
-          <span className={`block text-[13px] mt-0.5 ${accountStatus === 'linked' ? 'text-slate-400' : 'text-amber-600'}`}>
-            {accountStatus === 'linked' ? '계정 연결됨' : '계정 연결하기 (폰 바꿀 때 필요)'}
+      {/* 계정 · 이름 */}
+      <div className="flex items-center gap-1">
+        <button type="button" onClick={onOpenAccount} className="flex-1 min-w-0 flex items-center gap-3 py-3 text-left cursor-pointer">
+          <span className="relative w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-lg font-semibold shrink-0">
+            {(userName || '나').substring(0, 1)}
+            {accountStatus !== 'linked' && <span className="absolute top-0 right-0 w-3 h-3 rounded-full bg-amber-400 ring-2 ring-white" />}
           </span>
-        </span>
-        <ChevronRight size={18} className="text-slate-300 shrink-0" />
-      </button>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[17px] font-semibold text-slate-900 truncate">{userName || '나'}</span>
+            <span className={`block text-[13px] mt-0.5 ${accountStatus === 'linked' ? 'text-slate-400' : 'text-amber-600'}`}>
+              {accountStatus === 'linked' ? '계정 연결됨' : '계정 연결하기 (폰 바꿀 때 필요)'}
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-slate-300 shrink-0" />
+        </button>
+        {onRename && (
+          <button
+            type="button"
+            onClick={() => setEditingName(userName || '')}
+            aria-label="이름 수정"
+            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer"
+          >
+            <Pencil size={18} />
+          </button>
+        )}
+      </div>
+      {editingName !== null && (
+        <form
+          className="mb-2 flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!editingName.trim()) return;
+            onRename(editingName);
+            setEditingName(null);
+          }}
+        >
+          <input
+            value={editingName}
+            autoFocus
+            maxLength={30}
+            aria-label="이름"
+            placeholder="이름"
+            onChange={(e) => setEditingName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setEditingName(null)}
+            className="flex-1 min-w-0 h-11 px-3 rounded-xl bg-slate-100 text-[15px] text-slate-800 outline-none focus:ring-2 focus:ring-blue-200"
+          />
+          <button type="submit" className="shrink-0 h-11 px-4 rounded-xl bg-blue-600 text-white text-[14px] font-semibold cursor-pointer">
+            저장
+          </button>
+        </form>
+      )}
 
       {/* 근무표 사진으로 등록 (가장 많이 쓰는 것) */}
       <section className="mt-2 rounded-3xl bg-blue-600 text-white p-5">

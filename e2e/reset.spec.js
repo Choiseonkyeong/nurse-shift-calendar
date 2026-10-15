@@ -34,7 +34,7 @@ test('근무·메모 전체 삭제: 첫 화면으로 가지 않고, 서버에서
   await page.reload();
   await waitSaved(page);
   await expect(page.getByText('환영합니다!')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: /최간호/ })).toBeVisible();
+  await expect(page.getByTitle('최간호', { exact: true })).toBeVisible();
   expect(await readLocal(page, 'my_shift_data')).toEqual({});
 });
 

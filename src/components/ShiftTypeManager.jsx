@@ -7,6 +7,7 @@ import { useShiftTypes, DEFAULT_CODES, shiftTextVars, shortLabel } from '../lib/
 
 // 파스텔 색상 팔레트 (배경 / 글자)
 export const PALETTE = [
+  ['#E0EDF9', '#2F6DB0'], ['#F9E9DC', '#C0652A'], ['#EBE6F7', '#6B4FB8'], ['#DFF1EA', '#2E7D62'], ['#EAECE9', '#6B706A'],
   ['#DBEAFE', '#1D4ED8'], ['#DCFCE7', '#15803D'], ['#EDE9FE', '#6D28D9'], ['#FFEDD5', '#C2410C'], ['#FCE7F3', '#BE185D'],
   ['#E0F2FE', '#0369A1'], ['#F3E8FF', '#7E22CE'],
   ['#F1F5F9', '#64748B'], ['#D1FAE5', '#047857'], ['#FEF9C3', '#A16207'], ['#CCFBF1', '#115E59'],

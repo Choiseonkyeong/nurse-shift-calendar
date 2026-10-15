@@ -3,7 +3,7 @@ import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
-import { AlarmClock, Bell, BellOff, Camera, Check, ChevronDown, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
+import { AlarmClock, Bell, BellOff, Camera, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useSwipe } from '../lib/swipe';
 import { useShiftTypes, shiftTextVars, findShiftType, shortLabel } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
@@ -11,7 +11,6 @@ import PatternFill from './PatternFill';
 import DayItemsEditor from './DayItemsEditor';
 import Mascot from './Mascot';
 import { noteItems, parseItem } from '../lib/dayItems';
-import MonthPicker, { monthPickKey } from './MonthPicker';
 import { getHoliday, getHolidayShort, dayNumberClass } from '../utils/holidays';
 import { addMonthsKey, toDateKey, getTodayDateObj } from '../utils/dateUtils';
 import { usesServerPush, enablePushReminders, disablePushReminders, toStartTimes } from '../lib/pushNotifications';
@@ -357,7 +356,6 @@ export default function MyShiftTab({
   const [quickCode, setQuickCode] = useState(null);
   const quickMode = quickCode !== null;
   const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
-  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [isPatternOpen, setIsPatternOpen] = useState(false); // false | true | 'first'(처음 사용자 안내에서 열림)
 
   // 알림 권한 요청 및 타이머 등록
@@ -646,6 +644,7 @@ export default function MyShiftTab({
   });
 
   const findType = (code) => findShiftType(shiftTypes, code);
+  const workCounts = Object.entries(shiftCounts).filter(([code, count]) => count > 0 && findType(code)?.kind === 'work');
 
   return (
     <div className="space-y-4 max-w-md mx-auto pb-12 text-slate-800">
@@ -744,110 +743,8 @@ export default function MyShiftTab({
         </section>
       )}
 
-      {/* 0. 이번 주: 월~일 근무 한 줄 + 오늘 한마디 (누르면 그 날짜로) */}
-      {!quickMode && (() => {
-        const today = getTodayDateObj();
-        const base = new Date(today.year, today.month - 1, today.day);
-        const monday = new Date(base.getFullYear(), base.getMonth(), base.getDate() - ((base.getDay() + 6) % 7));
-        const days = Array.from({ length: 7 }, (_, i) => {
-          const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
-          return { key: toDateKey(d), d, code: myShifts[toDateKey(d)] || '' };
-        });
-        const todayType = myShifts[todayKey] ? findType(myShifts[todayKey]) : null;
-        const firstWork = days.map((x) => x.code && findType(x.code)).find((t) => t?.kind === 'work');
-        const msg = todayType
-          ? todayType.kind === 'work'
-            ? { mood: 'cheer', text: `오늘은 ${shortLabel(todayType.label) || todayType.code} 근무예요. 오늘도 힘내요!` }
-            : { mood: 'sleep', text: '오늘은 쉬는 날! 푹 쉬어요' }
-          : firstWork
-            ? { mood: 'happy', text: `이번 주는 ${shortLabel(firstWork.label) || firstWork.code} 근무로 시작해요!` }
-            : { mood: 'happy', text: '이번 주 근무를 넣어 볼까요?' };
-        const WEEK = ['월', '화', '수', '목', '금', '토', '일'];
-        return (
-          <section className="space-y-3" aria-label="이번 주 근무">
-            <p className="text-[15px] font-medium text-slate-500">
-              {today.year}년 {today.month}월 · 이번 주 스케줄
-            </p>
-            <div className="grid grid-cols-7 gap-1.5">
-              {days.map((x, i) => {
-                const t = x.code ? findType(x.code) : null;
-                const isToday = x.key === todayKey;
-                return (
-                  <button
-                    key={x.key}
-                    type="button"
-                    onClick={() => setSelectedDate(x.key)}
-                    aria-label={`이번 주 ${WEEK[i]}요일 ${x.d.getMonth() + 1}/${x.d.getDate()} ${x.code || '근무 없음'}`}
-                    className="flex flex-col items-center gap-1.5 cursor-pointer"
-                  >
-                    <span className={`text-[13px] font-medium ${isToday ? 'text-blue-600' : i === 5 ? 'text-sky-500' : i === 6 ? 'text-rose-500' : 'text-slate-500'}`}>{WEEK[i]}</span>
-                    <span
-                      style={t ? shiftTextVars(t) : undefined}
-                      className={`w-full aspect-square max-h-12 rounded-2xl flex items-center justify-center text-[15px] font-semibold ${
-                        t ? 'shift-cell shift-text' : 'bg-slate-50 text-slate-300'
-                      } ${[...(x.code || '')].length >= 3 ? 'text-[12px]' : ''} ${isToday ? 'ring-2 ring-inset ring-blue-500' : ''}`}
-                    >
-                      {x.code || '·'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedDate(todayKey);
-                setEditingDateKey(todayKey);
-                setIsEditModalOpen(true);
-              }}
-              className="w-full flex items-center gap-3 rounded-2xl bg-slate-50 pl-2 pr-3 py-2 text-left cursor-pointer active:bg-slate-100"
-            >
-              <span className="w-11 h-11 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center">
-                <Mascot size={36} mood={msg.mood} />
-              </span>
-              <span className="flex-1 min-w-0 text-[15px] text-slate-700">{msg.text}</span>
-              <ChevronRight size={18} className="shrink-0 text-slate-300" />
-            </button>
-          </section>
-        );
-      })()}
-
-      {/* 1. 달 제목 · 이번 달 요약 */}
-      <section className={quickMode ? 'pt-1' : 'border-t border-slate-100 pt-4'}>
-        <div className="flex items-end justify-between">
-          {/* 누르면 년·월 바로 고르기 */}
-          <button type="button" onClick={() => setIsMonthPickerOpen(true)} aria-label="년·월 선택" className="text-left cursor-pointer">
-            <h2 className="text-slate-900 leading-none">
-              <span className="block text-[13px] font-medium text-slate-400 mb-1.5">{year}년 </span>
-              <span className="text-[34px] font-bold tracking-tight">{month}월</span>
-              <ChevronDown size={22} className="inline-block ml-1 -mt-1 text-slate-400" aria-hidden="true" />
-            </h2>
-          </button>
-          <div className="flex items-center -mr-2 text-slate-700">
-            <button type="button" aria-label="이전 달" onClick={() => goMonth(-1)} className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100">
-              <ChevronLeft size={24} />
-            </button>
-            <button type="button" aria-label="다음 달" onClick={() => goMonth(1)} className="w-10 h-10 flex items-center justify-center rounded-full cursor-pointer active:bg-slate-100">
-              <ChevronRight size={24} />
-            </button>
-          </div>
-        </div>
-        {/* 이번 달 근무 수: 이번 달에 있는 근무만 (근무 색 글자 + 숫자) */}
-        {Object.values(shiftCounts).some(Boolean) && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[14px] text-slate-500">
-            {Object.entries(shiftCounts)
-              .filter(([, count]) => count > 0)
-              .map(([code, count]) => (
-                <span key={code}>
-                  <b style={shiftTextVars(findType(code))} className="shift-text font-semibold">{code}</b> {count}
-                </span>
-              ))}
-          </div>
-        )}
-      </section>
-
-      {/* 2. 달력 */}
-      <section className="border-t border-slate-100 pt-3 space-y-2">
+      {/* 1. 달력 (달 제목·‹ › 은 맨 위 머리글에) */}
+      <section className="space-y-2">
         {quickMode && (
           <div className="space-y-2 pb-1">
             <p className="text-[13px] text-blue-600 font-medium">
@@ -895,10 +792,10 @@ export default function MyShiftTab({
           <span className="text-sky-500">토</span>
         </div>
 
-        {/* 날짜: 근무 있는 날은 칸 전체를 근무 색으로 (한눈에 보이게) */}
+        {/* 날짜: 위에 날짜 숫자, 아래에 근무 코드 칩(가로로 긴 둥근 네모). 오늘은 칸 전체를 은은한 색 상자로 */}
         <div className="grid grid-cols-7 gap-1" {...monthSwipe}>
           {calendarDays.map((item, idx) => {
-            if (!item) return <div key={`empty_${idx}`} className="min-h-[66px]"></div>;
+            if (!item) return <div key={`empty_${idx}`} className="min-h-[64px]"></div>;
 
             const shift = myShifts[item.dateKey] || '';
             const isSelected = selectedDate === item.dateKey;
@@ -914,25 +811,21 @@ export default function MyShiftTab({
                 onClick={() => handleDayClick(item.dateKey)}
                 aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${items.length ? ` 일정 ${items.length}개${privacyBlur ? '' : `: ${items.map((l) => parseItem(l).text).join(', ')}`}` : ''}`}
                 aria-pressed={isSelected}
-                style={shift ? shiftTextVars(findType(shift)) : undefined}
-                className={`relative min-h-[66px] w-full min-w-0 pt-1 ${items.length ? 'pb-1' : ''} rounded-xl flex flex-col items-center gap-1.5 cursor-pointer transition-colors ${
-                  shift ? 'shift-cell' : isSelected ? 'bg-slate-100' : 'active:bg-slate-50'
+                aria-current={isToday ? 'date' : undefined}
+                className={`relative min-h-[64px] w-full min-w-0 px-[3px] pt-1.5 pb-1.5 rounded-2xl flex flex-col items-center gap-1 cursor-pointer transition-colors ${
+                  isToday ? 'today-cell' : isSelected ? 'bg-slate-50' : 'active:bg-slate-50'
                 } ${
-                  isSelected ? 'ring-2 ring-inset ring-blue-500' : uncertainSet.has(item.dateKey) ? `${shift ? '' : 'bg-amber-50 '}ring-2 ring-inset ring-amber-400` : ''
+                  isSelected ? 'ring-2 ring-inset ring-blue-400' : uncertainSet.has(item.dateKey) ? `${isToday ? '' : 'bg-amber-50 '}ring-2 ring-inset ring-amber-400` : ''
                 }`}
               >
-                <span
-                  className={`w-[26px] h-[26px] rounded-full flex items-center justify-center text-[14px] leading-none ${
-                    isToday ? 'bg-blue-600 !text-white font-semibold' : `font-medium ${dayNumberClass(item.dateKey)}`
-                  }`}
-                >
+                <span className={`text-[14px] leading-[18px] ${isToday ? 'font-semibold text-slate-900' : `font-normal ${dayNumberClass(item.dateKey)}`}`}>
                   {item.day}
                 </span>
                 {shift ? (
                   <span
-                    className={`shift-text max-w-full px-0.5 font-semibold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
-                      // 한눈에 보이게 크게: 1글자 19px, 2글자 16px, 3글자 이상 14px
-                      [...shift].length >= 3 ? 'text-[14px]' : [...shift].length === 2 ? 'text-[16px]' : 'text-[19px]'
+                    style={shiftTextVars(findType(shift))}
+                    className={`shift-cell shift-text w-full h-[26px] rounded-lg flex items-center justify-center font-semibold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
+                      [...shift].length >= 3 ? 'text-[11px]' : 'text-[13px]'
                     }`}
                   >
                     {shift}
@@ -963,6 +856,47 @@ export default function MyShiftTab({
           })}
         </div>
       </section>
+
+      {/* 2. 이번 달 근무 수 카드(근무만: D·E·N…) + 오늘 한마디 */}
+      {!quickMode && workCounts.length > 0 && (
+        <section className={`grid gap-2 ${['grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4'][Math.min(workCounts.length, 4) - 1]}`} aria-label="이번 달 근무 수">
+          {workCounts.map(([code, count]) => {
+              const t = findType(code);
+              return (
+                <div key={code} style={shiftTextVars(t)} className="shift-cell rounded-2xl py-3 flex flex-col items-center gap-1">
+                  <span className="shift-text w-9 h-7 rounded-full bg-white/70 flex items-center justify-center text-[13px] font-semibold">{code}</span>
+                  <span className="text-[20px] font-bold text-slate-900 leading-tight">{count}일</span>
+                </div>
+              );
+            })}
+        </section>
+      )}
+      {!quickMode && (() => {
+        const todayType = myShifts[todayKey] ? findType(myShifts[todayKey]) : null;
+        const msg = todayType
+          ? todayType.kind === 'work'
+            ? { mood: 'cheer', text: `오늘은 ${shortLabel(todayType.label) || todayType.code} 근무예요. 오늘도 힘내요!` }
+            : { mood: 'sleep', text: '오늘은 쉬는 날! 푹 쉬어요' }
+          : null;
+        if (!msg) return null;
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedDate(todayKey);
+              setEditingDateKey(todayKey);
+              setIsEditModalOpen(true);
+            }}
+            className="w-full flex items-center gap-3 rounded-2xl bg-slate-50 pl-2 pr-3 py-2 text-left cursor-pointer active:bg-slate-100"
+          >
+            <span className="w-11 h-11 shrink-0 rounded-xl bg-white flex items-center justify-center">
+              <Mascot size={36} mood={msg.mood} />
+            </span>
+            <span className="flex-1 min-w-0 text-[15px] text-slate-700">{msg.text}</span>
+            <ChevronRight size={18} className="shrink-0 text-slate-300" />
+          </button>
+        );
+      })()}
 
       {/* 3. 고른 날짜: 근무 · 시간 · 메모 */}
       {!quickMode && (() => {
@@ -1106,18 +1040,6 @@ export default function MyShiftTab({
             <DayItemsEditor key={editingDateKey} initial={noteItems(dayNotes[editingDateKey])} onChange={(text) => setNote(editingDateKey, text)} />
           </div>
         </Modal>
-      )}
-
-      {isMonthPickerOpen && (
-        <MonthPicker
-          year={year}
-          month={month}
-          onClose={() => setIsMonthPickerOpen(false)}
-          onPick={(y, m) => {
-            setSelectedDate(monthPickKey(y, m));
-            setIsMonthPickerOpen(false);
-          }}
-        />
       )}
 
       {isTypeManagerOpen && (
