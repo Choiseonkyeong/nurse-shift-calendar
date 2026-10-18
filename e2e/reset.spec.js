@@ -54,7 +54,7 @@ test('계정 창: 이 폰에서 로그아웃 → 처음 화면, 다시 로그인
   await expect(page.getByRole('button', { name: '9월 10일 D 근무' })).toBeVisible();
 
   await page.getByRole('button', { name: '계정', exact: true }).click();
-  await page.getByRole('button', { name: '이 폰에서 로그아웃' }).click();
+  await page.getByRole('dialog', { name: '계정' }).getByRole('button', { name: '로그아웃', exact: true }).click();
   await confirmOk(page);
   await expect(page.getByText('환영합니다!')).toBeVisible();
   expect(state.shifts[profile.id]).toEqual({ '2026-09-10': 'D' }); // 서버는 그대로
@@ -140,4 +140,15 @@ test('밴드(안드로이드) 안 브라우저: 크롬으로 열기(intent) 안�
   await expect(p.getByText('주소를 복사했어요')).toBeVisible();
   expect(await p.evaluate(() => navigator.clipboard.readText())).toMatch(/^http:\/\/localhost:\d+\//);
   await naver.close();
+});
+
+test('설정 탭 맨 아래 로그아웃: 계정 연결 전(임시 계정)에도 보이고, 경고 후 처음 화면으로', async ({ page }) => {
+  await openApp(page, { local: { my_shift_data: { '2026-09-10': 'D' } } });
+  await waitSaved(page);
+  await tab(page, '설정').click();
+  await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '이 폰에서 로그아웃할까요?' })).toContainText('임시 계정');
+  await confirmOk(page);
+  await expect(page.getByText('환영합니다!')).toBeVisible();
+  expect(await readLocal(page, 'my_shift_data')).toEqual({});
 });

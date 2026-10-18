@@ -8,9 +8,11 @@ import Modal from './Modal';
 import FontSheet from './FontSheet';
 import { FONTS, getFontPref } from '../lib/fontPref';
 import { Capacitor } from '@capacitor/core';
+import { signOutThisDevice } from '../lib/account';
+import { unregisterDevice } from '../lib/pushNotifications';
 import { getWidgetNotesPref, setWidgetNotesPref } from '../lib/widgetSync';
 import { confirmDialog } from '../lib/confirm';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon, Type, Pencil } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon, Type, Pencil, LogOut } from 'lucide-react';
 import { useShiftTypes } from '../lib/shiftTypes';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
@@ -681,6 +683,29 @@ export default function ImportTab({
           >
             <Trash2 size={14} />
             <span>근무·메모 전체 삭제</span>
+          </button>
+          {/* 로그아웃: 계정 연결 여부와 상관없이 항상 (연결 안 된 임시 계정이면 더 강하게 경고) */}
+          <button
+            type="button"
+            onClick={async () => {
+              const linked = accountStatus === 'linked';
+              const ok = await confirmDialog({
+                title: '이 폰에서 로그아웃할까요?',
+                message: linked
+                  ? '이 폰의 근무표·설정이 지워지고 처음 화면으로 돌아가요.\n서버의 데이터는 그대로라서 다시 로그인하면 모두 돌아와요.'
+                  : '아직 계정(카카오·Google·이메일)이 연결되지 않은 임시 계정이에요.\n로그아웃하면 이 폰의 근무·메모를 다시 불러올 수 없어요.\n먼저 위의 이름을 눌러 계정을 연결하는 걸 권해요.',
+                confirmText: '로그아웃',
+                danger: !linked
+              });
+              if (!ok) return;
+              await unregisterDevice().catch(() => {});
+              await signOutThisDevice();
+              window.location.reload();
+            }}
+            className="mt-3 inline-flex items-center gap-1.5 text-[14px] text-slate-500 cursor-pointer"
+          >
+            <LogOut size={15} />
+            <span>로그아웃</span>
           </button>
           <a
             href="/privacy.html"
