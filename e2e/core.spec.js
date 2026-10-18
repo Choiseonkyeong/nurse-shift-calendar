@@ -417,3 +417,9 @@ test('첫 화면: 앱을 열 때마다 먼저 보이고, 시작하기 → 이름
   await expect(page.getByRole('heading', { name: '2026년 9월' })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '시작 화면' })).toHaveCount(0);
 });
+
+test('로그인(계정 연결)한 폰은 첫 화면 없이 바로 근무표', async ({ page }) => {
+  await openApp(page, { intro: true, local: { signed_in: '1' } });
+  await expect(page.getByRole('heading', { name: '2026년 9월' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '시작 화면' })).toHaveCount(0);
+});

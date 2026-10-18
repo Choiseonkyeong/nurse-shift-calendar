@@ -98,7 +98,7 @@ export default function FontSheet({ onClose }) {
             </label>
           </div>
           <label className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 cursor-pointer">
-            <span className="flex-1 text-[15px] text-slate-800">앱을 열 때마다 첫 화면 보기</span>
+            <span className="flex-1 text-[15px] text-slate-800">로그인 전에는 앱을 열 때마다 첫 화면 보기</span>
             <input
               type="checkbox"
               role="switch"
