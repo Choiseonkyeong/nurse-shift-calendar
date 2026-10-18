@@ -37,6 +37,7 @@ import { SETTINGS_TS_KEY, decideSettingsSync, fetchMySettings, saveMySettings } 
 import { ROSTER_NAME_KEY } from './lib/rosterName';
 
 // 위쪽 큰 제목 (내 근무 화면은 이름이 들어간 제목)
+const SIGNED_IN_KEY = 'signed_in';
 const TAB_TITLES = { allowance: '연차 · 수당', groupShare: '그룹', import: '설정' };
 import { RESTORE_REPLACE_KEY } from './lib/backup';
 
@@ -176,8 +177,14 @@ export default function App() {
     return true;
   };
   // 예전 버전 기본 이름('최수민')이 그대로 저장된 사용자: 한 번 이름 확인
-  // 첫 화면: 처음 쓰는 사람 한 번 (설정에서 '열 때마다 보기'를 켜면 매번)
-  const [showIntro, setShowIntro] = useState(() => (!localStorage.getItem('shift_user_name') && !introSeen()) || introEveryLaunch());
+  // 첫 화면: 앱을 열 때마다 (설정 › 꾸미기에서 끌 수 있음, 처음 쓰는 사람은 항상)
+  // 로그인(계정 연결)한 폰은 첫 화면 없이 바로 근무표. 그룹 초대 링크(?join=)도 바로 참여 화면으로
+  const [showIntro, setShowIntro] = useState(
+    () =>
+      !/[?&]join=/.test(window.location.search) &&
+      localStorage.getItem(SIGNED_IN_KEY) !== '1' &&
+      ((!localStorage.getItem('shift_user_name') && !introSeen()) || introEveryLaunch())
+  );
   const [needsNameConfirm, setNeedsNameConfirm] = useState(
     () => localStorage.getItem('shift_user_name') === LEGACY_DEFAULT_NAME && !localStorage.getItem(NAME_CONFIRMED_KEY)
   );
@@ -289,6 +296,10 @@ export default function App() {
   });
   const [accountModal, setAccountModal] = useState(() => (oauthNotice ? (userName ? 'link' : 'login') : null));
   const [accountStatus, setAccountStatus] = useState(null);
+  // 계정이 연결된 걸 한 번 확인하면 기억 (다음부터 첫 화면 생략, 로그아웃하면 지워짐)
+  useEffect(() => {
+    if (accountStatus === 'linked') localStorage.setItem(SIGNED_IN_KEY, '1');
+  }, [accountStatus]);
   // 화면 테마: system → dark → light 순으로 전환
   const [themePref, setThemePrefState] = useState(getThemePref);
   const cycleTheme = () => {

@@ -42,8 +42,9 @@ export const setIntroPhoto = (dataUrl) => set(PHOTO_KEY, dataUrl);
 
 export const introSeen = () => get(SEEN_KEY) === '1';
 export const markIntroSeen = () => set(SEEN_KEY, '1');
-export const introEveryLaunch = () => get(EVERY_KEY) === '1';
-export const setIntroEveryLaunch = (on) => set(EVERY_KEY, on ? '1' : null);
+// 기본: 앱을 열 때마다 첫 화면 (끄면 '0' 저장)
+export const introEveryLaunch = () => get(EVERY_KEY) !== '0';
+export const setIntroEveryLaunch = (on) => set(EVERY_KEY, on ? null : '0');
 
 /** 고른 사진을 화면 크기(긴 변 1600px)로 줄여 JPEG 로 (저장 공간 절약) */
 export function shrinkPhoto(file, max = 1600, quality = 0.82) {

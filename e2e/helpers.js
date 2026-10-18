@@ -11,7 +11,7 @@ export async function openApp(page, { state = createFakeState(), local = {}, nam
   await installFakeSupabase(page.context(), state);
   await page.clock.setFixedTime(TODAY);
   // 첫 화면(시작 화면)은 이미 본 것으로 (intro: true 면 처음 사용자처럼 보여 줌)
-  const init = { ...(intro ? {} : { intro_seen: '1' }), ...(name ? { shift_user_name: name } : {}), ...local };
+  const init = { ...(intro ? {} : { intro_seen: '1', intro_every_launch: '0' }), ...(name ? { shift_user_name: name } : {}), ...local };
   await page.addInitScript((values) => {
     if (sessionStorage.getItem('__seeded')) return;
     sessionStorage.setItem('__seeded', '1');
