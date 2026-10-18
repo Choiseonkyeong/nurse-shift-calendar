@@ -384,7 +384,7 @@ test('달력: 날짜 아래 근무 칩, 오늘은 은은한 상자, 아래 이�
   await expect(page.getByRole('dialog', { name: '근무 직접 수정' })).toContainText('9월 28일');
 });
 
-test('첫 화면: 처음 쓰는 사람에게 한 번, 시작하기 → 이름 입력 / 꾸미기에서 배경 바꾸기·내 사진·열 때마다 보기', async ({ page }) => {
+test('첫 화면: 앱을 열 때마다 먼저 보이고, 시작하기 → 이름 입력 / 꾸미기에서 배경·내 사진·끄기', async ({ page }) => {
   await openApp(page, { name: null, intro: true });
   const intro = page.getByRole('dialog', { name: '시작 화면' });
   await expect(intro).toContainText('나의근무표');
@@ -394,7 +394,8 @@ test('첫 화면: 처음 쓰는 사람에게 한 번, 시작하기 → 이름 �
   await page.getByPlaceholder('예: 김간호 (선택)').fill('김간호');
   await page.getByRole('button', { name: '시작하기' }).click();
   await page.reload();
-  await expect(page.getByRole('dialog', { name: '시작 화면' })).toHaveCount(0); // 한 번만
+  await expect(page.getByRole('dialog', { name: '시작 화면' })).toBeVisible(); // 열 때마다
+  await page.getByRole('dialog', { name: '시작 화면' }).getByRole('button', { name: /시작하기/ }).click();
 
   await tab(page, '설정').click();
   await page.getByRole('button', { name: /꾸미기/ }).click();
@@ -409,7 +410,10 @@ test('첫 화면: 처음 쓰는 사람에게 한 번, 시작하기 → 이름 �
   await sheet.getByRole('button', { name: '미리 보기' }).click();
   await expect(page.getByRole('dialog', { name: '시작 화면' }).locator('img')).toBeVisible();
   await page.getByRole('dialog', { name: '시작 화면' }).getByRole('button', { name: /시작하기/ }).click();
-  await sheet.getByRole('switch').check();
+  // 끄면 다음부터 바로 근무표
+  await expect(sheet.getByRole('switch')).toBeChecked();
+  await sheet.getByRole('switch').uncheck();
   await page.reload();
-  await expect(page.getByRole('dialog', { name: '시작 화면' })).toBeVisible(); // 열 때마다
+  await expect(page.getByRole('heading', { name: '2026년 9월' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '시작 화면' })).toHaveCount(0);
 });

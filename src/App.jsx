@@ -176,7 +176,7 @@ export default function App() {
     return true;
   };
   // 예전 버전 기본 이름('최수민')이 그대로 저장된 사용자: 한 번 이름 확인
-  // 첫 화면: 처음 쓰는 사람 한 번 (설정에서 '열 때마다 보기'를 켜면 매번)
+  // 첫 화면: 앱을 열 때마다 (설정 › 꾸미기에서 끌 수 있음, 처음 쓰는 사람은 항상)
   const [showIntro, setShowIntro] = useState(() => (!localStorage.getItem('shift_user_name') && !introSeen()) || introEveryLaunch());
   const [needsNameConfirm, setNeedsNameConfirm] = useState(
     () => localStorage.getItem('shift_user_name') === LEGACY_DEFAULT_NAME && !localStorage.getItem(NAME_CONFIRMED_KEY)

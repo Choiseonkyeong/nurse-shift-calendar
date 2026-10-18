@@ -112,6 +112,7 @@ test('팝업: Esc·바깥 누르면 닫힘, 포커스는 팝업 안에서만 이
   await fresh.addInitScript(() => {
     localStorage.clear();
     localStorage.setItem('intro_seen', '1'); // 첫 화면(시작 화면)은 지나간 상태
+    localStorage.setItem('intro_every_launch', '0');
   });
   await fresh.goto('/');
   await fresh.keyboard.press('Escape');
