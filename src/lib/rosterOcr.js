@@ -910,9 +910,11 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
     rawStructure ||= scaledCanvas(img);
     rawResult ||= parseRosterWords(await ocrWords(worker, rawStructure), { year, month, shiftTypes });
     if (!rawResult.error && rawResult.year === result.year && rawResult.month === result.month
-      && rawResult.grid.cols.length >= result.grid.cols.length
+      && rawResult.grid.rows.length > result.grid.rows.length
+      && rawResult.grid.cols.map((c) => c.key).join() === result.grid.cols.map((c) => c.key).join()
       && rosterStructureScore(rawResult) > rosterStructureScore(result)) {
-      source = rawStructure;
+      // 원본은 빠진 행의 좌표만 보완. 칸별 인식은 표 선을 제거한 보정 이미지를 유지.
+      source = canvas.width === rawStructure.width && canvas.height === rawStructure.height ? canvas : rawStructure;
       result = rawResult;
     }
     // 표가 사진 일부만 차지하면(브라우저·엑셀 화면 캡처, 멀리서 찍은 사진) 글자가 작고 옆 메뉴 글자가 이름에 섞임
