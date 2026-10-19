@@ -782,7 +782,7 @@ export default function MyShiftTab({
         )}
 
         {/* 요일 */}
-        <div className="grid grid-cols-7 text-center text-[12px] font-medium">
+        <div className="grid grid-cols-7 text-center text-[13px] font-medium">
           <span className="text-rose-500">일</span>
           <span className="text-slate-400">월</span>
           <span className="text-slate-400">화</span>
@@ -812,19 +812,19 @@ export default function MyShiftTab({
                 aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${items.length ? ` 일정 ${items.length}개${privacyBlur ? '' : `: ${items.map((l) => parseItem(l).text).join(', ')}`}` : ''}`}
                 aria-pressed={isSelected}
                 aria-current={isToday ? 'date' : undefined}
-                className={`relative min-h-[64px] w-full min-w-0 px-[3px] pt-1.5 pb-1.5 rounded-2xl flex flex-col items-center gap-1 cursor-pointer transition-colors ${
+                className={`relative min-h-[64px] w-full min-w-0 px-[3px] pt-1.5 pb-1.5 rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-colors ${
                   isToday ? 'today-cell' : isSelected ? 'bg-slate-50' : 'active:bg-slate-50'
                 } ${
                   isSelected ? 'ring-2 ring-inset ring-blue-400' : uncertainSet.has(item.dateKey) ? `${isToday ? '' : 'bg-amber-50 '}ring-2 ring-inset ring-amber-400` : ''
                 }`}
               >
-                <span className={`text-[14px] leading-[18px] ${isToday ? 'font-semibold text-slate-900' : `font-normal ${dayNumberClass(item.dateKey)}`}`}>
+                <span className={`text-[16px] leading-[20px] tabular-nums ${isToday ? 'font-semibold text-slate-900' : `font-medium ${dayNumberClass(item.dateKey)}`}`}>
                   {item.day}
                 </span>
                 {shift ? (
                   <span
                     style={shiftTextVars(findType(shift))}
-                    className={`shift-cell shift-text w-full h-[26px] rounded-lg flex items-center justify-center font-semibold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
+                    className={`shift-cell shift-text w-full h-[26px] rounded-[5px] flex items-center justify-center font-semibold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
                       [...shift].length >= 3 ? 'text-[11px]' : 'text-[13px]'
                     }`}
                   >
@@ -864,7 +864,7 @@ export default function MyShiftTab({
               const t = findType(code);
               return (
                 <div key={code} style={shiftTextVars(t)} className="shift-cell rounded-2xl py-3 flex flex-col items-center gap-1">
-                  <span className="shift-text w-9 h-7 rounded-full bg-white/70 flex items-center justify-center text-[13px] font-semibold">{code}</span>
+                  <span className="shift-text w-10 h-7 rounded-[5px] bg-white/70 flex items-center justify-center text-[13px] font-semibold">{code}</span>
                   <span className="text-[20px] font-bold text-slate-900 leading-tight">{count}일</span>
                 </div>
               );
