@@ -62,6 +62,15 @@ describe('rosterParse', () => {
     });
   });
 
+  it('근무 글자를 두 칸만 읽은 사람도 이름 근거가 있으면 목록에서 빠지지 않음', () => {
+    const { words } = syntheticRoster();
+    // 둘째 사람의 이름은 남기고 근무는 처음 두 칸만 읽힌 상황.
+    const sparse = words.filter((q) => !(q.y0 === 170 && q.x0 > 165));
+    const r = parseRosterWords(sparse, { year: 2026, month: 10 });
+    expect(r.names).toEqual(['김간호', '이간호']);
+    expect(Object.keys(r.people.이간호)).toHaveLength(2);
+  });
+
   it('헤더가 없으면 오류 메시지', () => {
     expect(parseRosterWords([w('안녕', 0, 0, 10, 10)], { year: 2026, month: 10 }).error).toMatch(/날짜/);
   });

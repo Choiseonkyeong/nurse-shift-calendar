@@ -427,7 +427,14 @@ export function parseRosterWords(words, { year, month, shiftTypes = [], today = 
     else clusters.push({ ys: [w.y0] });
   });
   const minCount = Math.max(3, Math.round(cols.centers.length * 0.15));
-  let rowYs = clusters.filter((c) => c.ys.length >= minCount).map((c) => median(c.ys));
+  // 흐리거나 회전한 사진에서 한 사람의 근무를 몇 칸만 읽어도, 이름 근거가 있으면 행을 버리지 않음.
+  const namedYs = clean.filter((w) => belowHeader(w)
+    && w.x1 <= firstColLeft + cols.colW * 0.3 && w.x0 >= firstColLeft - cols.colW * 6
+    && nameQuality(extractName(w.text)) >= 65)
+    .map((w) => deskewY(center(w).x, center(w).y));
+  let rowYs = clusters.filter((c) => c.ys.length >= minCount
+    || (c.ys.length >= 2 && namedYs.some((y) => Math.abs(y - median(c.ys)) <= wordH)))
+    .map((c) => median(c.ys));
   // 날짜 아래 요일 줄(토 일 월 …)이 흐린 사진에서 근무 글자로 잘못 읽혀 사람 줄로 잡히면 모든 이름이 한 줄씩 밀림 → 제외
   // (날짜 칸 범위 안에서 요일 글자가 든 짧은 단어('월', '화우', '일!')가 3개 이상인 줄)
   const weekdayWords = clean

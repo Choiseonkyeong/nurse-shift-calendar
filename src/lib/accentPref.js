@@ -7,19 +7,21 @@ const ACCENT_DARK = { 50: 950, 100: 900, 200: 800, 300: 300, 400: 400, 500: 500,
 
 // Tailwind 색 (50~950)
 const PALETTES = {
-  pink: ['#fdf2f8', '#fce7f3', '#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777', '#be185d', '#9d174d', '#831843', '#500724'],
-  violet: ['#f5f3ff', '#ede9fe', '#ddd6fe', '#c4b5fd', '#a78bfa', '#8b5cf6', '#7c3aed', '#6d28d9', '#5b21b6', '#4c1d95', '#2e1065'],
-  teal: ['#f0fdfa', '#ccfbf1', '#99f6e4', '#5eead4', '#2dd4bf', '#14b8a6', '#0d9488', '#0f766e', '#115e59', '#134e4a', '#042f2e'],
-  sky: ['#f0f9ff', '#e0f2fe', '#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1', '#075985', '#0c4a6e', '#082f49'],
-  blue: null // tailwind.config.js 기본값 그대로
+  blue: ['#f4f6fc', '#e8edf9', '#d7e0f4', '#c3cef5', '#a5b5e1', '#7e94c6', '#586da3', '#465886', '#37466d', '#2b3756', '#1a2238'],
+  pink: ['#fff5f8', '#fce8ef', '#f7d6e2', '#f2bfd0', '#e39fb7', '#c67594', '#a15473', '#85435f', '#6e374f', '#582d40', '#361a27'],
+  violet: ['#faf6fd', '#f1eafa', '#e8dcf5', '#dbcaf0', '#c5ace2', '#a786c8', '#8061aa', '#6a4c91', '#573e77', '#46325f', '#2c1e3e'],
+  teal: ['#f1faf6', '#e1f2e9', '#d1ebdf', '#bce2d4', '#96ccba', '#65a58f', '#357567', '#285e53', '#204e45', '#1a3f38', '#102922'],
+  sky: ['#f2f9fd', '#e4f2fa', '#d2eaf6', '#badff2', '#96c8e1', '#69a7c8', '#397ba3', '#2c6387', '#24516f', '#1d425a', '#122a3c'],
+  black: ['#fafafa', '#f4f4f5', '#e4e4e7', '#d4d4d8', '#a1a1aa', '#71717a', '#27272a', '#18181b', '#121214', '#09090b', '#000000']
 };
 
 export const ACCENTS = [
-  { key: 'blue', label: '블루', hex: '#3b82f6' },
-  { key: 'pink', label: '벚꽃 핑크', hex: '#ec4899' },
-  { key: 'violet', label: '라벤더', hex: '#8b5cf6' },
-  { key: 'teal', label: '민트', hex: '#14b8a6' },
-  { key: 'sky', label: '하늘', hex: '#0ea5e9' }
+  { key: 'blue', label: '파스텔 블루', hex: '#c3cef5' },
+  { key: 'pink', label: '연분홍', hex: '#f2bfd0' },
+  { key: 'violet', label: '라벤더', hex: '#dbcaf0' },
+  { key: 'teal', label: '민트', hex: '#bce2d4' },
+  { key: 'sky', label: '하늘색', hex: '#badff2' },
+  { key: 'black', label: '검정', hex: '#27272a' }
 ];
 export const DEFAULT_ACCENT = 'blue';
 
@@ -49,14 +51,16 @@ const mix = (hex, base, t) => {
 };
 const DARK_TINT = { 50: 0.14, 100: 0.22, 200: 0.32 };
 
-/** 고른 색의 CSS 변수 (blue·indigo 둘 다) — 기본 블루면 '' */
+/** 고른 색의 CSS 변수 (blue·indigo 둘 다) — 없는 키면 '' */
 export function accentCss(key = getAccentPref()) {
   const pal = PALETTES[key];
   if (!pal) return '';
   const at = (s) => pal[SHADES.indexOf(s)];
   const darkAt = (s) => (DARK_TINT[s] ? mix(at(500), DARK_BASE, DARK_TINT[s]) : at(ACCENT_DARK[s]));
   const vars = (get) => SHADES.map((s) => ['blue', 'indigo'].map((p) => `--c-${p}-${s}:${rgb(get(s))};`).join('')).join('');
-  return `:root{${vars(at)}}.dark{${vars(darkAt)}}`;
+  // 배경 버튼의 진한 색은 유지하고, 다크 모드 강조 글자만 밝게 (검정 선택 시에도 읽히게).
+  const darkText = ['blue', 'indigo'].flatMap((p) => [500, 600].map((shade) => `.dark .text-${p}-${shade}`)).join(',');
+  return `:root{${vars(at)}}.dark{${vars(darkAt)}}${darkText}{color:rgb(${rgb(at(300))});}`;
 }
 
 export function applyAccent(key = getAccentPref()) {

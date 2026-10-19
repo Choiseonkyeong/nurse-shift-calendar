@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sureRatio } from '../src/lib/rosterOcr.js';
+import { sureRatio, rosterStructureScore } from '../src/lib/rosterOcr.js';
 
 const cells = (n, conf) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`2026-10-${String(i + 1).padStart(2, '0')}`, { code: 'D', confidence: conf }]));
 
@@ -15,4 +15,11 @@ describe('sureRatio (사진 결과를 믿을 만한지)', () => {
     expect(sureRatio({ names: [], grid, people: {} })).toBe(0);
     expect(sureRatio({})).toBe(0);
   });
+});
+
+it('방향 비교는 다섯 명만 잡힌 표보다 일곱 명과 날짜가 온전히 잡힌 표를 선택', () => {
+  const result = (rows, cols, weekdays) => ({ grid: { rows: Array(rows), cols: Array(cols), weekdays }, names: [] });
+  expect(rosterStructureScore(result(7, 30))).toBeGreaterThan(rosterStructureScore(result(5, 30)));
+  expect(rosterStructureScore(result(7, 30))).toBeGreaterThan(rosterStructureScore(result(10, 30, { total: 10, match: 2 })));
+  expect(rosterStructureScore({ error: '방향이 다름' })).toBe(0);
 });

@@ -335,12 +335,12 @@ test('일정·메모: 한 날짜에 여러 개 넣으면 달력 칸에 모두 �
 test('설정 › 꾸미기: 앱 색(기본 블루)·글꼴·글자 크기를 바꾸면 바로 바뀌고 다시 열어도 유지', async ({ page }) => {
   await openApp(page);
   const accent = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--c-blue-600').trim());
-  expect(await accent()).toBe('37 99 235'); // 기본: 블루(#2563eb)
+  expect(await accent()).toBe('88 109 163'); // 기본: 파스텔 블루의 가독성용 진한 강조색
   await tab(page, '설정').click();
   await page.getByRole('button', { name: /꾸미기/ }).click();
   const sheet = page.getByRole('dialog', { name: '꾸미기' });
   await sheet.getByRole('radio', { name: '라벤더' }).click();
-  await expect.poll(accent).toBe('124 58 237'); // violet-600
+  await expect.poll(accent).toBe('128 97 170'); // 파스텔 라벤더 강조색
   await sheet.getByRole('radio', { name: /고운바탕/ }).click();
   await sheet.getByRole('radio', { name: '크게', exact: true }).click();
   const bodyFont = () => page.evaluate(() => getComputedStyle(document.body).fontFamily);
@@ -350,7 +350,7 @@ test('설정 › 꾸미기: 앱 색(기본 블루)·글꼴·글자 크기를 바
   await page.reload();
   await expect.poll(bodyFont).toMatch(/^"Gowun Batang"/);
   await expect.poll(bodySize).toBe('17.28px');
-  expect(await accent()).toBe('124 58 237');
+  expect(await accent()).toBe('128 97 170');
 });
 
 test('일정 색 고르기, 보안 모드에서는 달력 칸·목록의 일정을 가림', async ({ page }) => {

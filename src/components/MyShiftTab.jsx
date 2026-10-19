@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { confirmDialog } from '../lib/confirm';
 import { errorText } from '../lib/errorText';
 import { toast, formatDateKo } from '../lib/toast';
 import Modal from './Modal';
@@ -355,6 +356,9 @@ export default function MyShiftTab({
   // 빠른 입력: null = 꺼짐, '' = 지우기, 그 외 = 선택한 근무 코드
   const [quickCode, setQuickCode] = useState(null);
   const quickMode = quickCode !== null;
+  useEffect(() => {
+    if (quickMode) document.getElementById('continuous-entry-help')?.scrollIntoView({ block: 'nearest' });
+  }, [quickMode]);
   const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
   const [isPatternOpen, setIsPatternOpen] = useState(false); // false | true | 'first'(처음 사용자 안내에서 열림)
 
@@ -593,6 +597,30 @@ export default function MyShiftTab({
     }
   };
 
+  const resetMonth = async () => {
+    const monthKey = `${year}-${String(month).padStart(2, '0')}-`;
+    const before = Object.fromEntries(Object.entries(myShifts).filter(([key]) => key.startsWith(monthKey)));
+    if (!Object.keys(before).length) {
+      toast(`${month}월에는 지울 근무가 없어요.`);
+      return;
+    }
+    if (!(await confirmDialog({
+      title: `${year}년 ${month}월 근무를 리셋할까요?`,
+      message: `${Object.keys(before).length}일의 근무만 지워요. 일정·메모와 다른 달 근무는 유지돼요.`,
+      confirmText: '근무 리셋', danger: true
+    }))) return;
+    setMyShifts((prev) => Object.fromEntries(Object.entries(prev || {}).filter(([key]) => !key.startsWith(monthKey))));
+    setQuickCode(null);
+    onCloseImportBanner?.();
+    toast(`${month}월 근무를 리셋했어요.`, 'success', {
+      action: { label: '되돌리기', onClick: () => {
+        // 리셋 이후 새로 입력한 날짜는 덮어쓰지 않아요.
+        setMyShifts((prev) => ({ ...before, ...(prev || {}) }));
+        toast(`${month}월 근무를 복원했어요.`);
+      } }
+    });
+  };
+
   // 이전/다음 달 이동
   const goMonth = (delta) => setSelectedDate(addMonthsKey(selectedDate, delta));
   // 달력을 왼쪽으로 밀면 다음 달, 오른쪽으로 밀면 이전 달
@@ -746,10 +774,14 @@ export default function MyShiftTab({
       {/* 1. 달력 (달 제목·‹ › 은 맨 위 머리글에) */}
       <section className="space-y-2">
         {quickMode && (
-          <div className="space-y-2 pb-1">
+          <div className="space-y-2 p-3 rounded-2xl bg-blue-50" id="continuous-entry-help" role="region" aria-label="연속 입력 안내">
             <p className="text-[13px] text-blue-600 font-medium">
-              {quickCode === '' ? '지울 날짜를 누르세요' : `날짜를 누르면 ${quickCode} 입력`}
+              {quickCode === '' ? '날짜를 누르면 그날 근무를 지워요' : `${quickCode} 근무를 넣을 날짜를 연속으로 누르세요`}
             </p>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[12px] text-slate-600">누르는 즉시 저장돼요.</span>
+              <button type="button" onClick={() => setQuickCode(null)} className="h-9 px-3 rounded-full bg-white text-blue-700 text-[13px] font-semibold cursor-pointer">연속 입력 종료</button>
+            </div>
             {/* 한 줄: 지우기(고정) + 근무 버튼(가로로 밀기) — 줄이 늘어나 달력이 밀리지 않게 */}
             <div className="flex items-center gap-1.5">
               <button
@@ -956,7 +988,7 @@ export default function MyShiftTab({
           {
             key: 'quick',
             icon: <Zap size={22} className={quickMode ? 'text-blue-600' : ''} />,
-            label: quickMode ? '입력 끝' : '빠른 입력',
+            label: quickMode ? '입력 종료' : '연속 입력',
             onClick: () => setQuickCode(quickMode ? null : (shiftTypes[0]?.code || '')),
             active: quickMode
           }
@@ -989,6 +1021,11 @@ export default function MyShiftTab({
           </span>
         </button>
       </section>
+
+      <button type="button" onClick={resetMonth}
+        className="w-full h-11 rounded-xl border border-slate-200 text-[13px] text-slate-500 cursor-pointer active:bg-slate-50">
+        {month}월 근무 리셋
+      </button>
 
       {isEditModalOpen && (
         <Modal onClose={() => setIsEditModalOpen(false)} label="근무 직접 수정">

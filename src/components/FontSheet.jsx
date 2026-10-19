@@ -117,7 +117,7 @@ export default function FontSheet({ onClose }) {
           <p className="text-[13px] text-slate-500 px-1">앱 색</p>
           <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3">
             <Mascot size={52} />
-            <div role="radiogroup" aria-label="앱 색" className="flex-1 flex flex-wrap gap-2.5">
+            <div role="radiogroup" aria-label="앱 색" className="flex-1 grid grid-cols-3 gap-x-2 gap-y-3">
               {ACCENTS.map((a) => (
                 <button
                   key={a.key}
@@ -127,10 +127,12 @@ export default function FontSheet({ onClose }) {
                   aria-label={a.label}
                   title={a.label}
                   onClick={() => pickAccent(a.key)}
-                  className={`w-9 h-9 rounded-full cursor-pointer flex items-center justify-center ${accent === a.key ? 'ring-[3px] ring-offset-2 ring-slate-300' : ''}`}
-                  style={{ backgroundColor: a.hex }}
+                  className="flex flex-col items-center gap-1 cursor-pointer min-w-0"
                 >
-                  {accent === a.key && <Check size={18} className="text-white" />}
+                  <span className={`w-9 h-9 rounded-full flex items-center justify-center ${accent === a.key ? 'ring-[3px] ring-offset-2 ring-slate-300' : ''}`} style={{ backgroundColor: a.hex }}>
+                    {accent === a.key && <Check size={18} className={a.key === 'black' ? 'text-white' : 'text-slate-800'} />}
+                  </span>
+                  <span className="text-[11px] text-slate-600 whitespace-nowrap">{a.label}</span>
                 </button>
               ))}
             </div>

@@ -129,7 +129,7 @@ test('옆으로 누운 사진(폰을 돌려 찍었는데 자동 회전 꺼짐)�
   await openApp(page, { name: '한소희' });
   await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-oct-sideways.jpg'));
-  await expect(page.getByText(/사진 방향 바꿔 읽는 중/)).toBeVisible({ timeout: 120000 });
+  await expect(page.getByText(/사진 방향 확인 중/)).toBeVisible({ timeout: 120000 });
   await expect(page.getByText('사진에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible({ timeout: 200000 });
   expect(await readLocal(page, 'my_shift_data')).toEqual(me.codes);
 });
@@ -320,3 +320,31 @@ test('엑셀 탭이 여러 개: 근무표 탭을 고르는 창(마지막으로 �
   await expect(page.getByRole('dialog', { name: '엑셀 탭 선택' })).toHaveCount(0);
   fs.rmSync(one.file, { force: true });
 });
+
+for (const angle of [90, 180, 270]) {
+  test(`사진 ${angle}도 회전: 특정 이름을 자동 선택하기 전에 일곱 명 전체를 보여 줌`, async ({ page, browser }) => {
+    test.setTimeout(240000);
+    const maker = await browser.newPage();
+    const src = fs.readFileSync(fixture('roster-oct-photo.jpg')).toString('base64');
+    const rotated = await maker.evaluate(async ({ src, angle }) => {
+      const img = new Image(); img.src = `data:image/jpeg;base64,${src}`; await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = angle % 180 ? img.height : img.width;
+      canvas.height = angle % 180 ? img.width : img.height;
+      const ctx = canvas.getContext('2d');
+      if (angle === 90) ctx.translate(img.height, 0);
+      else if (angle === 270) ctx.translate(0, img.width);
+      else ctx.translate(img.width, img.height);
+      ctx.rotate(angle * Math.PI / 180); ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL('image/png').split(',')[1];
+    }, { src, angle });
+    await maker.close();
+    await openApp(page, { name: '내별명' });
+    await tab(page, '설정').click();
+    await photoInput(page).setInputFiles({ name: `roster-${angle}.png`, mimeType: 'image/png', buffer: Buffer.from(rotated, 'base64') });
+    const choose = page.getByRole('dialog', { name: '본인 이름 선택' });
+    await expect(choose).toContainText('사진 근무표에서 7명을 찾았어요.', { timeout: 200000 });
+    // 이름을 고르기 전에는 내 근무표를 바꾸지 않음.
+    expect(await readLocal(page, 'my_shift_data') || {}).toEqual({});
+  });
+}
