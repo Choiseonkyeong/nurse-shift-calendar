@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import { openApp, expectUserName } from './helpers.js';
 
 // 서비스 워커(웹 오프라인 캐시)를 실제로 켜고 확인
 test.use({ serviceWorkers: 'allow' });
@@ -13,7 +13,7 @@ const cachedTitle = (page, path) =>
 
 test('개인정보처리방침을 열어도 오프라인용 앱 첫 화면 캐시가 바뀌지 않음', async ({ page }) => {
   await openApp(page);
-  await expect(page.getByTitle('김간호', { exact: true })).toBeVisible();
+  await expectUserName(page, '김간호');
   await page.waitForFunction(() => navigator.serviceWorker?.controller, null, { timeout: 15000 });
   await expect.poll(() => cachedTitle(page, '/')).toBe('근무표');
 

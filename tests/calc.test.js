@@ -79,7 +79,7 @@ describe('위젯 데이터', () => {
     const types = DEFAULT_SHIFT_TYPES.map((t) => (t.code === 'D' ? { ...t, start: '07:00', end: '15:00' } : t));
     const data = buildWidgetData({ '2026-09-28': 'D', '2026-09-29': 'N', '2026-12-01': 'E' }, types, new Date(2026, 8, 28));
     expect(Object.keys(data.days)).toEqual(['2026-09-28', '2026-09-29']);
-    expect(data.days['2026-09-28']).toMatchObject({ code: 'D', time: '07:00-15:00', bg: '#E0EDF9' });
+    expect(data.days['2026-09-28']).toMatchObject({ code: 'D', time: '07:00-15:00', bg: '#DDECF8' });
   });
   it('앱을 몇 주 안 열어도 위젯이 비지 않게 두 달치를 넘김', () => {
     const data = buildWidgetData({ '2026-10-20': 'D', '2026-11-27': 'N' }, DEFAULT_SHIFT_TYPES, new Date(2026, 8, 28));
@@ -135,7 +135,7 @@ describe('근무 기본 색', () => {
       { code: 'E', label: 'Evening (이브닝)', bg: '#000000', fg: '#FFFFFF' },
       { code: '수술', label: '수술', kind: 'work', bg: '#FEF08A', fg: '#854D0E' }
     ]);
-    expect(t.find((x) => x.code === 'D')).toMatchObject({ bg: '#E0EDF9', fg: '#2F6DB0', start: '07:00' });
+    expect(t.find((x) => x.code === 'D')).toMatchObject({ bg: '#DDECF8', fg: '#416F90', start: '07:00' });
     expect(t.find((x) => x.code === 'E')).toMatchObject({ bg: '#000000', fg: '#FFFFFF' });
     expect(t.find((x) => x.code === '수술')).toMatchObject({ bg: '#FEF08A', fg: '#854D0E' });
   });

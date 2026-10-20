@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { Calendar, CalendarCheck, Wallet, Users, Settings, Shield, Cloud, CloudOff, Loader2, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Calculator, BarChart3, User, Users, Shield, Cloud, CloudOff, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './components/MonthPicker';
 import { addMonthsKey } from './utils/dateUtils';
 import MyShiftTab from './components/MyShiftTab';
@@ -9,6 +9,7 @@ import { lazyImport, consumeResume, setResumeTab } from './lib/appUpdate';
 const AllowanceTab = lazy(lazyImport(() => import('./components/AllowanceTab')));
 const GroupShareTab = lazy(lazyImport(() => import('./components/GroupShareTab')));
 const ImportTab = lazy(lazyImport(() => import('./components/ImportTab')));
+const ShiftStats = lazy(lazyImport(() => import('./components/ShiftStats')));
 import NameSetup from './components/NameSetup';
 import IntroScreen from './components/IntroScreen';
 import { introSeen, markIntroSeen, introEveryLaunch } from './lib/introPref';
@@ -38,13 +39,20 @@ import { ROSTER_NAME_KEY } from './lib/rosterName';
 
 // 위쪽 큰 제목 (내 근무 화면은 이름이 들어간 제목)
 const SIGNED_IN_KEY = 'signed_in';
-const TAB_TITLES = { allowance: '연차 · 수당', groupShare: '그룹', import: '설정' };
+const TAB_TITLES = { allowance: '연차 · 수당', stats: '통계', groupShare: '그룹', import: '마이' };
+// 아래 탭바 (그룹은 마이 탭 안에서 들어감)
+const NAV_TABS = [
+  { key: 'myShift', label: '근무표', Icon: Calendar },
+  { key: 'allowance', label: '수당 계산', Icon: Calculator },
+  { key: 'stats', label: '통계', Icon: BarChart3 },
+  { key: 'import', label: '마이', Icon: User, also: 'groupShare' }
+];
 import { RESTORE_REPLACE_KEY } from './lib/backup';
 
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
 const LEGACY_DEFAULT_NAME = '최수민';
 const NAME_CONFIRMED_KEY = 'name_confirmed';
-const TAB_KEYS = ['myShift', 'allowance', 'groupShare', 'import'];
+const TAB_KEYS = ['myShift', 'allowance', 'stats', 'groupShare', 'import'];
 // 첫 실행에 이름을 비워 두고 시작한 경우: 기본 이름으로 두고, 그룹을 쓸 때 이름을 물음
 const DEFAULT_NAME = '나';
 const NAME_SKIPPED_KEY = 'name_skipped';
@@ -739,10 +747,6 @@ export default function App() {
     setUserName(next);
   };
 
-  const handleGoToday = () => {
-    setSelectedDate(today.dateStr);
-  };
-
   const currentGroup = (groups || []).find(g => g.id === activeGroupId) || (groups || [])[0] || null;
 
   if (authLanding) {
@@ -848,12 +852,11 @@ export default function App() {
             {activeTab !== 'myShift' ? (
               <h1 className="text-[26px] font-bold text-slate-900 tracking-tight leading-tight truncate">{TAB_TITLES[activeTab]}</h1>
             ) : (
-              // 내 근무: 이름 제목 없이 바로 '2026년 10월' (누르면 년·월 고르기). 이름은 설정 탭에서 바꿈
-              <button type="button" onClick={() => setHeaderPickerOpen(true)} aria-label="년·월 선택" className="flex items-center gap-1 cursor-pointer max-w-full">
-                <h1 className="text-[24px] font-bold text-slate-900 tracking-tight leading-tight truncate">
+              // 근무표: '2026년 10월'만 (누르면 년·월 고르기). 이름은 마이 탭에서 바꿈
+              <button type="button" onClick={() => setHeaderPickerOpen(true)} aria-label="년·월 선택" className="flex items-center cursor-pointer max-w-full">
+                <h1 className="text-[26px] font-bold text-slate-900 tracking-tight leading-tight truncate">
                   {headerYear}년 {headerMonth}월
                 </h1>
-                <ChevronDown size={20} className="shrink-0 text-slate-500" aria-hidden="true" />
               </button>
             )}
             <SyncBadge status={syncStatus} />
@@ -870,13 +873,6 @@ export default function App() {
                 </button>
               </>
             )}
-            <button
-              onClick={handleGoToday}
-              aria-label="오늘"
-              className="w-11 h-11 mr-1.5 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-700 cursor-pointer active:bg-slate-100"
-            >
-              <CalendarCheck size={22} />
-            </button>
             {/* 보안 모드가 켜져 있으면 표시 (눌러서 끄기). 켜기는 설정 탭 */}
             {privacyBlur && (
               <button
@@ -887,6 +883,7 @@ export default function App() {
                 <Shield size={15} /> 보안
               </button>
             )}
+            {activeTab !== 'myShift' && (
             <button
               type="button"
               onClick={() => setAccountModal('link')}
@@ -899,6 +896,7 @@ export default function App() {
                 <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-white" />
               )}
             </button>
+            )}
           </div>
         </div>
 
@@ -909,6 +907,7 @@ export default function App() {
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 4)}
           style={{ paddingBottom: 'calc(5.5rem + var(--safe-bottom) + var(--ad-h, 0px))' }}
         >
+          <div className={activeTab === 'myShift' || activeTab === 'stats' ? 'app-bezel' : ''}>
           <Suspense
             fallback={
               <div className="flex justify-center py-16 text-slate-300">
@@ -964,6 +963,8 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'stats' && <ShiftStats myShifts={myShifts || {}} initialYear={headerYear} />}
+
           {activeTab === 'groupShare' && (
             <GroupShareTab
               newGroupName={newGroupName}
@@ -987,6 +988,18 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'import' && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('groupShare')}
+              aria-label="그룹"
+              className="w-full mb-3 flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-left cursor-pointer active:bg-slate-100"
+            >
+              <Users size={20} className="shrink-0 text-slate-500" />
+              <span className="flex-1 text-[15px] font-medium text-slate-800">그룹 · 근무 공유</span>
+              <ChevronRight size={18} className="shrink-0 text-slate-300" />
+            </button>
+          )}
           {activeTab === 'import' && (
             <ImportTab
               onRename={handleRename}
@@ -1013,6 +1026,7 @@ export default function App() {
             />
           )}
           </Suspense>
+          </div>
         </div>
 
         {/* 3. 프레임 바닥에 완벽 밀착시킨 하단 네비게이션 탭 */}
@@ -1021,49 +1035,20 @@ export default function App() {
           className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-1px_0_rgb(var(--c-slate-100))] px-2 pt-2 grid grid-cols-4 z-50"
           style={{ paddingBottom: 'calc(0.375rem + var(--safe-bottom))' }}
         >
-          <button
-            onClick={() => setActiveTab('myShift')}
-            aria-current={activeTab === 'myShift' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl cursor-pointer ${
-              activeTab === 'myShift' ? 'text-indigo-600' : 'text-slate-400'
-            }`}
-          >
-            <Calendar size={22} className={activeTab === 'myShift' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[10.5px] font-medium">내 근무</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('allowance')}
-            aria-current={activeTab === 'allowance' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl cursor-pointer ${
-              activeTab === 'allowance' ? 'text-indigo-600' : 'text-slate-400'
-            }`}
-          >
-            <Wallet size={22} className={activeTab === 'allowance' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[10.5px] font-medium">수당</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('groupShare')}
-            aria-current={activeTab === 'groupShare' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl cursor-pointer ${
-              activeTab === 'groupShare' ? 'text-indigo-600' : 'text-slate-400'
-            }`}
-          >
-            <Users size={22} className={activeTab === 'groupShare' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[10.5px] font-medium">그룹</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('import')}
-            aria-current={activeTab === 'import' ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl cursor-pointer ${
-              activeTab === 'import' ? 'text-indigo-600' : 'text-slate-400'
-            }`}
-          >
-            <Settings size={22} className={activeTab === 'import' ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-            <span className="text-[10.5px] font-medium">설정</span>
-          </button>
+          {NAV_TABS.map(({ key, label, Icon, also }) => {
+            const on = activeTab === key || activeTab === also;
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                aria-current={on ? 'page' : undefined}
+                className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl cursor-pointer ${on ? 'text-indigo-600' : 'text-slate-400'}`}
+              >
+                <Icon size={22} className={on ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+                <span className="text-[10.5px] font-medium">{label}</span>
+              </button>
+            );
+          })}
         </div>
 
       </div>
@@ -1083,6 +1068,8 @@ function SyncBadge({ status }) {
     offline: { icon: <CloudOff size={11} />, text: '오프라인 · 기기 저장', cls: 'text-amber-500' }
   };
   const { icon, text, cls } = map[status] || map.connecting;
+  // 머리글은 년·월만: 저장 상태는 화면 읽기용으로만 두고, 오프라인일 때만 보여 줌
+  if (status !== 'offline') return <p className="sr-only" aria-live="polite">{text}</p>;
   return (
     <p className={`mt-0.5 text-[11px] font-normal flex items-center gap-1 whitespace-nowrap ${cls}`}>
       {icon} {text}

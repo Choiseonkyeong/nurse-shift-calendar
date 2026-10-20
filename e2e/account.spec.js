@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createFakeState, seedAccount, confirmPendingEmail } from './fakeSupabase.js';
-import { openApp, readLocal, tab, waitSaved } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved, expectUserName } from './helpers.js';
 
 test('이메일 계정 연결: 인증 메일 → 인증 확인 → 비밀번호 설정', async ({ page }) => {
   const state = createFakeState();
@@ -8,6 +8,7 @@ test('이메일 계정 연결: 인증 메일 → 인증 확인 → 비밀번호 
   await waitSaved(page);
 
   // 연결 전: 프로필 버튼에 경고 표시
+  await tab(page, '마이').click();
   await page.getByRole('button', { name: '계정 (연결 필요)' }).click();
   await expect(page.getByText(/임시 계정이에요/)).toBeVisible();
   await page.getByPlaceholder('이메일 주소').fill('nurse@example.com');
@@ -36,6 +37,7 @@ test('이미 다른 계정의 이메일이면 안내', async ({ page }) => {
   seedAccount(state, { email: 'taken@example.com', password: 'secret12', name: '누군가' });
   await openApp(page, { state });
   await waitSaved(page);
+  await tab(page, '마이').click();
   await page.getByRole('button', { name: '계정 (연결 필요)' }).click();
   await page.getByPlaceholder('이메일 주소').fill('taken@example.com');
   await page.getByRole('button', { name: '인증 메일 보내기' }).click();
@@ -55,7 +57,7 @@ test('새 폰: 첫 화면에서 기존 계정으로 로그인 → 계정 데이�
 
   await page.getByPlaceholder('비밀번호').fill('secret12');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
-  await expect(page.getByTitle('최간호', { exact: true })).toBeVisible();
+  await expectUserName(page, '최간호');
   await waitSaved(page);
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-15': 'N' });
 });
@@ -66,7 +68,7 @@ test('인증 메일 링크로 열린 웹 페이지: 완료 안내 후 앱 데이
   await page.goto('/?from=mail#access_token=abc&type=email_change&refresh_token=r');
   await expect(page.getByText('이메일 인증 완료')).toBeVisible();
   await page.getByRole('button', { name: '웹에서 근무표 열기' }).click();
-  await expect(page.getByTitle('김간호', { exact: true })).toBeVisible();
+  await expectUserName(page, '김간호');
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-01': 'D' });
   expect(page.url()).not.toContain('access_token');
 });
@@ -78,6 +80,7 @@ test('계정 삭제: 확인 문구 입력 후 서버·기기 데이터 모두 �
   const pid = Object.keys(state.profiles)[0];
   await expect.poll(() => state.shifts[pid]).toEqual({ '2026-09-01': 'D' });
 
+  await tab(page, '마이').click();
   await page.getByRole('button', { name: /^계정/ }).click();
   await page.getByRole('button', { name: '계정 삭제' }).click();
   const confirmBtn = page.getByRole('button', { name: '영구 삭제' });
@@ -93,7 +96,7 @@ test('계정 삭제: 확인 문구 입력 후 서버·기기 데이터 모두 �
 
 test('개인정보처리방침 페이지', async ({ page }) => {
   await openApp(page);
-  await tab(page, '설정').click();
+  await tab(page, '마이').click();
   const [popup] = await Promise.all([page.waitForEvent('popup'), page.getByRole('link', { name: '개인정보처리방침' }).click()]);
   await expect(popup.getByRole('heading', { name: '개인정보처리방침' })).toBeVisible();
   await expect(popup.getByText(/기기 안에서만/)).toBeVisible();
