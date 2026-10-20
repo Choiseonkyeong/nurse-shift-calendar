@@ -71,7 +71,7 @@ test('설정(근무 수당·연차)이 서버에 저장되고 새 폰 로그인 
   await page.getByPlaceholder('비밀번호').fill('secret12');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
   await waitSaved(page);
-  await tab(page, '수당').click();
+  await tab(page, '수당 계산').click();
   await page.getByRole('button', { name: /계산 설정/ }).click(); // 설정은 접혀 있음
   await page.getByLabel('N 1회 수당').fill('130000');
   await expect.poll(() => state.settings[profile.id]?.settings?.shift_configs?.allowance).toEqual({ N: 130000 });
@@ -84,7 +84,7 @@ test('설정(근무 수당·연차)이 서버에 저장되고 새 폰 로그인 
   await other.getByPlaceholder('비밀번호').fill('secret12');
   await other.getByRole('button', { name: '로그인', exact: true }).click();
   await waitSaved(other);
-  await tab(other, '수당').click();
+  await tab(other, '수당 계산').click();
   await other.getByRole('button', { name: /계산 설정/ }).click();
   await expect(other.getByLabel('N 1회 수당')).toHaveValue('130,000');
   await other.close();

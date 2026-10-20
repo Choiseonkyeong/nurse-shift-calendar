@@ -36,13 +36,14 @@ npx playwright test    # 화면(e2e) 테스트 — 화면을 바꿨으면 꼭
 - 글꼴: **Pretendard** 기본 (설정 › 꾸미기에서 변경 가능). 굵기: 제목 700 · 근무 코드 600 · 날짜 500 · 본문 400.
 - 앱 색: 파스텔 블루 기본 · 연분홍/라벤더/민트/하늘색/검정 선택 (`src/lib/accentPref.js`, 코드 전체의 `blue`/`indigo` 색 변수를 바꿔 끼우는 방식).
 - 근무 기본 색: `src/lib/shiftTypes.js` (D `#E0EDF9` · E `#F9E9DC` · N `#EBE6F7` · OFF `#EAECE9`).
-- 내 근무 화면: 맨 위 "2026년 10월 ⌄" → 달력(날짜 16px 아래 직사각형 근무 칩, 오늘은 세이지색 상자 `.today-cell`) → 근무 수 카드 → 오늘 한마디.
+- 근무표 화면: 맨 위 "2026년 10월 ‹ ›"만 → 둥근 회색 베젤(`.app-bezel`) 안에 달력(날짜 아래 둥근 근무 배지, 고른 날은 세이지색 상자 `.today-cell`) → 근무 수 카드(색 배지 + 큰 숫자).
+- 아래 탭: 근무표 · 수당 계산 · 통계 · 마이 (그룹은 마이 탭 맨 위에서 들어감, 계정 버튼은 근무표 외 화면 머리글).
 - 첫 화면: `src/components/IntroScreen.jsx` — 로그인 전에는 열 때마다, 로그인한 폰은 안 보임.
 - 수당: 근무 1회 수당 × 횟수만 (`src/lib/allowance.js` `shiftAllowance`). 계약 나이트 개수 기준·시급 계산은 넣지 않기로 함.
 - 캐릭터: `src/components/Mascot.jsx` (눈을 뜬 북극곰 얼굴 토닥이, `src/assets/polar-bear-face.webp`).
 
 ## 6. 구조 한눈에
-- 화면: `src/App.jsx`(머리글·탭·동기화), `src/components/*Tab.jsx`(내 근무·수당·그룹·설정)
+- 화면: `src/App.jsx`(머리글·탭·동기화), `src/components/*Tab.jsx`(근무표·수당·그룹·마이), 통계 탭은 `ShiftStats.jsx`
 - 데이터: 이 기기 `localStorage` + 서버(Supabase, `src/lib/shiftApi.js`). 날짜 메모는 한 줄 = 일정 하나 (`src/lib/dayItems.js`)
 - 앱: Capacitor (안드로이드 `android/`, 아이폰 `ios/`) — 네이티브 알람·위젯 코드 포함
 - 배포: master 에 머지되면 Vercel(웹) 자동 배포 + 안드로이드 APK 빌드. 사용자가 할 일 목록은 `docs/OWNER_TODO.md`

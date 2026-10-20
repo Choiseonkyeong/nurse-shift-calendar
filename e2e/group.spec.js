@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createFakeState, seedGroupWithMate, installFakeSupabase } from './fakeSupabase.js';
-import { openApp, readLocal, tab, waitSaved, confirmOk } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved, confirmOk, expectUserName } from './helpers.js';
 
 async function setup(page, { myShifts = {}, mateShifts = {} } = {}) {
   const state = createFakeState();
@@ -142,7 +142,7 @@ test('이름 없이 시작 → 그룹 만들 때만 이름을 묻고 이어서 �
   const state = createFakeState();
   await openApp(page, { state, name: null });
   await page.getByRole('button', { name: '이름 없이 시작하기' }).click();
-  await expect(page.getByTitle('나', { exact: true })).toBeVisible();
+  await expectUserName(page, '나');
   await waitSaved(page);
 
   await tab(page, '그룹').click();
@@ -154,8 +154,8 @@ test('이름 없이 시작 → 그룹 만들 때만 이름을 묻고 이어서 �
   await page.getByRole('button', { name: '확인' }).click();
 
   await expect(page.getByText(/'7병동' 그룹이 생성되었습니다/)).toBeVisible();
-  await tab(page, '내 근무').click(); // 위쪽 제목은 화면마다 다르고, 내 근무 화면에 이름이 나옴
-  await expect(page.getByTitle('박간호', { exact: true })).toBeVisible();
+  await tab(page, '근무표').click(); // 위쪽 제목은 화면마다 다르고, 내 근무 화면에 이름이 나옴
+  await expectUserName(page, '박간호');
   const me = Object.values(state.profiles)[0];
   expect(me.display_name).toBe('박간호');
   expect(state.groups[0].members).toEqual([me.id]);

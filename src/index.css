@@ -209,3 +209,13 @@ input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* 근무표·통계 화면: 흰 카드를 감싸는 둥근 회색 베젤 (디자인 시안) */
+.app-bezel {
+  background-color: #f7f7f5;
+  border-radius: 28px;
+  padding: 12px;
+}
+.dark .app-bezel {
+  background-color: rgb(30 41 59 / 0.6);
+}

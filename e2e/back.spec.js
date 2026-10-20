@@ -19,7 +19,7 @@ test('날짜 창을 연 채 뒤로가기 → 창만 닫힘, 한 번 더 누르�
   await back(page);
   await inApp(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByTitle('김간호', { exact: true })).toBeVisible();
+  await expect(tab(page, '근무표')).toHaveAttribute('aria-current', 'page');
   await back(page);
   await leftApp(page);
 });
@@ -40,17 +40,17 @@ test('다른 탭에서 뒤로가기 → 내 근무 탭, 등록 탭의 계정 창
   await tab(page, '그룹').click();
   await back(page);
   await inApp(page);
-  await expect(page.getByTitle('김간호', { exact: true })).toBeVisible();
+  await expect(tab(page, '근무표')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('내 그룹')).toHaveCount(0);
 
-  await tab(page, '설정').click();
+  await tab(page, '마이').click();
   await page.getByText('계정 연결하기').click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await back(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('근무표 사진으로 등록')).toBeVisible(); // 창만 닫히고 설정 탭 유지
   await back(page);
-  await expect(page.getByTitle('김간호', { exact: true })).toBeVisible();
+  await expect(tab(page, '근무표')).toHaveAttribute('aria-current', 'page');
   await back(page);
   await leftApp(page);
 });
