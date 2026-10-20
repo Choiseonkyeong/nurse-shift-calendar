@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { Calendar, Calculator, BarChart3, User, Users, Shield, Cloud, CloudOff, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Wallet, Users, Settings, Shield, Cloud, CloudOff, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './components/MonthPicker';
 import { addMonthsKey } from './utils/dateUtils';
 import MyShiftTab from './components/MyShiftTab';
@@ -9,7 +9,6 @@ import { lazyImport, consumeResume, setResumeTab } from './lib/appUpdate';
 const AllowanceTab = lazy(lazyImport(() => import('./components/AllowanceTab')));
 const GroupShareTab = lazy(lazyImport(() => import('./components/GroupShareTab')));
 const ImportTab = lazy(lazyImport(() => import('./components/ImportTab')));
-const ShiftStats = lazy(lazyImport(() => import('./components/ShiftStats')));
 import NameSetup from './components/NameSetup';
 import IntroScreen from './components/IntroScreen';
 import { introSeen, markIntroSeen, introEveryLaunch } from './lib/introPref';
@@ -39,20 +38,20 @@ import { ROSTER_NAME_KEY } from './lib/rosterName';
 
 // 위쪽 큰 제목 (내 근무 화면은 이름이 들어간 제목)
 const SIGNED_IN_KEY = 'signed_in';
-const TAB_TITLES = { allowance: '연차 · 수당', stats: '통계', groupShare: '그룹', import: '마이' };
-// 아래 탭바 (그룹은 마이 탭 안에서 들어감)
+const TAB_TITLES = { allowance: '연차 · 수당', groupShare: '그룹', import: '설정' };
+// 아래 탭바
 const NAV_TABS = [
-  { key: 'myShift', label: '근무표', Icon: Calendar },
-  { key: 'allowance', label: '수당 계산', Icon: Calculator },
-  { key: 'stats', label: '통계', Icon: BarChart3 },
-  { key: 'import', label: '마이', Icon: User, also: 'groupShare' }
+  { key: 'myShift', label: '내 근무', Icon: Calendar },
+  { key: 'allowance', label: '수당', Icon: Wallet },
+  { key: 'groupShare', label: '그룹', Icon: Users },
+  { key: 'import', label: '설정', Icon: Settings }
 ];
 import { RESTORE_REPLACE_KEY } from './lib/backup';
 
 const SYNCED_SHIFTS_KEY = 'synced_shift_data';
 const LEGACY_DEFAULT_NAME = '최수민';
 const NAME_CONFIRMED_KEY = 'name_confirmed';
-const TAB_KEYS = ['myShift', 'allowance', 'stats', 'groupShare', 'import'];
+const TAB_KEYS = ['myShift', 'allowance', 'groupShare', 'import'];
 // 첫 실행에 이름을 비워 두고 시작한 경우: 기본 이름으로 두고, 그룹을 쓸 때 이름을 물음
 const DEFAULT_NAME = '나';
 const NAME_SKIPPED_KEY = 'name_skipped';
@@ -852,7 +851,7 @@ export default function App() {
             {activeTab !== 'myShift' ? (
               <h1 className="text-[26px] font-bold text-slate-900 tracking-tight leading-tight truncate">{TAB_TITLES[activeTab]}</h1>
             ) : (
-              // 근무표: '2026년 10월'만 (누르면 년·월 고르기). 이름은 마이 탭에서 바꿈
+              // 내 근무: '2026년 10월'만 (누르면 년·월 고르기). 이름은 설정 탭에서 바꿈
               <button type="button" onClick={() => setHeaderPickerOpen(true)} aria-label="년·월 선택" className="flex items-center cursor-pointer max-w-full">
                 <h1 className="text-[26px] font-bold text-slate-900 tracking-tight leading-tight truncate">
                   {headerYear}년 {headerMonth}월
@@ -907,7 +906,7 @@ export default function App() {
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 4)}
           style={{ paddingBottom: 'calc(5.5rem + var(--safe-bottom) + var(--ad-h, 0px))' }}
         >
-          <div className={activeTab === 'myShift' || activeTab === 'stats' ? 'app-bezel' : ''}>
+          <div className={activeTab === 'myShift' ? 'app-bezel' : ''}>
           <Suspense
             fallback={
               <div className="flex justify-center py-16 text-slate-300">
@@ -963,8 +962,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'stats' && <ShiftStats myShifts={myShifts || {}} initialYear={headerYear} />}
-
           {activeTab === 'groupShare' && (
             <GroupShareTab
               newGroupName={newGroupName}
@@ -988,18 +985,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'import' && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('groupShare')}
-              aria-label="그룹"
-              className="w-full mb-3 flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-left cursor-pointer active:bg-slate-100"
-            >
-              <Users size={20} className="shrink-0 text-slate-500" />
-              <span className="flex-1 text-[15px] font-medium text-slate-800">그룹 · 근무 공유</span>
-              <ChevronRight size={18} className="shrink-0 text-slate-300" />
-            </button>
-          )}
           {activeTab === 'import' && (
             <ImportTab
               onRename={handleRename}
@@ -1035,8 +1020,8 @@ export default function App() {
           className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-1px_0_rgb(var(--c-slate-100))] px-2 pt-2 grid grid-cols-4 z-50"
           style={{ paddingBottom: 'calc(0.375rem + var(--safe-bottom))' }}
         >
-          {NAV_TABS.map(({ key, label, Icon, also }) => {
-            const on = activeTab === key || activeTab === also;
+          {NAV_TABS.map(({ key, label, Icon }) => {
+            const on = activeTab === key;
             return (
               <button
                 key={key}

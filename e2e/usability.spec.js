@@ -31,7 +31,7 @@ test('연속 입력: 안내를 보고 날짜를 누르면 즉시 저장, 종료 
 
 test('꾸미기: 파스텔 다섯 가지·검정 선택 후 새로고침에도 유지', async ({ page }) => {
   await openApp(page);
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: /꾸미기/ }).click();
   const colors = page.getByRole('radiogroup', { name: '앱 색', exact: true });
   await expect(colors.getByRole('radio')).toHaveCount(6);
@@ -43,7 +43,7 @@ test('꾸미기: 파스텔 다섯 가지·검정 선택 후 새로고침에도 �
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--c-blue-600').trim())).toBe('39 39 42');
   // 검정 테마 + 다크 모드에서도 선택한 탭이 검은 바탕에 묻히지 않아야 함.
   await page.evaluate(() => document.documentElement.classList.add('dark'));
-  const contrast = await tab(page, '근무표').evaluate((el) => {
+  const contrast = await tab(page, '내 근무').evaluate((el) => {
     const luminance = (color) => {
       const rgb = color.match(/[\d.]+/g).slice(0, 3).map((v) => {
         const n = Number(v) / 255;
