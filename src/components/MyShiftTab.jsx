@@ -772,7 +772,7 @@ export default function MyShiftTab({
       )}
 
       {/* 1. 달력 (달 제목·‹ › 은 맨 위 머리글에) */}
-      <section className="space-y-2">
+      <section className="space-y-3 rounded-[28px] border border-slate-100/80 bg-white px-3 py-5 shadow-sm sm:px-5 dark:border-slate-700 dark:bg-slate-900">
         {quickMode && (
           <div className="space-y-2 p-3 rounded-2xl bg-blue-50" id="continuous-entry-help" role="region" aria-label="연속 입력 안내">
             <p className="text-[13px] text-blue-600 font-medium">
@@ -895,7 +895,7 @@ export default function MyShiftTab({
           {workCounts.map(([code, count]) => {
               const t = findType(code);
               return (
-                <div key={code} style={shiftTextVars(t)} className="shift-cell rounded-2xl py-3 flex flex-col items-center gap-1">
+                <div key={code} style={shiftTextVars(t)} className="rounded-[24px] border border-slate-100 bg-white py-4 flex flex-col items-center gap-1 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <span className="shift-text w-10 h-7 rounded-[5px] bg-white/70 flex items-center justify-center text-[13px] font-semibold">{code}</span>
                   <span className="text-[20px] font-bold text-slate-900 leading-tight">{count}일</span>
                 </div>
