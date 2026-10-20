@@ -129,6 +129,14 @@ describe('정산 기간', () => {
 });
 
 describe('근무 기본 색', () => {
+  it('서버의 하늘색 나이트를 연보라로 표시하고 시간과 다른 근무 색은 보존', () => {
+    const t = mergeShiftTypes([
+      { code: 'N', bg: '#e0f2fe', fg: '#0369a1', start: '21:30', end: '08:00' },
+      { code: 'E', bg: '#000000', fg: '#FFFFFF' }
+    ]);
+    expect(t.find((x) => x.code === 'N')).toMatchObject({ bg: '#E6D9F5', fg: '#756097', start: '21:30', end: '08:00' });
+    expect(t.find((x) => x.code === 'E')).toMatchObject({ bg: '#000000', fg: '#FFFFFF' });
+  });
   it('예전 기본 색(서버 프리셋)은 새 기본 색으로, 직접 고른 색은 그대로', () => {
     const t = mergeShiftTypes([
       { code: 'D', label: 'Day (데이)', bg: '#FEF08A', fg: '#854D0E', start: '07:00' },
