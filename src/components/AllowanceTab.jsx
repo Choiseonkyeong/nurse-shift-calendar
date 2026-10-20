@@ -3,6 +3,7 @@ import { useShiftTypes, shiftTextVars, shortLabel } from '../lib/shiftTypes';
 import { getTodayDateObj, addMonthsKey } from '../utils/dateUtils';
 import { leaveYearRange, shiftAllowance, payPeriod } from '../lib/allowance';
 import ShiftStats from './ShiftStats';
+import Mascot from './Mascot';
 import { SlidersHorizontal, ChevronLeft, ChevronRight, ChevronDown, X, Minus, Plus, Pencil } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './MonthPicker';
 import Modal from './Modal';
@@ -182,7 +183,7 @@ export default function AllowanceTab({
   return (
     <div className="max-w-md mx-auto pb-12 text-slate-800 space-y-3">
       {/* 1. 이번 달 근무 수당: 숫자만 크게 */}
-      <section className="relative overflow-hidden rounded-3xl bg-blue-50 p-5">
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-50 to-blue-100/70 border border-blue-100 p-5">
         {/* 달 바꾸기: ‹ › 또는 제목을 눌러 년·월 선택 */}
         <div className="flex items-center justify-between -mt-1 -mx-2">
           <button type="button" aria-label="이전 달" onClick={() => setSelectedDate?.(addMonthsKey(selectedDate, -1))} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 active:bg-white cursor-pointer">
@@ -197,6 +198,10 @@ export default function AllowanceTab({
             <ChevronRight size={20} />
           </button>
         </div>
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-[13px] font-medium text-blue-700">차곡차곡 모인 이번 달 수당</span>
+          <Mascot size={48} />
+        </div>
         <p className={`mt-1 text-[36px] font-bold tracking-tight leading-tight text-slate-900 ${blurCls}`}>
           {won(allowance.total)}
           <span className="text-[22px] font-semibold ml-0.5 text-blue-600">원</span>
@@ -204,7 +209,8 @@ export default function AllowanceTab({
         {allowanceItems.length ? (
           <div className="mt-4 grid grid-cols-2 gap-2">
             {allowanceItems.map((it) => (
-              <div key={it.code} className="rounded-2xl bg-white p-3">
+              <div key={it.code} style={shiftTextVars(typeOf(it.code) || { bg: '#e8edf9', fg: '#586da3' })} className="shift-cell rounded-2xl border border-white/60 p-3">
+                <span className="shift-text inline-flex items-center justify-center min-w-7 h-6 px-1.5 mb-2 rounded-md bg-white/70 text-[12px] font-semibold">{it.code}</span>
                 <p className="text-[12px] text-slate-500">{shortLabel(typeOf(it.code)?.label || it.code)} 수당</p>
                 <p className={`text-[17px] font-semibold mt-0.5 text-slate-900 ${blurCls}`}>{won(it.total)} 원</p>
                 <p className={`text-[11px] text-slate-400 mt-0.5 ${blurCls}`}>
@@ -225,7 +231,7 @@ export default function AllowanceTab({
       </section>
 
       {/* 2. 연차: 남은 개수 + 막대 */}
-      <section className="rounded-3xl bg-slate-50 p-5">
+      <section className="rounded-3xl bg-gradient-to-br from-emerald-50 to-emerald-100/40 border border-emerald-100 p-5">
         <div className="flex items-end justify-between">
           <div>
             <p className="flex items-center gap-1 text-[13px] text-slate-500">
@@ -244,7 +250,7 @@ export default function AllowanceTab({
           </p>
         </div>
         <div className="mt-3 h-2.5 rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-valuenow={usedPct} aria-valuemin={0} aria-valuemax={100} aria-label="연차 사용률">
-          <div className="h-full rounded-full bg-blue-600" style={{ width: `${usedPct}%` }} />
+          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${usedPct}%` }} />
         </div>
         {leaveTypes.length > 1 && (
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[13px] text-slate-500">

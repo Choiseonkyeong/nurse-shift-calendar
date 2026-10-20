@@ -583,6 +583,16 @@ export function sureRatio(result) {
   return sure / total;
 }
 
+/** 방향·명암을 바꿔 읽은 표 중 날짜 열과 사람 행이 더 온전한 결과를 선택. */
+export function rosterStructureScore(result) {
+  if (result?.error || !result?.grid) return 0;
+  const { rows = [], cols = [], weekdays } = result.grid;
+  if (cols.length < 8 || !rows.length) return 0;
+  const weekdayFit = weekdays?.total >= 8 ? weekdays.match / weekdays.total : 1;
+  return rows.length * Math.min(cols.length, 31) * (weekdayFit < 0.7 ? 0.25 : 1)
+    + (result.names || []).filter((n) => nameQuality(n) >= 65).length;
+}
+
 /** 칸 글자 덩어리의 가로/세로 비율 (D·E·N·M 한 글자 ≈ 1, OFF 세 글자 ≈ 2.5) */
 function inkAspect(canvas) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -847,10 +857,39 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
   try {
     let source = canvas;
     let result = parseRosterWords(await ocrWords(worker, canvas), { year, month, shiftTypes });
+    let rawStructure = null;
+    let rawResult = null;
+    // 가로 사진의 연한 글자는 원본 명암으로 먼저 재시도. 정상 사진에서 불필요하게 세 방향을 더 읽지 않음.
+    if (result.error && widthOf(base) >= heightOf(base)) {
+      rawStructure = scaledCanvas(img);
+      rawResult = parseRosterWords(await ocrWords(worker, rawStructure), { year, month, shiftTypes });
+      if (!rawResult.error) { result = rawResult; source = rawStructure; }
+    }
+    // 세로로 누운 사진은 일부 숫자·이름만 읽혀도 성공으로 보일 수 있으므로 네 방향을 비교.
+    // 첫 번째로 표가 보인 방향에서 멈추지 않고, 사람 행·날짜 열이 가장 온전한 방향을 고름.
+    if (result.error || heightOf(base) > widthOf(base)) {
+      const turns = [90, 270, 180];
+      let best = { turned: img, c: canvas, source, r: result };
+      for (const [i, deg] of turns.entries()) {
+        stage = (p) => onProgress(0.1 + p * 0.3, `사진 방향 확인 중... (${i + 1}/${turns.length})`);
+        const turned = deskew(rotateQuarter(base, deg));
+        const c = preprocess(turned);
+        const r = parseRosterWords(await ocrWords(worker, c), { year, month, shiftTypes });
+        if (rosterStructureScore(r) > rosterStructureScore(best.r)) best = { turned, c, source: c, r };
+      }
+
+      if (best.turned !== img) { rawStructure = null; rawResult = null; }
+      img = best.turned;
+      canvas = best.c;
+      source = best.source;
+      result = best.r;
+    }
     // 보정 이미지에서 표를 못 찾으면 원본으로 한 번 더
     if (result.error) {
-      const raw = scaledCanvas(img);
-      const retry = parseRosterWords(await ocrWords(worker, raw), { year, month, shiftTypes });
+      const raw = rawStructure || scaledCanvas(img);
+      const retry = rawResult || parseRosterWords(await ocrWords(worker, raw), { year, month, shiftTypes });
+      rawStructure = raw;
+      rawResult = retry;
       if (!retry.error) {
         result = retry;
         source = raw;
@@ -866,25 +905,17 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
         source = big;
       }
     }
-    // 그래도 못 찾으면 옆으로·거꾸로 찍힌 사진일 수 있음 → 돌려서 다시
-    if (result.error) {
-      const turns = [90, 270, 180];
-      let found = null;
-      for (const [i, deg] of turns.entries()) {
-        stage = (p) => onProgress(0.1 + p * 0.3, `사진 방향 바꿔 읽는 중... (${i + 1}/${turns.length})`);
-        const turned = deskew(rotateQuarter(base, deg));
-        const c = preprocess(turned);
-        const r = parseRosterWords(await ocrWords(worker, c), { year, month, shiftTypes });
-        if (!r.error) {
-          found = { turned, c, r };
-          break;
-        }
-      }
-      if (!found) return result;
-      img = found.turned;
-      canvas = found.c;
-      source = found.c;
-      result = found.r;
+    if (result.error) return result;
+    // 이진화가 연한 글자·색 바탕 위 근무를 지울 수 있음. 원본 명암으로도 읽어 빠진 행을 복구.
+    rawStructure ||= scaledCanvas(img);
+    rawResult ||= parseRosterWords(await ocrWords(worker, rawStructure), { year, month, shiftTypes });
+    if (!rawResult.error && rawResult.year === result.year && rawResult.month === result.month
+      && rawResult.grid.rows.length > result.grid.rows.length
+      && rawResult.grid.cols.map((c) => c.key).join() === result.grid.cols.map((c) => c.key).join()
+      && rosterStructureScore(rawResult) > rosterStructureScore(result)) {
+      // 원본은 빠진 행의 좌표만 보완. 칸별 인식은 표 선을 제거한 보정 이미지를 유지.
+      source = canvas.width === rawStructure.width && canvas.height === rawStructure.height ? canvas : rawStructure;
+      result = rawResult;
     }
     // 표가 사진 일부만 차지하면(브라우저·엑셀 화면 캡처, 멀리서 찍은 사진) 글자가 작고 옆 메뉴 글자가 이름에 섞임
     // → 표 부분만 잘라 크게 다시 읽음 (같은 달·같은 줄 수로 읽힐 때만 바꿈)
@@ -904,8 +935,8 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
       const sameMonth = (r2.year === result.year && r2.month === result.month) || (r2.found && !result.found);
       const wd = (r) => (r.grid?.weekdays?.total >= 8 ? r.grid.weekdays.match / r.grid.weekdays.total : null);
       const betterDays = !r2.error && wd(r2) !== null && wd(r2) >= 0.8 && (wd(result) === null || wd(r2) > wd(result));
-      const bigEnough = !r2.error && r2.grid.cols.length >= result.grid.cols.length - 2 && r2.grid.rows.length >= result.grid.rows.length - 1;
-      if (!r2.error && ((sameMonth && bigEnough) || (betterDays && r2.grid.rows.length >= result.grid.rows.length - 1))) {
+      const bigEnough = !r2.error && r2.grid.cols.length >= result.grid.cols.length - 2 && r2.grid.rows.length >= result.grid.rows.length;
+      if (!r2.error && ((sameMonth && bigEnough) || (betterDays && r2.grid.rows.length >= result.grid.rows.length))) {
         img = cropped;
         canvas = c2;
         source = c2;
