@@ -7,7 +7,7 @@ export const DEFAULT_SHIFT_TYPES = [
   // 파스텔(디자인 시안 색): 데이 파랑 · 이브닝 살구 · 나이트 보라 · 미드 민트 · 휴무 회색 · 연차 분홍
   { code: 'D', label: 'Day (데이)', kind: 'work', bg: '#DDECF8', fg: '#416F90' },
   { code: 'E', label: 'Evening (이브닝)', kind: 'work', bg: '#F9E5D9', fg: '#A86442' },
-  { code: 'N', label: 'Night (나이트)', kind: 'work', bg: '#EEE5F8', fg: '#756097' },
+  { code: 'N', label: 'Night (나이트)', kind: 'work', bg: '#E6D9F5', fg: '#756097' },
   { code: 'M', label: 'Mid (미드)', kind: 'work', bg: '#DFF1EA', fg: '#2E7D62' },
   { code: 'OFF', label: 'OFF (휴무)', kind: 'off', bg: '#EAECE9', fg: '#6B706A' },
   { code: '연차', label: '연차 (휴가)', kind: 'leave', bg: '#FCE7F3', fg: '#BE185D', leaveDays: 1 }
@@ -24,7 +24,8 @@ const PREVIOUS_DEFAULT_COLORS = {
   E: '#F9E9DC/#C0652A',
   N: '#EBE6F7/#6B4FB8'
 };
-const isPreviousDefaultColor = (t) => PREVIOUS_DEFAULT_COLORS[t.code] === `${t.bg}/${t.fg}`.toUpperCase();
+const isPreviousDefaultColor = (t) => PREVIOUS_DEFAULT_COLORS[t.code] === `${t.bg}/${t.fg}`.toUpperCase() ||
+  (t.code === 'N' && `${t.bg}/${t.fg}`.toUpperCase() === '#EEE5F8/#756097');
 
 export const DEFAULT_CODES = new Set(DEFAULT_SHIFT_TYPES.map((t) => t.code));
 const FALLBACK = { bg: '#F1F5F9', fg: '#475569' };
