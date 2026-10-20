@@ -292,7 +292,7 @@ test('수당 화면에서도 달 바꾸기: ‹ › 와 년·월 선택', async 
   await expect(page.getByRole('heading', { name: '2025년 12월' })).toBeVisible();
 });
 
-test('일정·메모: 한 날짜에 여러 개 넣으면 달력 칸에 모두 보이고, 손잡이를 끌어 순서를 바꿈', async ({ page }) => {
+test('일정·메모: 한 날짜에 여러 개 넣으면 달력 칸이 모두 읽어 주고(화면엔 숫자·배지만), 손잡이를 끌어 순서를 바꿈', async ({ page }) => {
   await openApp(page, { local: { day_notes: { '2026-09-10': '교육\n회식\n은행\n택배' } } });
   const cell = page.getByRole('button', { name: /^9월 10일 (?!\()/ });
   await expect(cell).toHaveAttribute('aria-label', /일정 4개: 교육, 회식, 은행, 택배/);
@@ -353,7 +353,7 @@ test('설정 › 꾸미기: 앱 색(기본 블루)·글꼴·글자 크기를 바
   expect(await accent()).toBe('128 97 170');
 });
 
-test('일정 색 고르기, 보안 모드에서는 달력 칸·목록의 일정을 가림', async ({ page }) => {
+test('일정 색 고르기, 보안 모드에서는 달력 칸 읽기·목록의 일정을 가림', async ({ page }) => {
   await openApp(page, { local: { day_notes: { '2026-09-28': '교육\n회식' } } });
   await page.getByRole('button', { name: /^9월 28일 \(/ }).click();
   const dialog = page.getByRole('dialog', { name: '근무 직접 수정' });
@@ -376,10 +376,10 @@ test('달력: 날짜 아래 근무 배지, 고른 날은 은은한 상자, 아�
   await openApp(page, { local: { my_shift_data: { '2026-09-28': 'N', '2026-09-29': 'N', '2026-09-30': 'D' } } });
   const today = page.getByRole('button', { name: /^9월 28일 N 근무/ });
   await expect(today).toHaveAttribute('aria-current', 'date');
-  await expect(today).toHaveClass(/today-cell/); // 고른 날(처음엔 오늘)만 은은한 상자
+  await expect(today).toHaveClass(/selected-cell/); // 고른 날(처음엔 오늘)만 은은한 상자
   await page.getByRole('button', { name: /^9월 29일 N 근무/ }).click();
   await page.keyboard.press('Escape');
-  await expect(today).not.toHaveClass(/today-cell/);
+  await expect(today).not.toHaveClass(/selected-cell/);
   const counts = page.getByRole('region', { name: '이번 달 근무 수' });
   await expect(counts).toContainText('N2일');
   await expect(counts).toContainText('D1일');

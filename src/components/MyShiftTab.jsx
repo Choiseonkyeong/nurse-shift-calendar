@@ -826,12 +826,12 @@ export default function MyShiftTab({
           <span className="text-slate-400">토</span>
         </div>
 
-        {/* 날짜: 위에 날짜 숫자, 바로 아래 둥근 근무 배지. 고른 날만 은은한 색 상자로 */}
-        <div className="grid grid-cols-7 gap-1" {...monthSwipe}>
+        {/* 날짜: 숫자 바로 아래 둥근 근무 배지만 (일정은 아래 목록에). 고른 날은 칸 크기만큼만 옅은 상자 */}
+        <div className="grid grid-cols-7 gap-x-1 gap-y-2 items-start" {...monthSwipe}>
           {calendarDays.map((item, idx) => {
             if (item.prevDay) {
               return (
-                <div key={`prev_${idx}`} className="min-h-[64px] pt-1.5 text-center text-[16px] leading-[20px] font-medium tabular-nums text-slate-300" aria-hidden="true">
+                <div key={`prev_${idx}`} className="pt-1 text-center text-[16px] leading-[20px] font-medium tabular-nums text-slate-300" aria-hidden="true">
                   {item.prevDay}
                 </div>
               );
@@ -840,7 +840,7 @@ export default function MyShiftTab({
             const shift = myShifts[item.dateKey] || '';
             const isSelected = selectedDate === item.dateKey;
             const isToday = item.dateKey === todayKey;
-            // 일정은 개수 제한 없이 모두 보여 줌 (칸이 그만큼 길어짐)
+            // 일정은 달력 칸에 그리지 않고 읽기용 이름에만 (화면에는 아래 목록)
             const items = noteItems(dayNotes[item.dateKey]);
 
             return (
@@ -851,8 +851,8 @@ export default function MyShiftTab({
                 aria-label={`${month}월 ${item.day}일 ${shift ? `${shift} 근무` : '근무 없음'}${getHoliday(item.dateKey) ? ` ${getHoliday(item.dateKey)}` : ''}${items.length ? ` 일정 ${items.length}개${privacyBlur ? '' : `: ${items.map((l) => parseItem(l).text).join(', ')}`}` : ''}`}
                 aria-pressed={isSelected}
                 aria-current={isToday ? 'date' : undefined}
-                className={`relative min-h-[64px] w-full min-w-0 px-[2px] pt-1.5 pb-1.5 rounded-xl flex flex-col items-center gap-1.5 cursor-pointer transition-colors ${
-                  isSelected ? 'today-cell' : uncertainSet.has(item.dateKey) ? 'bg-amber-50 ring-2 ring-inset ring-amber-400' : 'active:bg-slate-50'
+                className={`relative w-full min-w-0 px-[2px] pt-1 pb-1 rounded-[10px] flex flex-col items-center gap-1 cursor-pointer transition-colors ${
+                  isSelected ? 'selected-cell' : uncertainSet.has(item.dateKey) ? 'bg-amber-50 ring-2 ring-inset ring-amber-400' : 'active:bg-slate-50'
                 }`}
               >
                 <span className={`text-[16px] leading-[20px] tabular-nums ${isToday ? 'font-semibold text-slate-900' : `font-medium ${dayNumberClass(item.dateKey).replace('text-sky-500', 'text-slate-700')}`}`}>
@@ -861,30 +861,14 @@ export default function MyShiftTab({
                 {shift ? (
                   <span
                     style={shiftTextVars(findType(shift))}
-                    className={`shift-cell shift-text w-[92%] h-[24px] rounded-[7px] flex items-center justify-center font-semibold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
+                    className={`shift-cell shift-text w-full h-[22px] rounded-[6px] flex items-center justify-center font-semibold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
                       [...shift].length >= 3 ? 'text-[11px]' : 'text-[13px]'
                     }`}
                   >
                     {shift}
                   </span>
-                ) : null}
-                {items.length > 0 && (
-                  <span className={`w-full px-[2px] flex flex-col gap-[2px] ${privacyBlur ? 'blur-[3px] select-none' : ''}`} aria-hidden="true">
-                    {items.map((line, i) => {
-                      const { text, hex } = parseItem(line);
-                      return (
-                        <span
-                          key={i}
-                          style={hex ? { '--ic': hex } : undefined}
-                          className={`block w-full overflow-hidden whitespace-nowrap rounded-[4px] px-[2px] text-left text-[10px] leading-[14px] tracking-[-0.04em] ${
-                            hex ? 'item-chip' : 'bg-slate-900/[.07] text-slate-700'
-                          }`}
-                        >
-                          {text}
-                        </span>
-                      );
-                    })}
-                  </span>
+                ) : (
+                  <span className="h-[22px]" aria-hidden="true" />
                 )}
               </button>
             );
