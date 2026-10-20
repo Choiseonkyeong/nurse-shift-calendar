@@ -25,7 +25,7 @@ const PREVIOUS_DEFAULT_COLORS = {
   N: '#EBE6F7/#6B4FB8'
 };
 const isPreviousDefaultColor = (t) => PREVIOUS_DEFAULT_COLORS[t.code] === `${t.bg}/${t.fg}`.toUpperCase() ||
-  (t.code === 'N' && `${t.bg}/${t.fg}`.toUpperCase() === '#EEE5F8/#756097');
+  (t.code === 'N' &&  ['#EEE5F8/#756097', '#E0F2FE/#0369A1'].includes(`${t.bg}/${t.fg}`.toUpperCase()));
 
 export const DEFAULT_CODES = new Set(DEFAULT_SHIFT_TYPES.map((t) => t.code));
 const FALLBACK = { bg: '#F1F5F9', fg: '#475569' };
