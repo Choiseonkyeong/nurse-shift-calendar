@@ -14,7 +14,7 @@ test('카카오 계정 연결: 지금 쓰던 근무 그대로, 계정 상태 연
   await waitSaved(page);
   const pid = Object.keys(state.profiles)[0];
 
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: '계정 (연결 필요)' }).click();
   await page.getByRole('button', { name: '카카오로 계정 연결' }).click();
 
@@ -23,7 +23,7 @@ test('카카오 계정 연결: 지금 쓰던 근무 그대로, 계정 상태 연
   expect(page.url()).not.toContain('access_token');
   await expect(page.getByText(/카카오.*계정에 연결되어 있어요/)).toBeVisible();
   await page.getByRole('button', { name: '닫기' }).click();
-  await tab(page, '마이').click(); // 계정 버튼은 근무표 외 화면 머리글에
+  await tab(page, '설정').click(); // 계정 버튼은 내 근무 외 화면 머리글에
   await expect(page.getByRole('button', { name: '계정', exact: true })).toBeVisible();
 
   // 같은 계정·프로필 유지
@@ -39,7 +39,7 @@ test('이미 다른 계정에 연결된 카카오면 안내하고 데이터는 �
   await openApp(page, { state, local: { my_shift_data: { '2026-09-10': 'E' } } });
   await waitSaved(page);
 
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: '계정 (연결 필요)' }).click();
   await page.getByRole('button', { name: '카카오로 계정 연결' }).click();
   await expect(page.getByText(/이미 다른 근무표 계정에 연결되어 있어요/)).toBeVisible();
@@ -55,7 +55,7 @@ test('새 폰 첫 화면: 카카오로 시작 → 기존 계정의 이름·근�
   await expectUserName(page, '최간호');
   await waitSaved(page);
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-15': 'N' });
-  await tab(page, '마이').click(); // 계정 버튼은 근무표 외 화면 머리글에
+  await tab(page, '설정').click(); // 계정 버튼은 내 근무 외 화면 머리글에
   await expect(page.getByRole('button', { name: '계정', exact: true })).toBeVisible();
 });
 
@@ -75,7 +75,7 @@ test('쓰던 기기에서 기존 카카오 계정으로 로그인: 확인 후 �
   await openApp(page, { state, local: { my_shift_data: { '2026-09-01': 'D' } } });
   await waitSaved(page);
 
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: '계정 (연결 필요)' }).click();
   await page.getByRole('button', { name: '기존 계정으로 로그인' }).click();
   await page.getByRole('button', { name: '카카오로 로그인' }).click();

@@ -19,7 +19,7 @@ test('근무·메모 전체 삭제: 첫 화면으로 가지 않고, 서버에서
   await expect.poll(() => Object.keys(state.shifts[pid] || {}).length).toBe(2);
   await expect.poll(() => Object.keys(state.notes[pid] || {}).length).toBe(1);
 
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: '근무·메모 전체 삭제' }).click();
   await expect(page.getByRole('dialog', { name: '근무·메모를 모두 지울까요?' })).toContainText('이름·계정·그룹');
   await confirmOk(page);
@@ -53,7 +53,7 @@ test('계정 창: 이 폰에서 로그아웃 → 처음 화면, 다시 로그인
   await login();
   await expect(page.getByRole('button', { name: '9월 10일 D 근무' })).toBeVisible();
 
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: '계정', exact: true }).click();
   await page.getByRole('dialog', { name: '계정' }).getByRole('button', { name: '로그아웃', exact: true }).click();
   await confirmOk(page);
@@ -146,7 +146,7 @@ test('밴드(안드로이드) 안 브라우저: 크롬으로 열기(intent) 안�
 test('설정 탭 맨 아래 로그아웃: 계정 연결 전(임시 계정)에도 보이고, 경고 후 처음 화면으로', async ({ page }) => {
   await openApp(page, { local: { my_shift_data: { '2026-09-10': 'D' } } });
   await waitSaved(page);
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '이 폰에서 로그아웃할까요?' })).toContainText('임시 계정');
   await confirmOk(page);

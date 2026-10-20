@@ -119,7 +119,7 @@ test('달력 날짜는 버튼(스크린리더로 날짜·근무를 읽음)', asy
 
 test('다크 모드 전환', async ({ page }) => {
   await openApp(page);
-  await tab(page, '마이').click(); // 테마는 설정 탭에
+  await tab(page, '설정').click(); // 테마는 설정 탭에
   const theme = page.getByRole('button', { name: /화면 테마/ });
   await theme.click(); // 기기 설정 → 다크
   await expect(page.locator('html')).toHaveClass(/dark/);
@@ -127,7 +127,7 @@ test('다크 모드 전환', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(15, 23, 42)');
   await page.reload();
   await expect(page.locator('html')).toHaveClass(/dark/); // 설정 유지
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await theme.click(); // 다크 → 라이트
   await expect(page.locator('html')).not.toHaveClass(/dark/);
 });
@@ -144,7 +144,7 @@ test('수당 탭: 근무 1회 수당 × 횟수 (나이트·이브닝), 입사일
     }
   });
   await page.getByRole('button', { name: '다음 달' }).first().click();
-  await tab(page, '수당 계산').click();
+  await tab(page, '수당').click();
   // 수당을 아직 안 넣었으면 넣으라는 안내
   await page.getByRole('button', { name: /1회 수당을 넣으면/ }).click();
   const calc = page.getByRole('dialog', { name: '계산 설정' });
@@ -227,11 +227,11 @@ test('반복 패턴으로 기존 근무를 덮어써도 알림의 되돌리기�
   expect(await readLocal(page, 'my_shift_data')).toEqual(before);
 });
 
-test('위쪽 제목: 근무표는 년·월만(이름·계정 버튼 없이), 다른 화면은 화면 이름 / 이름은 마이에서 바꿈', async ({ page }) => {
+test('위쪽 제목: 내 근무는 년·월만(이름·계정 버튼 없이), 다른 화면은 화면 이름 / 이름은 설정에서 바꿈', async ({ page }) => {
   await openApp(page);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('2026년 9월');
   await expect(page.getByTitle('김간호', { exact: true })).toHaveCount(0); // 근무표 머리글은 년·월만
-  for (const [t, title] of [['수당 계산', '연차 · 수당'], ['통계', '통계'], ['그룹', '그룹'], ['마이', '마이']]) {
+  for (const [t, title] of [['수당', '연차 · 수당'], ['그룹', '그룹'], ['설정', '설정']]) {
     await tab(page, t).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
   }
@@ -278,7 +278,7 @@ test('년·월 바로 고르기: 제목을 눌러 다른 해·달로 한 번에 
 
 test('수당 화면에서도 달 바꾸기: ‹ › 와 년·월 선택', async ({ page }) => {
   await openApp(page);
-  await tab(page, '수당 계산').click();
+  await tab(page, '수당').click();
   await expect(page.getByText(/^9월 근무 수당/)).toBeVisible();
   await page.getByRole('button', { name: '다음 달' }).click();
   await expect(page.getByText(/^10월 근무 수당/)).toBeVisible();
@@ -288,7 +288,7 @@ test('수당 화면에서도 달 바꾸기: ‹ › 와 년·월 선택', async 
   await picker.getByRole('button', { name: '2025년 12월' }).click();
   await expect(page.getByText(/^2025년 12월 근무 수당/)).toBeVisible();
   // 내 근무 화면도 같은 달로
-  await tab(page, '근무표').click();
+  await tab(page, '내 근무').click();
   await expect(page.getByRole('heading', { name: '2025년 12월' })).toBeVisible();
 });
 
@@ -336,7 +336,7 @@ test('설정 › 꾸미기: 앱 색(기본 블루)·글꼴·글자 크기를 바
   await openApp(page);
   const accent = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--c-blue-600').trim());
   expect(await accent()).toBe('88 109 163'); // 기본: 파스텔 블루의 가독성용 진한 강조색
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: /꾸미기/ }).click();
   const sheet = page.getByRole('dialog', { name: '꾸미기' });
   await sheet.getByRole('radio', { name: '라벤더' }).click();
@@ -365,9 +365,9 @@ test('일정 색 고르기, 보안 모드에서는 달력 칸 읽기·목록의 
   const cell = page.getByRole('button', { name: /^9월 28일 (?!\()/ });
   await expect(cell).toHaveAttribute('aria-label', /일정 2개: 교육, 회식/);
 
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: /보안 모드/ }).click();
-  await tab(page, '근무표').click();
+  await tab(page, '내 근무').click();
   await expect(cell).toHaveAttribute('aria-label', /일정 2개$/); // 내용은 읽어 주지 않음
   await expect(page.locator('ul.blur-\\[5px\\]')).toContainText('교육');
 });
@@ -399,7 +399,7 @@ test('첫 화면: 앱을 열 때마다 먼저 보이고, 시작하기 → 이름
   await expect(page.getByRole('dialog', { name: '시작 화면' })).toBeVisible(); // 열 때마다
   await page.getByRole('dialog', { name: '시작 화면' }).getByRole('button', { name: /시작하기/ }).click();
 
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await page.getByRole('button', { name: /꾸미기/ }).click();
   const sheet = page.getByRole('dialog', { name: '꾸미기' });
   await sheet.getByRole('radio', { name: '밤 근무' }).click();

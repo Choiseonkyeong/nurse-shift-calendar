@@ -154,7 +154,7 @@ test('이름 없이 시작 → 그룹 만들 때만 이름을 묻고 이어서 �
   await page.getByRole('button', { name: '확인' }).click();
 
   await expect(page.getByText(/'7병동' 그룹이 생성되었습니다/)).toBeVisible();
-  await tab(page, '근무표').click(); // 위쪽 제목은 화면마다 다르고, 내 근무 화면에 이름이 나옴
+  await tab(page, '내 근무').click(); // 위쪽 제목은 화면마다 다르고, 내 근무 화면에 이름이 나옴
   await expectUserName(page, '박간호');
   const me = Object.values(state.profiles)[0];
   expect(me.display_name).toBe('박간호');

@@ -24,24 +24,13 @@ export async function openApp(page, { state = createFakeState(), local = {}, nam
 
 export const readLocal = (page, key) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), key);
 
-export const tab = (page, label) => {
-  // 그룹은 아래 탭바가 아니라 마이 탭 안에서 들어감
-  if (label === '그룹') {
-    return {
-      click: async () => {
-        await tab(page, '마이').click();
-        await page.getByRole('button', { name: '그룹', exact: true }).click();
-      }
-    };
-  }
-  return page.getByRole('button', { name: label, exact: true }).last();
-};
+export const tab = (page, label) => page.getByRole('button', { name: label, exact: true }).last();
 
-/** 이름(계정 버튼 제목) 확인: 계정 버튼은 근무표 외 화면 머리글에 있음 → 마이 탭에서 보고 근무표로 돌아옴 */
+/** 이름(계정 버튼 제목) 확인: 계정 버튼은 내 근무 외 화면 머리글에 있음 → 설정 탭에서 보고 내 근무로 돌아옴 */
 export async function expectUserName(page, name) {
-  await tab(page, '마이').click();
+  await tab(page, '설정').click();
   await expect(page.getByTitle(name, { exact: true })).toBeVisible();
-  await tab(page, '근무표').click();
+  await tab(page, '내 근무').click();
 }
 
 /** 서버 동기화 완료 표시까지 대기 */
