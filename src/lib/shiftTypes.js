@@ -5,9 +5,9 @@ import { createContext, useContext } from 'react';
 // kind: work(근무) | off(휴무) | leave(휴가, leaveDays 만큼 연차 차감)
 export const DEFAULT_SHIFT_TYPES = [
   // 파스텔(디자인 시안 색): 데이 파랑 · 이브닝 살구 · 나이트 보라 · 미드 민트 · 휴무 회색 · 연차 분홍
-  { code: 'D', label: 'Day (데이)', kind: 'work', bg: '#E0EDF9', fg: '#2F6DB0' },
-  { code: 'E', label: 'Evening (이브닝)', kind: 'work', bg: '#F9E9DC', fg: '#C0652A' },
-  { code: 'N', label: 'Night (나이트)', kind: 'work', bg: '#EBE6F7', fg: '#6B4FB8' },
+  { code: 'D', label: 'Day (데이)', kind: 'work', bg: '#E4F1FF', fg: '#326FBE' },
+  { code: 'E', label: 'Evening (이브닝)', kind: 'work', bg: '#FCE9DF', fg: '#BC6130' },
+  { code: 'N', label: 'Night (나이트)', kind: 'work', bg: '#EDEAFF', fg: '#6758C1' },
   { code: 'M', label: 'Mid (미드)', kind: 'work', bg: '#DFF1EA', fg: '#2E7D62' },
   { code: 'OFF', label: 'OFF (휴무)', kind: 'off', bg: '#EAECE9', fg: '#6B706A' },
   { code: '연차', label: '연차 (휴가)', kind: 'leave', bg: '#FCE7F3', fg: '#BE185D', leaveDays: 1 }
@@ -15,7 +15,7 @@ export const DEFAULT_SHIFT_TYPES = [
 
 // 예전 기본 색 (D·E 가 둘 다 갈색이라 구분이 어려웠음). 서버 프리셋·저장된 설정에 이 색이 그대로 있으면 새 기본 색으로 보여 줌
 const LEGACY_COLORS = new Set(
-  ['#FEF08A/#854D0E', '#FFEDD5/#9A3412', '#F3E8FF/#6B21A8', '#F1F5F9/#475569', '#FFE4E6/#E11D48'].map((c) => c.toUpperCase())
+  ['#FEF08A/#854D0E', '#FFEDD5/#9A3412', '#F3E8FF/#6B21A8', '#F1F5F9/#475569', '#FFE4E6/#E11D48', '#E0EDF9/#2F6DB0', '#F9E9DC/#C0652A', '#EBE6F7/#6B4FB8'].map((c) => c.toUpperCase())
 );
 const isLegacyColor = (t) => LEGACY_COLORS.has(`${t.bg}/${t.fg}`.toUpperCase());
 
