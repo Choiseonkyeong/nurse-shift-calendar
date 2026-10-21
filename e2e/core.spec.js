@@ -336,6 +336,7 @@ test('설정 › 꾸미기: 앱 색(기본 블루)·글꼴·글자 크기를 바
   await openApp(page);
   const accent = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--c-blue-600').trim());
   expect(await accent()).toBe('88 109 163'); // 기본: 파스텔 블루의 가독성용 진한 강조색
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontSize)).toBe('14.72px'); // 기본 글자 크기: 작게 (16px × 0.92)
   await tab(page, '설정').click();
   await page.getByRole('button', { name: /꾸미기/ }).click();
   const sheet = page.getByRole('dialog', { name: '꾸미기' });

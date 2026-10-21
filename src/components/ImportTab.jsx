@@ -534,32 +534,33 @@ export default function ImportTab({
       )}
 
       {/* 근무표 사진으로 등록 (가장 많이 쓰는 것) */}
-      <section className="mt-2 rounded-3xl bg-blue-600 text-white p-5">
+      {/* 고른 앱 색(blue 변수)의 옅은 카드 + 진한 버튼: 어떤 색·다크 모드에서도 한 톤으로 */}
+      <section className="mt-2 rounded-3xl bg-blue-100 text-blue-800 p-5">
         <div className="flex items-center gap-2">
-          <Camera size={22} />
+          <Camera size={22} className="text-blue-600" />
           <h3 className="text-[17px] font-semibold">근무표 사진으로 등록</h3>
         </div>
         {ocrProgress ? (
           <div className="space-y-2 mt-4">
-            <div className="h-2 bg-white/25 rounded-full overflow-hidden">
-              <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-white" />
+            <div className="h-2 bg-white/70 rounded-full overflow-hidden">
+              <div style={{ width: `${Math.round(ocrProgress.p * 100)}%` }} className="h-full transition-all bg-blue-600" />
             </div>
             <div className="flex items-center gap-2">
-              <p className="flex-1 text-[13px] text-blue-100 flex items-center gap-1.5">
+              <p className="flex-1 text-[13px] text-blue-700 flex items-center gap-1.5">
                 <Loader2 size={13} className="animate-spin shrink-0" /> {ocrProgress.msg}
               </p>
-              <button type="button" onClick={() => ocrAbortRef.current?.abort()} className="shrink-0 px-3 py-1.5 rounded-lg bg-white/20 text-[13px] font-medium cursor-pointer">
+              <button type="button" onClick={() => ocrAbortRef.current?.abort()} className="shrink-0 px-3 py-1.5 rounded-lg bg-white text-[13px] font-medium cursor-pointer">
                 취소
               </button>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 mt-4">
-            <label className="flex items-center justify-center gap-1.5 h-12 bg-[#ffffff] text-[#1d4ed8] font-semibold text-[15px] rounded-xl cursor-pointer">
+            <label className="flex items-center justify-center gap-1.5 h-12 bg-blue-600 text-white font-semibold text-[15px] rounded-xl cursor-pointer">
               <Camera size={17} /> 촬영하기
               <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
             </label>
-            <label className="flex items-center justify-center gap-1.5 h-12 bg-white/20 text-white font-semibold text-[15px] rounded-xl cursor-pointer">
+            <label className="flex items-center justify-center gap-1.5 h-12 bg-white text-blue-700 font-semibold text-[15px] rounded-xl cursor-pointer">
               <ImageIcon size={17} /> 앨범에서 선택
               <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
             </label>
