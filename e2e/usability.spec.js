@@ -46,7 +46,8 @@ test('꾸미기: 파스텔 다섯 가지·검정 선택 후 새로고침에도 �
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--c-blue-600').trim())).toBe('39 39 42');
   // 검정 테마 + 다크 모드에서도 선택한 탭이 검은 바탕에 묻히지 않아야 함.
   await page.evaluate(() => document.documentElement.classList.add('dark'));
-  const contrast = await tab(page, '내 근무').evaluate((el) => {
+  // 버튼 색에 0.12초 전환 효과가 있어 바로 읽으면 중간 색이 잡힘 → 색이 다 바뀔 때까지 다시 잼
+  const contrast = () => tab(page, '내 근무').evaluate((el) => {
     const luminance = (color) => {
       const rgb = color.match(/[\d.]+/g).slice(0, 3).map((v) => {
         const n = Number(v) / 255;
@@ -58,5 +59,5 @@ test('꾸미기: 파스텔 다섯 가지·검정 선택 후 새로고침에도 �
     const b = luminance(getComputedStyle(document.body).backgroundColor);
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
   });
-  expect(contrast).toBeGreaterThanOrEqual(4.5);
+  await expect.poll(contrast).toBeGreaterThanOrEqual(4.5);
 });
