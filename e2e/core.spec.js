@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createFakeState } from './fakeSupabase.js';
-import { openApp, readLocal, tab, waitSaved, expectUserName } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved, expectUserName, openTools } from './helpers.js';
 
 const day = (page, label) => page.getByRole('button', { name: new RegExp(`^${label} (?!\\()`) }); // 아래 일정 목록 버튼 "9월 5일 (토) 일정·메모" 제외
 
@@ -87,10 +87,11 @@ test('모든 팝업이 하단 탭바 위에 표시', async ({ page }) => {
       return nav.contains(document.elementFromPoint(r.left + r.width / 2, r.top + 10));
     });
   for (const open of [
-    () => page.getByRole('button', { name: /종류/ }).click(),
-    () => page.getByRole('button', { name: '반복 패턴', exact: true }).click(),
+    () => openTools(page),
+    async () => { await openTools(page); await page.getByRole('button', { name: '근무 종류' }).click(); },
+    async () => { await openTools(page); await page.getByRole('button', { name: '반복 패턴', exact: true }).click(); },
     () => day(page, '9월 5일').click(),
-    () => page.getByRole('button', { name: /^알림$/ }).click()
+    async () => { await openTools(page); await page.getByRole('button', { name: /^알림$/ }).click(); }
   ]) {
     await open();
     await expect.poll(navCovers).toBe(false);
@@ -193,12 +194,12 @@ test('앱을 켜 둔 채 날짜가 바뀌면 다시 볼 때 오늘(다음 달)�
   await openApp(page);
   await page.clock.setFixedTime(new Date('2026-09-30T23:50:00+09:00'));
   await page.reload();
-  await expect(page.getByText('9월 30일 (수) 일정·메모')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^9월 30일 / })).toHaveAttribute('aria-pressed', 'true');
   // 밤 근무 후 아침에 다시 열기
   await page.clock.setFixedTime(new Date('2026-10-01T07:30:00+09:00'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(page.getByRole('heading', { name: '2026년 10월' })).toBeVisible();
-  await expect(page.getByText('10월 1일 (목) 일정·메모')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^10월 1일 / })).toHaveAttribute('aria-pressed', 'true');
 
   // 다른 날짜(10/15)를 보고 있었으면 날짜가 바뀌어도 그대로
   await page.getByRole('button', { name: /^10월 15일 (?!\()/ }).click();
@@ -206,13 +207,14 @@ test('앱을 켜 둔 채 날짜가 바뀌면 다시 볼 때 오늘(다음 달)�
   await page.clock.setFixedTime(new Date('2026-10-02T07:30:00+09:00'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForTimeout(300);
-  await expect(page.getByText('10월 15일 (목) 일정·메모')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^10월 15일 / })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('반복 패턴으로 기존 근무를 덮어써도 알림의 되돌리기로 적용 전 그대로 (빈칸이던 날은 다시 빈칸)', async ({ page }) => {
   // 사진·엑셀로 등록해 둔 근무가 있는 상태
   const before = { '2026-09-10': 'E', '2026-09-28': 'N', '2026-09-30': '연차' };
   await openApp(page, { local: { my_shift_data: before } });
+  await openTools(page);
   await page.getByRole('button', { name: '반복 패턴', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '반복 패턴 입력' });
   await expect(dialog.getByText(/일 겹침/)).toBeVisible(); // 덮어쓰기 기본 체크
@@ -356,6 +358,7 @@ test('설정 › 꾸미기: 앱 색(기본 블루)·글꼴·글자 크기를 바
 
 test('일정 색 고르기, 보안 모드에서는 달력 칸 읽기·목록의 일정을 가림', async ({ page }) => {
   await openApp(page, { local: { day_notes: { '2026-09-28': '교육\n회식' } } });
+  await openTools(page); // 고른 날짜(오늘) 정보는 근무 도구 시트에
   await page.getByRole('button', { name: /^9월 28일 \(/ }).click();
   const dialog = page.getByRole('dialog', { name: '근무 직접 수정' });
   await dialog.getByRole('button', { name: '교육 색 고르기' }).click();
@@ -370,6 +373,7 @@ test('일정 색 고르기, 보안 모드에서는 달력 칸 읽기·목록의 
   await page.getByRole('button', { name: /보안 모드/ }).click();
   await tab(page, '내 근무').click();
   await expect(cell).toHaveAttribute('aria-label', /일정 2개$/); // 내용은 읽어 주지 않음
+  await openTools(page);
   await expect(page.locator('ul.blur-\\[5px\\]')).toContainText('교육');
 });
 

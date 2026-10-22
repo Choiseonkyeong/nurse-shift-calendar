@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { Calendar, Wallet, Users, Settings, Shield, Cloud, CloudOff, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Wallet, Users, Settings, Shield, Cloud, CloudOff, Loader2, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './components/MonthPicker';
 import { addMonthsKey } from './utils/dateUtils';
 import MyShiftTab from './components/MyShiftTab';
@@ -201,6 +201,8 @@ export default function App() {
   const syncedShiftsRef = useRef(null); // 서버에 반영된 마지막 근무 스냅샷 (null = 아직 동기화 전)
   // 내 근무 머리글의 '2026년 10월' → 년·월 고르기
   const [headerPickerOpen, setHeaderPickerOpen] = useState(false);
+  // 내 근무 '근무 도구' 시트 (고른 날짜·메모·근무 종류·패턴·연속 입력·공유·알림·리셋)
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [headerYear, headerMonth] = selectedDate.split('-').map(Number);
 
   const [myShifts, setMyShifts] = useState(() => {
@@ -867,8 +869,11 @@ export default function App() {
                 <button type="button" aria-label="이전 달" onClick={() => setSelectedDate(addMonthsKey(selectedDate, -1))} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-700 cursor-pointer active:bg-slate-100">
                   <ChevronLeft size={22} />
                 </button>
-                <button type="button" aria-label="다음 달" onClick={() => setSelectedDate(addMonthsKey(selectedDate, 1))} className="w-9 h-9 mr-1 flex items-center justify-center rounded-full text-slate-700 cursor-pointer active:bg-slate-100">
+                <button type="button" aria-label="다음 달" onClick={() => setSelectedDate(addMonthsKey(selectedDate, 1))} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-700 cursor-pointer active:bg-slate-100">
                   <ChevronRight size={22} />
+                </button>
+                <button type="button" aria-label="근무 도구" onClick={() => setToolsOpen(true)} className="w-9 h-9 mr-1 flex items-center justify-center rounded-full text-slate-700 cursor-pointer active:bg-slate-100">
+                  <MoreHorizontal size={22} />
                 </button>
               </>
             )}
@@ -899,14 +904,14 @@ export default function App() {
           </div>
         </div>
 
-        {/* 2. 탭 메인 컨텐츠 영역 (하단 패딩 확보) */}
+        {/* 2. 탭 메인 컨텐츠 영역 (하단 패딩 확보, 내 근무는 탭바 바로 위까지 달력이 차도록 여유를 줄임) */}
         <div
           ref={scrollAreaRef}
           className="px-4 pt-1 flex-1 overflow-y-auto bg-page"
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 4)}
-          style={{ paddingBottom: 'calc(5.5rem + var(--safe-bottom) + var(--ad-h, 0px))' }}
+          style={{ paddingBottom: `calc(${activeTab === 'myShift' ? '4.5rem' : '5.5rem'} + var(--safe-bottom) + var(--ad-h, 0px))` }}
         >
-          <div className={activeTab === 'myShift' ? 'app-bezel' : ''}>
+          <div className={activeTab === 'myShift' ? 'app-bezel min-h-full flex flex-col' : ''}>
           <Suspense
             fallback={
               <div className="flex justify-center py-16 text-slate-300">
@@ -947,6 +952,8 @@ export default function App() {
               onResolveUncertain={(dateKey) =>
                 setImportBanner((b) => (b && b.uncertain.includes(dateKey) ? { ...b, uncertain: b.uncertain.filter((k) => k !== dateKey) } : b))
               }
+              toolsOpen={toolsOpen}
+              onCloseTools={() => setToolsOpen(false)}
             />
           )}
 

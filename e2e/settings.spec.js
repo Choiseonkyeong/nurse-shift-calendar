@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createFakeState, seedAccount } from './fakeSupabase.js';
-import { openApp, readLocal, tab, waitSaved, confirmOk } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved, confirmOk, openTools } from './helpers.js';
 
 const day = (page, label) => page.getByRole('button', { name: new RegExp(`^${label} (?!\\()`) }); // 아래 일정 목록 버튼 "9월 5일 (토) 일정·메모" 제외
 
@@ -13,7 +13,8 @@ test('오프라인에서 만든 근무 종류와 그 근무가 연결 후 서버
   state.offline = true;
   await page.reload();
   await expect(page.getByText('오프라인 · 기기 저장')).toBeVisible();
-  await page.getByRole('button', { name: /종류/ }).click();
+  await openTools(page);
+  await page.getByRole('button', { name: '근무 종류' }).click();
   await page.getByRole('button', { name: /새 근무 추가/ }).click();
   await page.getByPlaceholder('예: 교', { exact: true }).fill('교');
   await page.getByPlaceholder('예: 교육', { exact: true }).fill('교육');
@@ -47,7 +48,8 @@ test('오프라인에서 지운 근무 종류는 연결 후에도 되살아나�
 
   state.offline = true;
   await page.reload();
-  await page.getByRole('button', { name: /종류/ }).click();
+  await openTools(page);
+  await page.getByRole('button', { name: '근무 종류' }).click();
   await page.getByRole('button', { name: /야간당직/ }).click();
   await page.getByRole('button', { name: '삭제' }).click();
   await confirmOk(page);
@@ -56,7 +58,8 @@ test('오프라인에서 지운 근무 종류는 연결 후에도 되살아나�
   await page.reload();
   await waitSaved(page);
   await expect.poll(() => Object.keys(state.types[pid] || {})).toEqual([]);
-  await page.getByRole('button', { name: /종류/ }).click();
+  await openTools(page);
+  await page.getByRole('button', { name: '근무 종류' }).click();
   await expect(page.getByRole('button', { name: /야간당직/ })).toHaveCount(0);
 });
 
@@ -122,12 +125,14 @@ test('팝업: Esc·바깥 누르면 닫힘, 포커스는 팝업 안에서만 이
 
 test('웹 푸시 설정이 없으면 알림 창에 웹 알림 한계 안내', async ({ page }) => {
   await openApp(page);
+  await openTools(page);
   await page.getByRole('button', { name: /^알림$/ }).click();
   await expect(page.getByText(/웹에서는 이 화면이 열려 있을 때만/)).toBeVisible();
 });
 
 test('다른 기기에서 켠 알림이 동기화됐는데 이 기기에 권한이 없으면 "권한 필요" → 허용하면 정상 표시', async ({ page, context }) => {
   await openApp(page, { local: { shift_alarm_settings: { enabled: true, minutesBefore: 60 } } });
+  await openTools(page);
   const alarm = page.getByRole('button', { name: '권한 필요' });
   await expect(alarm).toBeVisible();
   await alarm.click();
@@ -136,13 +141,16 @@ test('다른 기기에서 켠 알림이 동기화됐는데 이 기기에 권한�
   await context.grantPermissions(['notifications']);
   await page.getByRole('button', { name: '이 기기에서 알림 허용하기' }).click();
   await expect(page.getByText(/1시간 전 알림이 설정되었습니다/)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await openTools(page);
   await expect(page.getByRole('button', { name: '1시간 전', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '권한 필요' })).toHaveCount(0);
 });
 
 test('근무 종류: 새 근무 추가 화면에서 Esc → 목록으로, 한 번 더 → 닫힘 (내용이 바뀐 창도 Esc 동작)', async ({ page }) => {
   await openApp(page);
-  await page.getByRole('button', { name: /종류/ }).first().click();
+  await openTools(page);
+  await page.getByRole('button', { name: '근무 종류' }).first().click();
   await page.getByRole('button', { name: /새 근무 추가/ }).click();
   await expect(page.getByRole('heading', { name: '새 근무 추가' })).toBeVisible();
   await page.keyboard.press('Escape');
@@ -161,7 +169,8 @@ test('앱 확인 창: 다른 팝업 위에 뜨고, 취소·Esc 는 아무것도 
   };
   await page.reload();
   await waitSaved(page);
-  await page.getByRole('button', { name: /종류/ }).click();
+  await openTools(page);
+  await page.getByRole('button', { name: '근무 종류' }).click();
   await page.getByRole('button', { name: /야간당직/ }).click();
 
   const ask = page.getByRole('dialog', { name: "'야' 근무를 삭제할까요?" });
@@ -191,7 +200,8 @@ test('달력에 쓰인 근무 종류도 한 번에 삭제: 그 날짜들을 비�
   await waitSaved(page);
   await expect.poll(() => state.shifts[pid]?.['2026-09-10']).toBe('야');
 
-  await page.getByRole('button', { name: /종류/ }).click();
+  await openTools(page);
+  await page.getByRole('button', { name: '근무 종류' }).click();
   await page.getByRole('button', { name: /야간당직/ }).click();
   await page.getByRole('button', { name: '삭제' }).click();
   await expect(page.getByRole('dialog', { name: "'야' 근무를 삭제할까요?" })).toContainText('2일');
