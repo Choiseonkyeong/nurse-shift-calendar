@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import { toast, formatDateKo } from '../lib/toast';
-import { Users, Plus, LogIn, ChevronLeft, ChevronRight, ChevronDown, Share2, RotateCcw, Palette } from 'lucide-react';
+import { Plus, LogIn, ChevronLeft, ChevronRight, ChevronDown, Share2, RotateCcw, Palette } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './MonthPicker';
 import { useSwipe } from '../lib/swipe';
 import { shareText, webOrigin } from '../lib/shareCalendar';
@@ -11,6 +11,7 @@ import { hasUnread } from '../lib/groupActivity';
 import { useShiftTypes, badgeStyle } from '../lib/shiftTypes';
 import { dayNumberClass, getHoliday } from '../utils/holidays';
 import GroupBoard from './GroupBoard';
+import { ChickFriends } from './ChickArt';
 import { readGroupColors, saveGroupColor } from '../lib/groupColors';
 import {
   fetchMyGroups,
@@ -339,10 +340,8 @@ export default function GroupShareTab({
               </div>
             ) : (
               <div className="py-6 text-center">
-                <span className="w-16 h-16 mx-auto rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Users size={30} />
-                </span>
-                <p className="text-[17px] font-semibold text-slate-900 mt-3">동료와 근무를 함께 봐요</p>
+                <ChickFriends width={220} />
+                <p className="text-[18px] font-semibold text-slate-900 mt-3">동료와 근무를 함께 봐요</p>
                 <p className="sr-only">아직 참여 중인 공유 그룹이 없습니다.</p>
               </div>
             )}

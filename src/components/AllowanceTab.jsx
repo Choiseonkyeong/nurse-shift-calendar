@@ -3,7 +3,7 @@ import { useShiftTypes, shiftTextVars, shortLabel } from '../lib/shiftTypes';
 import { getTodayDateObj, addMonthsKey } from '../utils/dateUtils';
 import { leaveYearRange, shiftAllowance, payPeriod } from '../lib/allowance';
 import ShiftStats from './ShiftStats';
-import Mascot from './Mascot';
+import { CoinChick } from './ChickArt';
 import { SlidersHorizontal, ChevronLeft, ChevronRight, ChevronDown, X, Minus, Plus, Pencil } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './MonthPicker';
 import Modal from './Modal';
@@ -198,14 +198,17 @@ export default function AllowanceTab({
             <ChevronRight size={20} />
           </button>
         </div>
-        <div className="flex items-center justify-between mt-3">
-          <span className="text-[13px] font-medium text-blue-700">차곡차곡 모인 이번 달 수당</span>
-          <Mascot size={48} />
+        {/* 왼쪽: 제목·금액, 오른쪽: 동전 저글링 병아리 */}
+        <div className="flex items-end justify-between gap-2 mt-2">
+          <div className="min-w-0 pb-1">
+            <span className="text-[13px] font-medium text-blue-700">차곡차곡 모인 이번 달 수당</span>
+            <p className={`mt-2 text-[36px] font-bold tracking-tight leading-tight text-slate-900 ${blurCls}`}>
+              {won(allowance.total)}
+              <span className="text-[22px] font-semibold ml-0.5 text-blue-600">원</span>
+            </p>
+          </div>
+          <CoinChick size={104} />
         </div>
-        <p className={`mt-1 text-[36px] font-bold tracking-tight leading-tight text-slate-900 ${blurCls}`}>
-          {won(allowance.total)}
-          <span className="text-[22px] font-semibold ml-0.5 text-blue-600">원</span>
-        </p>
         {allowanceItems.length ? (
           <div className="mt-4 grid grid-cols-2 gap-2">
             {allowanceItems.map((it) => (
@@ -223,15 +226,15 @@ export default function AllowanceTab({
           <button
             type="button"
             onClick={() => setOpenSettings(true)}
-            className="mt-4 w-full rounded-2xl bg-white px-4 py-3 text-left text-[14px] text-slate-700 cursor-pointer active:bg-slate-50"
+            className="mt-3 w-full rounded-full bg-white px-4 py-3 text-center text-[14px] font-medium text-slate-700 shadow-[0_4px_14px_rgb(15_23_42/0.08)] cursor-pointer active:bg-slate-50"
           >
-            나이트·이브닝 1회 수당을 넣으면 이번 달 수당이 계산돼요 ›
+            나이트·이브닝 1회 수당을 넣으면 이번 달 수당이 계산돼요
           </button>
         )}
       </section>
 
       {/* 2. 연차: 남은 개수 + 막대 */}
-      <section className="rounded-3xl bg-gradient-to-br from-emerald-50 to-emerald-100/40 border border-emerald-100 p-5">
+      <section className="rounded-3xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-100 p-5">
         <div className="flex items-end justify-between">
           <div>
             <p className="flex items-center gap-1 text-[13px] text-slate-500">
@@ -249,8 +252,9 @@ export default function AllowanceTab({
             {leaveTotal}일 중 <b className="font-semibold text-slate-800">{totalUsed}일</b> 사용
           </p>
         </div>
-        <div className="mt-3 h-2.5 rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-valuenow={usedPct} aria-valuemin={0} aria-valuemax={100} aria-label="연차 사용률">
-          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${usedPct}%` }} />
+        {/* 남은 연차만큼 채워진 막대 (다 쓰면 비어 있음) */}
+        <div className="mt-3 h-2.5 rounded-full bg-white/70 overflow-hidden" role="progressbar" aria-valuenow={100 - usedPct} aria-valuemin={0} aria-valuemax={100} aria-label="남은 연차 비율">
+          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${100 - usedPct}%` }} />
         </div>
         {leaveTypes.length > 1 && (
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[13px] text-slate-500">
