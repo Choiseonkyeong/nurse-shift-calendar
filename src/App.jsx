@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Calendar, Wallet, Users, Settings, Shield, Cloud, CloudOff, Loader2, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './components/MonthPicker';
+import Mascot from './components/Mascot';
 import { addMonthsKey } from './utils/dateUtils';
 import MyShiftTab from './components/MyShiftTab';
 import { lazyImport, consumeResume, setResumeTab } from './lib/appUpdate';
@@ -854,7 +855,8 @@ export default function App() {
               <h1 className="text-[26px] font-bold text-slate-900 tracking-tight leading-tight truncate">{TAB_TITLES[activeTab]}</h1>
             ) : (
               // 내 근무: '2026년 10월'만 (누르면 년·월 고르기). 이름은 설정 탭에서 바꿈
-              <button type="button" onClick={() => setHeaderPickerOpen(true)} aria-label="년·월 선택" className="flex items-center cursor-pointer max-w-full">
+              <button type="button" onClick={() => setHeaderPickerOpen(true)} aria-label="년·월 선택" className="flex items-center gap-1.5 cursor-pointer max-w-full">
+                <Mascot size={30} className="-ml-1" />
                 <h1 className="text-[26px] font-bold text-slate-900 tracking-tight leading-tight truncate">
                   {headerYear}년 {headerMonth}월
                 </h1>

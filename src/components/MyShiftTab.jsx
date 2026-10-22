@@ -775,6 +775,31 @@ export default function MyShiftTab({
         </section>
       )}
 
+      {/* 오늘 한마디: 근무가 하나라도 있으면 달력 위 한 줄 (누르면 오늘 근무 수정) */}
+      {!quickMode && !importBanner && Object.keys(myShifts || {}).length > 0 && (() => {
+        const todayType = myShifts[todayKey] ? findType(myShifts[todayKey]) : null;
+        const text = !todayType
+          ? '오늘 근무를 넣어 볼까요?'
+          : todayType.kind === 'work'
+            ? `오늘은 ${shortLabel(todayType.label) || todayType.code} 근무예요. 오늘도 힘내요!`
+            : '오늘은 쉬는 날! 푹 쉬어요';
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedDate(todayKey);
+              setEditingDateKey(todayKey);
+              setIsEditModalOpen(true);
+            }}
+            className="shrink-0 w-full flex items-center gap-2 rounded-2xl bg-white/80 pl-1.5 pr-3 py-1 text-left cursor-pointer active:bg-white"
+          >
+            <Mascot size={32} />
+            <span className="flex-1 min-w-0 truncate text-[14px] text-slate-700">{text}</span>
+            <ChevronRight size={16} className="shrink-0 text-slate-300" />
+          </button>
+        );
+      })()}
+
       {/* 1. 달력 (달 제목·‹ › 은 맨 위 머리글에) */}
       <section className="flex-1 flex flex-col gap-3 rounded-[28px] soft-card bg-white px-3 py-4 sm:px-5">
         {quickMode && (
