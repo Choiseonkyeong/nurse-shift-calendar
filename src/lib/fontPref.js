@@ -45,8 +45,11 @@ const write = (key, value, fallback) => {
   }
 };
 
+// 글자 크기 기본값: 작게 (한 화면에 달력·카드가 다 보이도록)
+export const DEFAULT_FONT_SIZE = 'sm';
+
 export const getFontPref = () => read(FONT_KEY, FONTS, 'pretendard');
-export const getFontSizePref = () => read(SIZE_KEY, FONT_SIZES, 'md');
+export const getFontSizePref = () => read(SIZE_KEY, FONT_SIZES, DEFAULT_FONT_SIZE);
 
 /** 글꼴 CSS 문자열 (그림 공유 등 캔버스에서도 씀) */
 export const fontStack = (key = getFontPref()) => {
@@ -68,6 +71,6 @@ export function setFontPref(key) {
 }
 
 export function setFontSizePref(key) {
-  write(SIZE_KEY, key, 'md');
+  write(SIZE_KEY, key, DEFAULT_FONT_SIZE);
   applyFont(undefined, key);
 }
