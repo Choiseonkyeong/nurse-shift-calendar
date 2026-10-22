@@ -388,7 +388,8 @@ test('달력: 날짜 아래 근무 배지, 고른 날은 은은한 상자, 아�
   const counts = page.getByRole('region', { name: '이번 달 근무 수' });
   await expect(counts).toContainText('N2일');
   await expect(counts).toContainText('D1일');
-  await expect(page.getByRole('button', { name: /오늘은 나이트 근무예요/ })).toHaveCount(0); // 곰 한마디 배너 없음
+  await page.getByRole('button', { name: /오늘은 나이트 근무예요/ }).click(); // 달력 위 병아리 한마디 → 오늘 근무 수정
+  await expect(page.getByRole('dialog', { name: '근무 직접 수정' })).toContainText('9월 28일');
 });
 
 test('첫 화면: 앱을 열 때마다 먼저 보이고, 시작하기 → 이름 입력 / 꾸미기에서 배경·내 사진·끄기', async ({ page }) => {
