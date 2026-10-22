@@ -26,7 +26,7 @@ export default function NameSetup({ onSubmit, onLogin, onCancel, initialName = '
     <Modal align="center" label="이름 입력" zIndex={110} onClose={groupMode ? onCancel : undefined}>
       <form onSubmit={submit} className="bg-white w-full max-w-[20rem] rounded-2xl p-6 space-y-4 shadow-xl text-left">
         <div className="space-y-1">
-          {!confirmMode && !groupMode && <Mascot size={72} mood="cheer" className="mx-auto mb-1" title="북극곰 토닥이" />}
+          {!confirmMode && !groupMode && <Mascot size={72} mood="cheer" className="mx-auto mb-1" title="병아리" />}
           <h2 className="text-[22px] font-bold text-slate-900">
             {confirmMode ? '이름을 확인해 주세요' : groupMode ? '그룹에서 쓸 이름' : '환영합니다!'}
           </h2>

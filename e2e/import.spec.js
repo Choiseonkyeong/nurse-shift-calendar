@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { openApp, readLocal, tab, waitSaved, confirmOk, expectUserName } from './helpers.js';
+import { openApp, readLocal, tab, waitSaved, confirmOk, expectUserName, openTools } from './helpers.js';
 import { createFakeState, seedAccount } from './fakeSupabase.js';
 
 const fixture = (name) => path.join(import.meta.dirname, 'fixtures', name);
@@ -167,6 +167,7 @@ test('내보내기(CSV·.ics) + 전체 백업 저장 → 다른 기기에서 복
 test('근무표 이미지 공유(웹: 파일 저장): 이번 달 전체 또는 정산 기간 선택', async ({ page }) => {
   await openApp(page, { local: { my_shift_data: { '2026-08-27': 'N', '2026-09-01': 'D' } } });
   const share = page.getByRole('button', { name: '근무표 이미지 공유' });
+  await openTools(page);
   await share.click();
   const pick = page.getByRole('dialog', { name: '근무표 공유' });
   await expect(pick.getByRole('button', { name: /정산 기간 8\.26 ~ 9\.25/ })).toBeVisible(); // 기본 정산 시작일 26일
@@ -174,6 +175,7 @@ test('근무표 이미지 공유(웹: 파일 저장): 이번 달 전체 또는 �
   expect(img.suggestedFilename()).toBe('shift-2026-09.png');
   expect(fs.statSync(await img.path()).size).toBeGreaterThan(20000);
 
+  await openTools(page);
   await share.click();
   const [img2] = await Promise.all([page.waitForEvent('download'), pick.getByRole('button', { name: /정산 기간/ }).click()]);
   expect(img2.suggestedFilename()).toBe('shift-2026-09-period.png');
@@ -187,19 +189,23 @@ test('그 달에 일정이 있으면 "일정·메모도 넣기"를 고를 수 �
     const [img] = await Promise.all([page.waitForEvent('download'), pick.getByRole('button', { name: /9월 전체/ }).click()]);
     return fs.readFileSync(await img.path()).readUInt32BE(20); // PNG 높이
   };
+  await openTools(page);
   await share.click();
   await expect(pick.getByRole('switch', { name: '일정·메모도 넣기' })).toHaveAttribute('aria-checked', 'false');
   const plain = await download();
+  await openTools(page);
   await share.click();
   await pick.getByRole('switch', { name: '일정·메모도 넣기' }).click();
   const withNotes = await download();
   expect(withNotes).toBeGreaterThan(plain + 100);
+  await openTools(page);
   await share.click();
   await expect(pick.getByRole('switch', { name: '일정·메모도 넣기' })).toHaveAttribute('aria-checked', 'true');
 });
 
 test('정산 시작일이 1일이면 고르는 창 없이 바로 그 달 이미지', async ({ page }) => {
   await openApp(page, { local: { shift_configs: { startDay: 1 } } });
+  await openTools(page);
   const [img] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '근무표 이미지 공유' }).click()]);
   expect(img.suggestedFilename()).toBe('shift-2026-09.png');
 });

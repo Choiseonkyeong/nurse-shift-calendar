@@ -1,13 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { openApp, readLocal, confirmOk, tab } from './helpers.js';
+import { openApp, readLocal, confirmOk, tab, openTools } from './helpers.js';
 
 test('월 리셋: 취소는 유지, 선택 월 근무만 삭제, 메모·다른 달 유지, 되돌리기', async ({ page }) => {
   const shifts = { '2026-08-31': 'N', '2026-09-01': 'D', '2026-09-28': 'E', '2026-10-01': 'N' };
   const notes = { '2026-09-28': '생일 약속' };
   await openApp(page, { local: { my_shift_data: shifts, day_notes: notes } });
+  await openTools(page);
   await page.getByRole('button', { name: '9월 근무 리셋', exact: true }).click();
   await page.getByRole('button', { name: '취소', exact: true }).click();
   expect(await readLocal(page, 'my_shift_data')).toEqual(shifts);
+  await openTools(page);
   await page.getByRole('button', { name: '9월 근무 리셋', exact: true }).click();
   await confirmOk(page);
   await expect.poll(() => readLocal(page, 'my_shift_data')).toEqual({ '2026-08-31': 'N', '2026-10-01': 'N' });
@@ -18,6 +20,7 @@ test('월 리셋: 취소는 유지, 선택 월 근무만 삭제, 메모·다른 
 
 test('연속 입력: 안내를 보고 날짜를 누르면 즉시 저장, 종료 후에는 날짜 편집창', async ({ page }) => {
   await openApp(page);
+  await openTools(page);
   await page.getByRole('button', { name: '연속 입력', exact: true }).click();
   const help = page.getByRole('region', { name: '연속 입력 안내' });
   await expect(help).toContainText('누르는 즉시 저장돼요.');
