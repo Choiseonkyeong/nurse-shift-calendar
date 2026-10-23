@@ -27,7 +27,7 @@ export async function ensureSession() {
   return unwrap(await supabase.auth.signInAnonymously()).session;
 }
 
-/** 내 프로필 조회/생성. claimLegacy=true 이면 같은 이름의 레거시(group_shifts) 데이터 연결 */
+/** 내 프로필 조회/생성. claimLegacy 는 구버전 호환용 (서버가 무시: 이름만으로 레거시 데이터를 연결하지 않음) */
 export async function ensureProfile(displayName, claimLegacy = false) {
   const supabase = await getSupabase();
   return unwrap(await supabase.rpc('ensure_profile', {

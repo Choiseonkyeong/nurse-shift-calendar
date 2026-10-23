@@ -34,3 +34,19 @@ export function mergeWithRemote(remote = {}, local = {}, base = null) {
     : Object.fromEntries(Object.entries(local || {}).filter(([, v]) => v));
   return applyChanges(remote, localChanges);
 }
+
+/**
+ * 서버가 저장하지 않은 날짜(skipped)는 기준점에 넣지 않고 서버 값 그대로 둠
+ * → 다음 동기화 때 "이 기기에서 바뀐 것"으로 다시 보내고, 기기 값이 조용히 지워지지 않음
+ * @param snapshot 저장 성공으로 가정한 새 기준점
+ * @param server   서버에 실제로 있는 값 (저장 전 기준점 또는 서버 조회 값)
+ * @param skipped  set_my_shifts 가 돌려준 건너뛴 날짜 목록
+ */
+export function excludeSkipped(snapshot = {}, server = {}, skipped = []) {
+  const next = { ...(snapshot || {}) };
+  (Array.isArray(skipped) ? skipped : []).forEach((k) => {
+    if (server?.[k]) next[k] = server[k];
+    else delete next[k];
+  });
+  return next;
+}

@@ -31,7 +31,7 @@ import { isNativeApp, syncLocalReminders, syncShiftAlarms, wakeAlarmOf } from '.
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 import { syncWidget } from './lib/widgetSync';
 import { startAds } from './lib/ads';
-import { applyChanges, mergeWithRemote } from './lib/syncMerge';
+import { applyChanges, mergeWithRemote, excludeSkipped } from './lib/syncMerge';
 import { queueTypeOp, flushTypeQueue, applyTypeQueue } from './lib/typeSync';
 import { SETTINGS_TS_KEY, decideSettingsSync, fetchMySettings, saveMySettings } from './lib/settingsSync';
 import { ROSTER_NAME_KEY } from './lib/rosterName';
@@ -507,8 +507,10 @@ export default function App() {
       // 기준 스냅샷이 없으면 이전 버전 사용자 → 기기 값 전체 우선 (기존 동작 유지)
       const merged = mergeWithRemote(remote, local, replaceWithLocal ? remote : syncedShiftsRef.current || readJson(SYNCED_SHIFTS_KEY));
       const result = await saveShiftChanges(diffShifts(remote, merged));
-      if (result?.skipped?.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', result.skipped);
-      markSyncedShifts(merged);
+      const skipped = result?.skipped || [];
+      if (skipped.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', skipped);
+      // 서버가 건너뛴 날짜는 기준점에서 빼 둠 → 기기 값은 남고 다음 동기화 때 다시 시도
+      markSyncedShifts(excludeSkipped(merged, remote, skipped));
       // 조회하는 동안 사용자가 바꾼 값은 유지 (다음 저장 때 반영)
       setMyShifts((cur) => applyChanges(merged, diffShifts(local, cur || {})));
 
@@ -528,7 +530,7 @@ export default function App() {
       } catch (err) {
         console.error('메모 동기화 실패 (기기에만 저장):', err.message);
       }
-      setSyncStatus('saved');
+      setSyncStatus(skipped.length ? 'unsaved' : 'saved');
     } finally {
       pullingRef.current = false;
     }
@@ -610,9 +612,12 @@ export default function App() {
 
     const timer = setTimeout(async () => {
       try {
-        await saveShiftChanges(changes);
-        markSyncedShifts(applyChanges(syncedShiftsRef.current, changes));
-        setSyncStatus('saved');
+        const result = await saveShiftChanges(changes);
+        const skipped = result?.skipped || [];
+        if (skipped.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', skipped);
+        const prev = syncedShiftsRef.current;
+        markSyncedShifts(excludeSkipped(applyChanges(prev, changes), prev, skipped));
+        setSyncStatus(skipped.length ? 'unsaved' : 'saved');
       } catch (err) {
         setSyncStatus('offline');
         console.error('근무 저장 실패:', err.message);
@@ -1057,11 +1062,12 @@ function SyncBadge({ status }) {
     connecting: { icon: <Loader2 size={11} className="animate-spin" />, text: '서버 연결 중', cls: 'text-slate-400' },
     saving: { icon: <Loader2 size={11} className="animate-spin" />, text: '저장 중', cls: 'text-slate-400' },
     saved: { icon: <Cloud size={11} />, text: '서버에 저장됨', cls: 'text-slate-400' },
-    offline: { icon: <CloudOff size={11} />, text: '오프라인 · 기기 저장', cls: 'text-amber-500' }
+    offline: { icon: <CloudOff size={11} />, text: '오프라인 · 기기 저장', cls: 'text-amber-500' },
+    unsaved: { icon: <CloudOff size={11} />, text: '일부 근무 서버 저장 안 됨 · 기기 저장', cls: 'text-amber-500' }
   };
   const { icon, text, cls } = map[status] || map.connecting;
-  // 머리글은 년·월만: 저장 상태는 화면 읽기용으로만 두고, 오프라인일 때만 보여 줌
-  if (status !== 'offline') return <p className="sr-only" aria-live="polite">{text}</p>;
+  // 머리글은 년·월만: 저장 상태는 화면 읽기용으로만 두고, 오프라인·저장 안 됨일 때만 보여 줌
+  if (status !== 'offline' && status !== 'unsaved') return <p className="sr-only" aria-live="polite">{text}</p>;
   return (
     <p className={`mt-0.5 text-[11px] font-normal flex items-center gap-1 whitespace-nowrap ${cls}`}>
       {icon} {text}
