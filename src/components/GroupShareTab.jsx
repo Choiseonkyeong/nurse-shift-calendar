@@ -340,7 +340,7 @@ export default function GroupShareTab({
               </div>
             ) : (
               <div className="py-6 text-center">
-                <ChickFriends width={220} />
+                <ChickFriends width={260} />
                 <p className="text-[18px] font-semibold text-slate-900 mt-3">동료와 근무를 함께 봐요</p>
                 <p className="sr-only">아직 참여 중인 공유 그룹이 없습니다.</p>
               </div>

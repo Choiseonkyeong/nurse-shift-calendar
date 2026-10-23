@@ -207,7 +207,7 @@ export default function AllowanceTab({
               <span className="text-[22px] font-semibold ml-0.5 text-blue-600">원</span>
             </p>
           </div>
-          <CoinChick size={104} />
+          <CoinChick size={112} />
         </div>
         {allowanceItems.length ? (
           <div className="mt-4 grid grid-cols-2 gap-2">

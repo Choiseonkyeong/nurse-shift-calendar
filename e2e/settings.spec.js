@@ -93,6 +93,35 @@ test('설정(근무 수당·연차)이 서버에 저장되고 새 폰 로그인 
   await other.close();
 });
 
+test('오프라인에서 바꾼 설정이 연결 후 다른 기기의 예전 변경에 덮이지 않고 올라감', async ({ page }) => {
+  const state = createFakeState();
+  await openApp(page, { state });
+  await waitSaved(page);
+  const pid = Object.keys(state.profiles)[0];
+  await expect.poll(() => state.settings[pid]?.updated_at).toBeTruthy();
+  // 다른 기기가 그 뒤(10시)에 설정을 바꿈
+  state.settings[pid] = { settings: { shift_configs: { allowance: { E: 5000 } } }, updated_at: '2026-09-28T01:00:00.000Z' };
+
+  // 이 기기: 11시에 오프라인으로 나이트 수당 입력
+  state.offline = true;
+  await page.clock.setFixedTime(new Date('2026-09-28T11:00:00+09:00'));
+  await page.reload();
+  await expect(page.getByText('오프라인 · 기기 저장')).toBeVisible();
+  await tab(page, '수당').click();
+  await page.getByRole('button', { name: /계산 설정/ }).click();
+  await page.getByLabel('N 1회 수당').fill('130000');
+  await page.keyboard.press('Escape');
+
+  // 연결 후: 더 최근인 이 기기 변경이 서버로 올라가야 함 (예전엔 서버 값으로 덮임)
+  state.offline = false;
+  await page.reload();
+  await waitSaved(page);
+  await expect.poll(() => state.settings[pid]?.settings?.shift_configs?.allowance?.N).toBe(130000);
+  await tab(page, '수당').click();
+  await page.getByRole('button', { name: /계산 설정/ }).click();
+  await expect(page.getByLabel('N 1회 수당')).toHaveValue('130,000');
+});
+
 test('팝업: Esc·바깥 누르면 닫힘, 포커스는 팝업 안에서만 이동', async ({ page }) => {
   await openApp(page);
   const dialog = page.getByRole('dialog', { name: '근무 직접 수정' });

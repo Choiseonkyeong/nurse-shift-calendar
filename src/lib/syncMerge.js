@@ -28,6 +28,15 @@ export function applyChanges(base = {}, changes = {}) {
  * @param local  기기 현재 값
  * @param base   마지막으로 서버와 일치했던 기기 스냅샷 (없으면 이전 버전 → 기기 값 전체가 우선)
  */
+/**
+ * 서버가 저장하지 못한 날짜(skipped: 모르는 근무 코드 등)는 "서버와 일치"로 기록하지 않는다.
+ * → 기준 스냅샷에서 그 날짜를 서버 값으로 되돌려 두면, 다음 동기화 때 기기 값이 다시 올라감
+ */
+export function syncedExceptSkipped(merged = {}, remote = {}, skipped = []) {
+  if (!skipped?.length) return merged;
+  return applyChanges(merged, Object.fromEntries(skipped.map((k) => [k, remote?.[k] || null])));
+}
+
 export function mergeWithRemote(remote = {}, local = {}, base = null) {
   const localChanges = base
     ? diffShifts(base, local)
