@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diffShifts, applyChanges, mergeWithRemote } from '../src/lib/syncMerge';
+import { diffShifts, applyChanges, mergeWithRemote, syncedExceptSkipped } from '../src/lib/syncMerge';
 
 describe('syncMerge', () => {
   it('diffShifts: 추가·변경·삭제', () => {
@@ -27,5 +27,13 @@ describe('syncMerge', () => {
 
   it('기준 스냅샷이 없으면(이전 버전) 기기 값 우선', () => {
     expect(mergeWithRemote({ a: 'D', b: 'E' }, { a: 'N', c: '' }, null)).toEqual({ a: 'N', b: 'E' });
+  });
+  it('서버가 건너뛴 날짜는 동기화 기준에서 빼서 다음에 다시 올라가게', () => {
+    const remote = { a: 'D' };
+    const merged = { a: 'D', b: '교', c: 'N' };
+    const base = syncedExceptSkipped(merged, remote, ['b']);
+    expect(base).toEqual({ a: 'D', c: 'N' });
+    expect(diffShifts(base, merged)).toEqual({ b: '교' }); // 다음 저장 때 다시 보냄
+    expect(syncedExceptSkipped(merged, remote, [])).toBe(merged);
   });
 });

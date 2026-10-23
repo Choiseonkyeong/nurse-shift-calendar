@@ -31,7 +31,7 @@ import { isNativeApp, syncLocalReminders, syncShiftAlarms, wakeAlarmOf } from '.
 import { ShiftTypesContext, mergeShiftTypes } from './lib/shiftTypes';
 import { syncWidget } from './lib/widgetSync';
 import { startAds } from './lib/ads';
-import { applyChanges, mergeWithRemote } from './lib/syncMerge';
+import { applyChanges, mergeWithRemote, syncedExceptSkipped } from './lib/syncMerge';
 import { queueTypeOp, flushTypeQueue, applyTypeQueue } from './lib/typeSync';
 import { SETTINGS_TS_KEY, decideSettingsSync, fetchMySettings, saveMySettings } from './lib/settingsSync';
 import { ROSTER_NAME_KEY } from './lib/rosterName';
@@ -399,18 +399,28 @@ export default function App() {
   rosterNameRef.current = rosterName;
 
   // 이 기기에서 설정을 바꾸면 변경 시각 기록 후 서버에 저장 (디바운스)
+  // 시각은 오프라인·첫 동기화 전에도 기록 → 연결 후 첫 동기화에서 서버 값에 덮이지 않고 올라감
+  const lastSettingsRef = useRef({ shiftConfigs, alarmSettings, rosterName });
+  const pendingSettingsTsRef = useRef(null); // 아직 서버에 못 올린 이 기기 변경의 시각
   useEffect(() => {
-    if (!profile || !settingsReadyRef.current) return;
-    if (applyingServerSettingsRef.current) {
-      applyingServerSettingsRef.current = false;
-      return;
+    const prev = lastSettingsRef.current;
+    const changed = prev.shiftConfigs !== shiftConfigs || prev.alarmSettings !== alarmSettings || prev.rosterName !== rosterName;
+    lastSettingsRef.current = { shiftConfigs, alarmSettings, rosterName };
+    if (changed && applyingServerSettingsRef.current) {
+      applyingServerSettingsRef.current = false; // 서버에서 온 값은 다시 올리지 않음
+    } else if (changed) {
+      pendingSettingsTsRef.current = new Date().toISOString();
+      localStorage.setItem(SETTINGS_TS_KEY, pendingSettingsTsRef.current);
     }
-    const ts = new Date().toISOString();
-    localStorage.setItem(SETTINGS_TS_KEY, ts);
+    // 첫 동기화 전이면 syncSettings 가 기록된 시각을 보고 올림
+    const ts = pendingSettingsTsRef.current;
+    if (!ts || !profile || !settingsReadyRef.current) return;
     const timer = setTimeout(() => {
-      saveMySettings({ shift_configs: shiftConfigs || {}, shift_alarm_settings: alarmSettings, roster_name: rosterName || '' }, ts).catch((err) =>
-        console.error('설정 저장 실패 (다음 연결 때 다시 저장):', err.message)
-      );
+      saveMySettings({ shift_configs: shiftConfigs || {}, shift_alarm_settings: alarmSettings, roster_name: rosterName || '' }, ts)
+        .then(() => {
+          if (pendingSettingsTsRef.current === ts) pendingSettingsTsRef.current = null;
+        })
+        .catch((err) => console.error('설정 저장 실패 (다음 연결 때 다시 저장):', err.message));
     }, 1500);
     return () => clearTimeout(timer);
   }, [shiftConfigs, alarmSettings, rosterName, profile]);
@@ -508,7 +518,8 @@ export default function App() {
       const merged = mergeWithRemote(remote, local, replaceWithLocal ? remote : syncedShiftsRef.current || readJson(SYNCED_SHIFTS_KEY));
       const result = await saveShiftChanges(diffShifts(remote, merged));
       if (result?.skipped?.length) console.warn('저장되지 않은 근무(알 수 없는 코드):', result.skipped);
-      markSyncedShifts(merged);
+      // 서버가 건너뛴 날짜는 동기화된 것으로 치지 않음 → 근무 종류가 서버에 생긴 뒤 다시 올라감
+      markSyncedShifts(syncedExceptSkipped(merged, remote, result?.skipped));
       // 조회하는 동안 사용자가 바꾼 값은 유지 (다음 저장 때 반영)
       setMyShifts((cur) => applyChanges(merged, diffShifts(local, cur || {})));
 
@@ -610,8 +621,9 @@ export default function App() {
 
     const timer = setTimeout(async () => {
       try {
-        await saveShiftChanges(changes);
-        markSyncedShifts(applyChanges(syncedShiftsRef.current, changes));
+        const result = await saveShiftChanges(changes);
+        const skipped = new Set(result?.skipped || []);
+        markSyncedShifts(applyChanges(syncedShiftsRef.current, Object.fromEntries(Object.entries(changes).filter(([k]) => !skipped.has(k)))));
         setSyncStatus('saved');
       } catch (err) {
         setSyncStatus('offline');
