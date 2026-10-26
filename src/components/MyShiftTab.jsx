@@ -882,7 +882,8 @@ export default function MyShiftTab({
                   isSelected ? 'selected-cell' : uncertainSet.has(item.dateKey) ? 'bg-amber-50 ring-2 ring-inset ring-amber-400' : 'active:bg-slate-50'
                 }`}
               >
-                <span className={`text-[16px] leading-[20px] tabular-nums ${isToday ? 'font-semibold text-slate-900' : `font-medium ${dayNumberClass(item.dateKey).replace('text-sky-500', 'text-slate-700')}`}`}>
+                {/* 오늘: 앱 색 동그라미 안에 흰 숫자 (줄 높이는 그대로) */}
+                <span className={`text-[16px] leading-[20px] tabular-nums ${isToday ? 'inline-flex items-center justify-center w-[26px] h-[26px] -my-[3px] rounded-full bg-blue-600 text-white font-semibold' : `font-medium ${dayNumberClass(item.dateKey).replace('text-sky-500', 'text-slate-700')}`}`}>
                   {item.day}
                 </span>
                 {shift ? (
