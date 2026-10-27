@@ -144,6 +144,22 @@ export const HOLIDAYS = {
 /** 'YYYY-MM-DD' → 공휴일 이름 (없으면 undefined) */
 export const getHoliday = (dateKey) => HOLIDAYS[dateKey];
 
+/** 그 달의 공휴일 [{ day, name }] (날짜순) — 달력 아래 한 줄 안내용 */
+export function monthHolidays(year, month) {
+  const prefix = `${year}-${String(month).padStart(2, '0')}-`;
+  return Object.keys(HOLIDAYS)
+    .filter((k) => k.startsWith(prefix))
+    .sort()
+    .map((k) => ({ day: Number(k.slice(8)), name: HOLIDAYS[k] }));
+}
+
+/** 받침에 맞는 '이에요/예요' (예: 한글날이에요, 설날이에요, 크리스마스예요) */
+export function withIeyo(word = '') {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  const hasBatchim = code >= 0 && code <= 11171 && code % 28 !== 0;
+  return `${word}${hasBatchim ? '이에요' : '예요'}`;
+}
+
 // 달력 칸에 들어가는 짧은 이름 (칸이 좁아 3글자 이하로. 전체 이름은 스크린리더·상세에서)
 const SHORT = {
   대체휴일: '대체',
