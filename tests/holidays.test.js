@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { HOLIDAYS } from '../src/utils/holidays';
+import { HOLIDAYS, monthHolidays, withIeyo } from '../src/utils/holidays';
 
 // 음력 명절은 한국 음력(단기력, 한국 시간 기준)으로 다시 계산해 목록과 대조
 // (중국 음력과 하루 차이 나는 해가 있음: 2028년 설날은 한국 1/27, 중국 1/26)
@@ -39,5 +39,22 @@ describe('공휴일 목록', () => {
   it('2028년 설날 연휴는 1/26~28 (1/25 는 평일)', () => {
     expect(HOLIDAYS['2028-01-25']).toBeUndefined();
     expect(['2028-01-26', '2028-01-27', '2028-01-28'].map((k) => HOLIDAYS[k])).toEqual(['설날', '설날', '설날']);
+  });
+});
+
+describe('공휴일 표시 도우미', () => {
+  it('그 달의 공휴일을 날짜순으로', () => {
+    expect(monthHolidays(2026, 10)).toEqual([
+      { day: 3, name: '개천절' },
+      { day: 5, name: '대체휴일' },
+      { day: 9, name: '한글날' }
+    ]);
+    expect(monthHolidays(2026, 11)).toEqual([]);
+  });
+  it('받침에 맞는 이에요/예요', () => {
+    expect(withIeyo('한글날')).toBe('한글날이에요');
+    expect(withIeyo('추석')).toBe('추석이에요');
+    expect(withIeyo('크리스마스')).toBe('크리스마스예요');
+    expect(withIeyo('개천절')).toBe('개천절이에요');
   });
 });

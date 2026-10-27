@@ -431,3 +431,14 @@ test('로그인(계정 연결)한 폰은 첫 화면 없이 바로 근무표', as
   await expect(page.getByRole('heading', { name: '2026년 9월' })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '시작 화면' })).toHaveCount(0);
 });
+
+test('공휴일: 달력 칸에 빨간 점, 달력 아래 이번 달 공휴일 한 줄, 수정 창 제목에 이름', async ({ page }) => {
+  await openApp(page); // 오늘 2026-09-28, 9월 24~26일 추석
+  await expect(page.getByText('24일 추석 · 25일 추석 · 26일 추석')).toBeVisible();
+  const cell = page.getByRole('button', { name: /^9월 25일 / });
+  await expect(cell).toHaveAttribute('aria-label', /추석/);
+  await expect(cell.locator('.bg-rose-400')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^9월 23일 / }).locator('.bg-rose-400')).toHaveCount(0);
+  await cell.click();
+  await expect(page.getByRole('dialog', { name: '근무 직접 수정' }).getByRole('heading')).toContainText('· 추석');
+});

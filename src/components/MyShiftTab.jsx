@@ -12,7 +12,7 @@ import PatternFill from './PatternFill';
 import DayItemsEditor from './DayItemsEditor';
 import Mascot from './Mascot';
 import { noteItems, parseItem } from '../lib/dayItems';
-import { getHoliday, dayNumberClass } from '../utils/holidays';
+import { getHoliday, dayNumberClass, monthHolidays, withIeyo } from '../utils/holidays';
 import { addMonthsKey, toDateKey, getTodayDateObj } from '../utils/dateUtils';
 import { usesServerPush, enablePushReminders, disablePushReminders, toStartTimes } from '../lib/pushNotifications';
 import {
@@ -778,11 +778,20 @@ export default function MyShiftTab({
       {/* 오늘 한마디: 근무가 하나라도 있으면 달력 위 한 줄 (누르면 오늘 근무 수정) */}
       {!quickMode && !importBanner && Object.keys(myShifts || {}).length > 0 && (() => {
         const todayType = myShifts[todayKey] ? findType(myShifts[todayKey]) : null;
-        const text = !todayType
-          ? '오늘 근무를 넣어 볼까요?'
-          : todayType.kind === 'work'
-            ? `오늘은 ${shortLabel(todayType.label) || todayType.code} 근무예요. 오늘도 힘내요!`
-            : '오늘은 쉬는 날! 푹 쉬어요';
+        const todayHoliday = getHoliday(todayKey);
+        const workName = todayType && (shortLabel(todayType.label) || todayType.code);
+        // 공휴일이면 공휴일 이름을 먼저 (근무면 '…지만 근무', 쉬는 날이면 '푹 쉬어요')
+        const text = todayHoliday
+          ? !todayType
+            ? `오늘은 ${withIeyo(todayHoliday)}`
+            : todayType.kind === 'work'
+              ? `오늘은 ${todayHoliday}! ${workName} 근무, 힘내요!`
+              : `오늘은 ${todayHoliday}! 푹 쉬어요`
+          : !todayType
+            ? '오늘 근무를 넣어 볼까요?'
+            : todayType.kind === 'work'
+              ? `오늘은 ${workName} 근무예요. 오늘도 힘내요!`
+              : '오늘은 쉬는 날! 푹 쉬어요';
         return (
           <button
             type="button"
@@ -882,6 +891,8 @@ export default function MyShiftTab({
                   isSelected ? 'selected-cell' : uncertainSet.has(item.dateKey) ? 'bg-amber-50 ring-2 ring-inset ring-amber-400' : 'active:bg-slate-50'
                 }`}
               >
+                {/* 공휴일: 칸 오른쪽 위 작은 빨간 점 (이름은 달력 아래 한 줄·수정 창에) */}
+                {getHoliday(item.dateKey) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-rose-400" aria-hidden="true" />}
                 {/* 오늘: 앱 색 동그라미 안에 흰 숫자 (줄 높이는 그대로) */}
                 <span className={`text-[16px] leading-[20px] tabular-nums ${isToday ? 'inline-flex items-center justify-center w-[26px] h-[26px] -my-[3px] rounded-full bg-blue-600 text-white font-semibold' : `font-medium ${dayNumberClass(item.dateKey).replace('text-sky-500', 'text-slate-700')}`}`}>
                   {item.day}
@@ -902,6 +913,13 @@ export default function MyShiftTab({
             );
           })}
         </div>
+        {/* 이번 달 공휴일 한 줄 */}
+        {monthHolidays(year, month).length > 0 && (
+          <p className="text-[12px] leading-snug text-slate-500 px-1" aria-label="이번 달 공휴일">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-400 mr-1.5 align-middle" aria-hidden="true" />
+            {monthHolidays(year, month).map((h) => `${h.day}일 ${h.name}`).join(' · ')}
+          </p>
+        )}
       </section>
 
       {/* 2. 이번 달 근무 수 카드(근무만: D·E·N…) */}
@@ -1028,7 +1046,10 @@ export default function MyShiftTab({
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-[13px] text-slate-400">근무 직접 수정</p>
-                <h3 className="text-[20px] font-bold text-slate-900 mt-0.5">{formatDateKo(editingDateKey)}</h3>
+                <h3 className="text-[20px] font-bold text-slate-900 mt-0.5">
+                  {formatDateKo(editingDateKey)}
+                  {getHoliday(editingDateKey) && <span className="ml-1.5 text-[15px] font-semibold text-rose-500">· {getHoliday(editingDateKey)}</span>}
+                </h3>
               </div>
               <button
                 onClick={() => setIsEditModalOpen(false)}
