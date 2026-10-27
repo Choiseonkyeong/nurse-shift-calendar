@@ -14,6 +14,8 @@ import { getWidgetNotesPref, setWidgetNotesPref } from '../lib/widgetSync';
 import { confirmDialog } from '../lib/confirm';
 import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon, Type, Pencil, LogOut } from 'lucide-react';
 import { useShiftTypes } from '../lib/shiftTypes';
+import Avatar from './Avatar';
+import { useProfilePhoto, setProfilePhoto, squarePhoto } from '../lib/profilePhoto';
 import { parseIcs } from '../lib/icsImport';
 import { cellToCode } from '../lib/rosterParse';
 import { toCsv, toIcs } from '../lib/exportData';
@@ -66,6 +68,22 @@ export default function ImportTab({
   // 이름 바꾸기 (예전엔 내 근무 화면 제목을 눌러 바꿨음)
   const [editingName, setEditingName] = useState(null);
   const [isFontOpen, setIsFontOpen] = useState(false);
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  const profilePhoto = useProfilePhoto();
+  // 프로필 사진: 정사각형 256px 로 줄여 이 기기에 저장 (백업 파일에 포함)
+  const handleProfilePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await squarePhoto(file);
+      if (!setProfilePhoto(dataUrl)) throw new Error('저장 공간이 부족해 사진을 저장하지 못했어요');
+      setPhotoSheetOpen(false);
+      toast('프로필 사진을 바꿨어요.', 'success');
+    } catch (err) {
+      toast(errorText(err, '사진을 불러오지 못했어요.'), 'error');
+    }
+  };
   const [fontKey, setFontKey] = useState(getFontPref);
   const [widgetNotes, setWidgetNotes] = useState(getWidgetNotesPref);
   const shiftTypes = useShiftTypes();
@@ -481,13 +499,16 @@ export default function ImportTab({
           </div>
         ))}
 
-      {/* 계정 · 이름 */}
+      {/* 계정 · 이름 (프로필 사진을 누르면 사진 바꾸기) */}
       <div className="flex items-center gap-1">
-        <button type="button" onClick={onOpenAccount} className="flex-1 min-w-0 flex items-center gap-3 py-3 text-left cursor-pointer">
-          <span className="relative w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-lg font-semibold shrink-0">
-            {(userName || '나').substring(0, 1)}
-            {accountStatus !== 'linked' && <span className="absolute top-0 right-0 w-3 h-3 rounded-full bg-amber-400 ring-2 ring-white" />}
+        <button type="button" onClick={() => setPhotoSheetOpen(true)} aria-label="프로필 사진 바꾸기" className="relative shrink-0 py-3 cursor-pointer">
+          <Avatar size={52} />
+          <span className="absolute bottom-2.5 right-0 w-5 h-5 rounded-full bg-white shadow flex items-center justify-center text-slate-500" aria-hidden="true">
+            <Camera size={12} />
           </span>
+          {accountStatus !== 'linked' && <span className="absolute top-3 right-0 w-3 h-3 rounded-full bg-amber-400 ring-2 ring-white" />}
+        </button>
+        <button type="button" onClick={onOpenAccount} className="flex-1 min-w-0 flex items-center gap-3 py-3 pl-2 text-left cursor-pointer">
           <span className="flex-1 min-w-0">
             <span className="block text-[17px] font-semibold text-slate-900 truncate">{userName || '나'}</span>
             <span className={`block text-[13px] mt-0.5 ${accountStatus === 'linked' ? 'text-slate-400' : 'text-amber-600'}`}>
@@ -643,6 +664,33 @@ export default function ImportTab({
             <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${widgetNotes ? 'translate-x-5' : ''}`} />
           </button>
         </div>
+      )}
+      {photoSheetOpen && (
+        <Modal onClose={() => setPhotoSheetOpen(false)} label="프로필 사진">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-3 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[18px] font-bold text-slate-900">프로필 사진</h3>
+              <button type="button" onClick={() => setPhotoSheetOpen(false)} aria-label="닫기" className="w-9 h-9 -mr-1 flex items-center justify-center rounded-full text-slate-400 active:bg-slate-100 cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex justify-center py-1"><Avatar size={96} /></div>
+            <label className="flex items-center justify-center gap-1.5 h-12 rounded-xl bg-blue-600 text-white text-[15px] font-semibold cursor-pointer">
+              <ImageIcon size={17} /> 앨범에서 선택
+              <input type="file" accept="image/*" onChange={handleProfilePhoto} className="hidden" aria-label="프로필 사진 고르기" />
+            </label>
+            <label className="flex items-center justify-center gap-1.5 h-12 rounded-xl bg-slate-100 text-slate-700 text-[15px] font-semibold cursor-pointer">
+              <Camera size={17} /> 사진 찍기
+              <input type="file" accept="image/*" capture="user" onChange={handleProfilePhoto} className="hidden" />
+            </label>
+            {profilePhoto && (
+              <button type="button" onClick={() => { setProfilePhoto(''); setPhotoSheetOpen(false); }} className="w-full h-11 rounded-xl text-[14px] text-slate-500 cursor-pointer active:bg-slate-50">
+                기본 병아리로 되돌리기
+              </button>
+            )}
+            <p className="text-[12px] text-slate-400 text-center">이 기기에만 저장되고, 백업 파일에 함께 들어가요.</p>
+          </div>
+        </Modal>
       )}
       {isFontOpen && (
         <FontSheet

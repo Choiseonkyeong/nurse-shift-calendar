@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Calendar, Wallet, Users, Settings, Shield, Cloud, CloudOff, Loader2, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 import MonthPicker, { monthPickKey } from './components/MonthPicker';
+import Avatar from './components/Avatar';
 import { addMonthsKey } from './utils/dateUtils';
 import MyShiftTab from './components/MyShiftTab';
 import { lazyImport, consumeResume, setResumeTab } from './lib/appUpdate';
@@ -569,7 +570,12 @@ export default function App() {
         // 서버에 저장된 내 근무 종류(이름·색상·시간) 반영
         // (아직 못 보낸 기기 변경은 서버 목록 위에 유지)
         const serverTypes = await fetchMyShiftTypes().catch(() => null);
-        if (serverTypes?.length) setCustomShiftTypes(applyTypeQueue(serverTypes));
+        if (serverTypes?.length) {
+          // 서버에 표시 기호 열이 아직 없으면(마이그레이션 전) 기기에 저장된 기호를 그대로 둠
+          const localSymbol = Object.fromEntries((customShiftTypesRef.current || []).filter((t) => t.symbol).map((t) => [t.code, t.symbol]));
+          const withSymbol = serverTypes.map((t) => ('symbol' in t || !localSymbol[t.code] ? t : { ...t, symbol: localSymbol[t.code] }));
+          setCustomShiftTypes(applyTypeQueue(withSymbol));
+        }
 
         await syncSettingsRef.current();
       } catch (err) {
@@ -905,9 +911,9 @@ export default function App() {
               onClick={() => setAccountModal('link')}
               aria-label={accountStatus === 'linked' ? '계정' : '계정 (연결 필요)'}
               title={nameSkipped || !userName ? '나' : userName}
-              className="relative ml-1 w-9 h-9 shrink-0 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-semibold text-sm cursor-pointer"
+              className="relative ml-1 w-9 h-9 shrink-0 rounded-full flex items-center justify-center cursor-pointer"
             >
-              {userName.substring(0, 1)}
+              <Avatar size={36} />
               {accountStatus && accountStatus !== 'linked' && (
                 <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-white" />
               )}

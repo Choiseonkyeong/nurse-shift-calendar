@@ -241,3 +241,42 @@ test('달력에 쓰인 근무 종류도 한 번에 삭제: 그 날짜들을 비�
   expect(await readLocal(page, 'my_shift_data')).toEqual({ '2026-09-12': 'D' });
   await expect(page.getByRole('button', { name: /야간당직/ })).toHaveCount(0);
 });
+
+test('근무 달력 표시 기호: 연차를 💛로 바꾸면 달력·근무 수정 창에 💛, 서버에도 저장 (코드는 그대로)', async ({ page }) => {
+  const state = createFakeState();
+  await openApp(page, { state, local: { my_shift_data: { '2026-09-10': '연차' } } });
+  await waitSaved(page);
+  const pid = Object.keys(state.profiles)[0];
+  await openTools(page);
+  await page.getByRole('button', { name: '근무 종류' }).click();
+  await page.getByRole('button', { name: /^연차/ }).click();
+  await page.getByRole('button', { name: '달력 표시 💛' }).click();
+  await page.getByRole('button', { name: '저장', exact: true }).click();
+  await page.getByRole('button', { name: '닫기' }).click();
+  const cell = page.getByRole('button', { name: /^9월 10일 연차 근무/ }); // 읽어 주는 이름은 코드 그대로
+  await expect(cell).toContainText('💛');
+  await expect.poll(() => state.types[pid]?.['연차']?.symbol).toBe('💛');
+  expect((await readLocal(page, 'my_shift_data'))['2026-09-10']).toBe('연차');
+  await page.reload();
+  await waitSaved(page);
+  await expect(cell).toContainText('💛'); // 서버에서 다시 받아도 유지
+});
+
+test('표시 기호: 서버에 마이그레이션이 없어도 근무 종류 저장은 되고 기호는 이 기기에 유지', async ({ page }) => {
+  const state = createFakeState();
+  state.noSymbolColumn = true;
+  await openApp(page, { state, local: { my_shift_data: { '2026-09-10': '연차' } } });
+  await waitSaved(page);
+  const pid = Object.keys(state.profiles)[0];
+  await openTools(page);
+  await page.getByRole('button', { name: '근무 종류' }).click();
+  await page.getByRole('button', { name: /^연차/ }).click();
+  await page.getByLabel('달력 표시', { exact: true }).fill('🎀');
+  await page.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '근무 종류 관리' })).toBeVisible(); // 오류 없이 목록으로
+  await page.getByRole('button', { name: '닫기' }).click();
+  await expect.poll(() => state.types[pid]?.['연차']?.code).toBe('연차'); // 기호 없이 저장됨
+  await page.reload();
+  await waitSaved(page);
+  await expect(page.getByRole('button', { name: /^9월 10일 연차 근무/ })).toContainText('🎀');
+});

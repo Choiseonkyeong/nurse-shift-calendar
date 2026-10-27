@@ -3,7 +3,10 @@ import { errorText } from '../lib/errorText';
 import { confirmDialog } from '../lib/confirm';
 import Modal from './Modal';
 import { X, Plus, ChevronLeft, Trash2, Check } from 'lucide-react';
-import { useShiftTypes, DEFAULT_CODES, shiftTextVars, shortLabel } from '../lib/shiftTypes';
+import { useShiftTypes, DEFAULT_CODES, shiftTextVars, shortLabel, displayCode, visibleLength } from '../lib/shiftTypes';
+
+// 달력 표시 기호 빠른 선택
+const SYMBOLS = ['💛', '🎀', '💗', '⭐', '🌙', '☀️', '🏖️', '🍀', '✈️', '🎂'];
 
 // 파스텔 색상 팔레트 (배경 / 글자)
 export const PALETTE = [
@@ -44,6 +47,8 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
     const code = editing.code.trim();
     if (!code) return setError('근무 코드를 입력해 주세요.');
     if (code.length > 4) return setError('근무 코드는 4자 이내로 입력해 주세요.');
+    const symbol = (editing.symbol || '').trim();
+    if (visibleLength(symbol) > 2) return setError('달력 표시는 2자(이모지 2개) 이내로 입력해 주세요.');
     if (isNew && shiftTypes.some((t) => t.code === code)) return setError('이미 있는 근무 코드입니다.');
     if (editing.kind === 'work' && (!!editing.start !== !!editing.end)) {
       return setError('시작·종료 시각을 모두 입력하거나 모두 비워 주세요.');
@@ -52,6 +57,7 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
       await onSave({
         ...editing,
         code,
+        symbol,
         label: editing.label.trim() || code,
         start: editing.kind === 'work' ? editing.start : '',
         end: editing.kind === 'work' ? editing.end : '',
@@ -113,7 +119,7 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
                   className="w-full flex items-center gap-3 py-3 cursor-pointer text-left"
                 >
                   <span style={shiftTextVars(t)} className="shift-text w-12 shrink-0 text-[17px] font-semibold truncate">
-                    {t.code}
+                    {displayCode(t)}
                   </span>
                   <span className="flex-1 text-[15px] text-slate-800 truncate">{shortLabel(t.label)}</span>
                   <span className="text-[12px] text-slate-400 whitespace-nowrap">
@@ -137,7 +143,7 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
           <div className="space-y-3">
             <div className="flex justify-center">
               <span style={{ backgroundColor: editing.bg, color: editing.fg }} className="min-w-[4rem] text-center px-6 py-2.5 rounded-2xl text-[20px] font-bold">
-                {editing.code || '코드'}
+                {displayCode({ ...editing, symbol: (editing.symbol || '').trim() }) || '코드'}
               </span>
             </div>
 
@@ -162,6 +168,34 @@ export default function ShiftTypeManager({ onClose, onSave, onDelete, usedDays =
                   className="w-full px-3 h-11 bg-slate-100 rounded-xl text-[15px] outline-none focus:ring-2 focus:ring-blue-200"
                 />
               </label>
+            </div>
+
+            {/* 달력 표시: 근무 코드는 그대로 두고 달력·카드에 보일 글자만 (예: 연차 → 💛) */}
+            <div className="space-y-1.5">
+              <label className="flex items-center justify-between gap-2">
+                <span className="text-[13px] text-slate-400">달력 표시 (이모지·기호, 비우면 코드)</span>
+                <input
+                  value={editing.symbol || ''}
+                  onChange={(e) => set('symbol', e.target.value)}
+                  placeholder={editing.code || '코드'}
+                  aria-label="달력 표시"
+                  className="w-24 px-3 h-10 bg-slate-100 rounded-xl text-[17px] text-center outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </label>
+              <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {SYMBOLS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-label={`달력 표시 ${s}`}
+                    aria-pressed={editing.symbol === s}
+                    onClick={() => set('symbol', editing.symbol === s ? '' : s)}
+                    className={`shrink-0 w-10 h-10 rounded-xl text-[18px] cursor-pointer ${editing.symbol === s ? 'bg-blue-50 ring-2 ring-inset ring-blue-500' : 'bg-slate-100'}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-1">

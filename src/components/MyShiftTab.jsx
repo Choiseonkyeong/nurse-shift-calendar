@@ -6,7 +6,7 @@ import Modal from './Modal';
 import { needsRetakeHint } from '../lib/importQuality';
 import { AlarmClock, Bell, BellOff, Camera, Check, X, ChevronLeft, ChevronRight, Zap, Eraser, Palette, Repeat, Share2, Loader2, Undo2, AlertTriangle, UserX } from 'lucide-react';
 import { useSwipe } from '../lib/swipe';
-import { useShiftTypes, shiftTextVars, findShiftType, shortLabel } from '../lib/shiftTypes';
+import { useShiftTypes, shiftTextVars, findShiftType, shortLabel, displayCode, visibleLength } from '../lib/shiftTypes';
 import ShiftTypeManager from './ShiftTypeManager';
 import PatternFill from './PatternFill';
 import DayItemsEditor from './DayItemsEditor';
@@ -842,8 +842,9 @@ export default function MyShiftTab({
                     onClick={() => setQuickCode(t.code)}
                     style={quickCode === t.code ? { backgroundColor: t.fg, color: '#fff' } : shiftTextVars(t)}
                     className={`shrink-0 min-w-[44px] px-3 h-9 rounded-full text-sm font-semibold cursor-pointer ${quickCode === t.code ? '' : 'bg-slate-100 shift-text'}`}
+                    aria-label={t.code}
                   >
-                    {t.code}
+                    {displayCode(t)}
                   </button>
                 ))}
               </div>
@@ -901,10 +902,10 @@ export default function MyShiftTab({
                   <span
                     style={shiftTextVars(findType(shift))}
                     className={`shift-cell shift-text w-full h-[22px] rounded-[6px] flex items-center justify-center font-semibold leading-none whitespace-nowrap overflow-hidden tracking-tight ${
-                      [...shift].length >= 3 ? 'text-[11px]' : 'text-[13px]'
+                      visibleLength(displayCode(findType(shift), shift)) >= 3 ? 'text-[11px]' : 'text-[13px]'
                     }`}
                   >
-                    {shift}
+                    {displayCode(findType(shift), shift)}
                   </span>
                 ) : (
                   <span className="h-[22px]" aria-hidden="true" />
@@ -929,7 +930,7 @@ export default function MyShiftTab({
               const t = findType(code);
               return (
                 <div key={code} style={shiftTextVars(t)} className="rounded-[24px] soft-card bg-white py-5 flex flex-col items-center gap-2">
-                  <span className="shift-cell w-12 h-8 rounded-[10px] flex items-center justify-center text-[15px] font-semibold text-slate-800">{code}</span>
+                  <span className="shift-cell w-12 h-8 rounded-[10px] flex items-center justify-center text-[15px] font-semibold text-slate-800">{displayCode(t, code)}</span>
                   <span className="text-[28px] font-bold text-slate-900 leading-tight tracking-tight">{count}일</span>
                 </div>
               );
@@ -960,7 +961,7 @@ export default function MyShiftTab({
                   <p className="text-[17px] font-semibold text-slate-900 mt-1">
                     {code ? (
                       <>
-                        <span style={shiftTextVars(findType(code))} className="shift-text">{code}</span>
+                        <span style={shiftTextVars(findType(code))} className="shift-text">{displayCode(findType(code), code)}</span>
                         {t?.label && t.label !== code && <span> {t.label}</span>}
                         {t?.start && t?.end && <span className="font-normal text-slate-500"> · {t.start}–{t.end}</span>}
                       </>
@@ -1074,7 +1075,7 @@ export default function MyShiftTab({
                     }`}
                   >
                     <span aria-hidden="true" style={shiftTextVars(item)} className="shift-text text-[18px] font-semibold leading-none truncate max-w-full">
-                      {item.code}
+                      {displayCode(item)}
                     </span>
                     <span className="text-[12px] text-slate-500 leading-tight truncate max-w-full">{shortLabel(item.label)}</span>
                     {on && <Check size={14} className="absolute top-1.5 right-1.5 text-blue-600" />}

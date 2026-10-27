@@ -1,7 +1,7 @@
 // src/lib/shareCalendar.js
 // 이번 달 근무표를 이미지(PNG)로 만들어 공유/저장 (카톡 등으로 보내기)
 import { Capacitor } from '@capacitor/core';
-import { findShiftType } from './shiftTypes';
+import { findShiftType, displayCode } from './shiftTypes';
 import { getHoliday } from '../utils/holidays';
 import { fontStack } from './fontPref';
 import { noteItems, parseItem } from './dayItems';
@@ -117,8 +117,9 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
     if (t) {
       counts[code] = (counts[code] || 0) + 1;
       ctx.fillStyle = t.fg;
-      ctx.font = `700 ${code.length > 3 ? 26 : code.length > 1 ? 34 : 44}px ${font()}`;
-      ctx.fillText(code, x + cellW / 2, y + 98);
+      const shown = displayCode(t, code); // 표시 기호(예: 💛)가 있으면 그것
+      ctx.font = `700 ${shown.length > 3 ? 26 : shown.length > 1 ? 34 : 44}px ${font()}`;
+      ctx.fillText(shown, x + cellW / 2, y + 98);
     }
 
     // 일정: 칸 폭에 맞춰 자른 글자 + 고른 색 바탕
@@ -148,7 +149,7 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
     .filter((t) => counts[t.code])
     .forEach((t) => {
       ctx.font = `700 28px ${font()}`;
-      const cw = ctx.measureText(t.code).width;
+      const cw = ctx.measureText(displayCode(t)).width;
       ctx.font = `500 28px ${font()}`;
       const nw = ctx.measureText(String(counts[t.code])).width;
       const w = cw + nw + 50;
@@ -158,7 +159,7 @@ export function renderShiftCanvas({ start, end, title, subtitle = '', myShifts =
       ctx.fill();
       ctx.font = `700 28px ${font()}`;
       ctx.fillStyle = t.fg;
-      ctx.fillText(t.code, cx + 20, cy + 38);
+      ctx.fillText(displayCode(t), cx + 20, cy + 38);
       ctx.font = `500 28px ${font()}`;
       ctx.fillStyle = '#475569';
       ctx.fillText(String(counts[t.code]), cx + 30 + cw, cy + 38);
