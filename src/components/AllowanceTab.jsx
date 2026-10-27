@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useShiftTypes, shiftTextVars, shortLabel } from '../lib/shiftTypes';
+import { useShiftTypes, shiftTextVars, shortLabel, displayCode } from '../lib/shiftTypes';
 import { getTodayDateObj, addMonthsKey } from '../utils/dateUtils';
 import { leaveYearRange, shiftAllowance, payPeriod } from '../lib/allowance';
 import ShiftStats from './ShiftStats';
@@ -213,7 +213,7 @@ export default function AllowanceTab({
           <div className="mt-4 grid grid-cols-2 gap-2">
             {allowanceItems.map((it) => (
               <div key={it.code} style={shiftTextVars(typeOf(it.code) || { bg: '#e8edf9', fg: '#586da3' })} className="shift-cell rounded-2xl border border-white/60 p-3">
-                <span className="shift-text inline-flex items-center justify-center min-w-7 h-6 px-1.5 mb-2 rounded-md bg-white/70 text-[12px] font-semibold">{it.code}</span>
+                <span className="shift-text inline-flex items-center justify-center min-w-7 h-6 px-1.5 mb-2 rounded-md bg-white/70 text-[12px] font-semibold">{displayCode(typeOf(it.code), it.code)}</span>
                 <p className="text-[12px] text-slate-500">{shortLabel(typeOf(it.code)?.label || it.code)} 수당</p>
                 <p className={`text-[17px] font-semibold mt-0.5 text-slate-900 ${blurCls}`}>{won(it.total)} 원</p>
                 <p className={`text-[11px] text-slate-400 mt-0.5 ${blurCls}`}>
@@ -260,7 +260,7 @@ export default function AllowanceTab({
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[13px] text-slate-500">
             {leaveTypes.map((t) => (
               <span key={t.code} className={leaveUsage[t.code] ? '' : 'opacity-40'}>
-                <b style={shiftTextVars(t)} className="shift-text font-semibold">{t.code}</b> {leaveUsage[t.code]}회
+                <b style={shiftTextVars(t)} className="shift-text font-semibold">{displayCode(t)}</b> {leaveUsage[t.code]}회
                 {(t.leaveDays ?? 1) !== 1 && ` · ${leaveUsage[t.code] * (t.leaveDays ?? 1)}일`}
               </span>
             ))}

@@ -44,6 +44,15 @@ export function mergeShiftTypes(custom = []) {
   return [...byCode.values()];
 }
 
+/** 달력·카드에 보일 글자: 표시 기호(예: 💛)가 있으면 그것, 없으면 근무 코드 */
+export const displayCode = (t, fallback = '') => t?.symbol || t?.code || fallback;
+
+/** 화면에 보이는 글자 수 (이모지·합성 이모지도 1자) */
+export function visibleLength(s = '') {
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) return [...new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(s)].length;
+  return [...s].length;
+}
+
 /** 'Day (데이)' → '데이' (괄호 안 한글 이름만, 없으면 그대로) */
 export const shortLabel = (label = '') => label.match(/\(([^)]+)\)\s*$/)?.[1] || label;
 

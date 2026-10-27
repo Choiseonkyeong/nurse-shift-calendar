@@ -161,3 +161,15 @@ describe('광고 설정', () => {
     expect(pickBannerId(on, 'android')).toBe('ca-app-pub-1234567890123456/1234567890');
   });
 });
+
+describe('근무 표시 기호', () => {
+  it('표시 기호가 있으면 그것, 없으면 코드', async () => {
+    const { displayCode, visibleLength } = await import('../src/lib/shiftTypes');
+    expect(displayCode({ code: '연차', symbol: '💛' })).toBe('💛');
+    expect(displayCode({ code: 'D', symbol: '' })).toBe('D');
+    expect(displayCode(undefined, 'X')).toBe('X');
+    expect(visibleLength('💛')).toBe(1);
+    expect(visibleLength('👩‍⚕️')).toBe(1);
+    expect(visibleLength('연차')).toBe(2);
+  });
+});

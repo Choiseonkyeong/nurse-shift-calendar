@@ -258,6 +258,10 @@ export async function installFakeSupabase(context, state) {
         case 'get_my_shift_types':
           return json(Object.values(state.types[myProfile.id] || {}));
         case 'upsert_my_shift_type': {
+          // 표시 기호 마이그레이션 전 서버 흉내: p_symbol 을 모름
+          if (state.noSymbolColumn && 'p_symbol' in body) {
+            return json({ code: 'PGRST202', message: 'Could not find the function public.upsert_my_shift_type(p_symbol, ...)' }, 404);
+          }
           (state.types[myProfile.id] ||= {})[body.p_code] = {
             code: body.p_code,
             label: body.p_label,
@@ -267,7 +271,9 @@ export async function installFakeSupabase(context, state) {
             start_time: body.p_start ? `${body.p_start}:00` : null,
             end_time: body.p_end ? `${body.p_end}:00` : null,
             night_hours: body.p_night_hours,
-            leave_days: body.p_leave_days
+            leave_days: body.p_leave_days,
+            // 표시 기호 마이그레이션 적용된 서버처럼: null 이면 기존 값 유지
+            ...(state.noSymbolColumn ? {} : { symbol: body.p_symbol == null ? state.types[myProfile.id]?.[body.p_code]?.symbol ?? null : body.p_symbol || null })
           };
           return json(null);
         }

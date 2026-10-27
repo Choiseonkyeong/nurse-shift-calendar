@@ -41,6 +41,8 @@ npx playwright test    # 화면(e2e) 테스트 — 화면을 바꿨으면 꼭
 - 첫 화면: `src/components/IntroScreen.jsx` — 로그인 전에는 열 때마다, 로그인한 폰은 안 보임.
 - 수당: 근무 1회 수당 × 횟수만 (`src/lib/allowance.js` `shiftAllowance`). 계약 나이트 개수 기준·시급 계산은 넣지 않기로 함.
 - 캐릭터: `src/components/Mascot.jsx` (노란 병아리, `src/assets/chick.webp`). 장면 그림(동전 저글링 `chick-coins.webp`·손잡은 셋 `chick-friends.webp`)은 `src/components/ChickArt.jsx`.
+- 근무 달력 표시 기호: `shift_types.symbol` (이모지·기호 2자 이내, 비우면 코드). 화면·공유 그림·위젯은 모두 `displayCode()`(`src/lib/shiftTypes.js`)로 표시. 서버 마이그레이션이 없어도 기기에 저장되어 동작.
+- 프로필 사진: `src/lib/profilePhoto.js` (이 기기 localStorage `profile_photo`, 256px JPEG, 백업 파일에 포함) · 표시는 `src/components/Avatar.jsx` (사진 없으면 병아리).
 
 ## 6. 구조 한눈에
 - 화면: `src/App.jsx`(머리글·탭·동기화), `src/components/*Tab.jsx`(내 근무·수당·그룹·설정)

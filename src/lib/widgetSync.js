@@ -1,7 +1,7 @@
 // src/lib/widgetSync.js
 // Android·iOS 홈 화면 위젯에 앞으로 WIDGET_DAYS 일 근무를 전달 (웹에서는 아무것도 하지 않음)
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { findShiftType } from './shiftTypes';
+import { findShiftType, displayCode } from './shiftTypes';
 import { noteTexts } from './dayItems';
 
 const ShiftWidget = registerPlugin('ShiftWidget');
@@ -24,7 +24,7 @@ export function buildWidgetData(myShifts = {}, shiftTypes = [], today = new Date
     if (!code && !notes) continue;
     const t = code ? findShiftType(shiftTypes, code) || {} : {};
     days[key] = {
-      code,
+      code: code ? displayCode(t, code) : '', // 위젯에는 표시 기호(예: 💛)가 있으면 그것
       label: t.label || code,
       bg: t.bg || '#F1F5F9',
       fg: t.fg || '#475569',

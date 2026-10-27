@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
 import { openApp, readLocal, confirmOk, tab, openTools } from './helpers.js';
 
@@ -60,4 +61,23 @@ test('꾸미기: 파스텔 다섯 가지·검정 선택 후 새로고침에도 �
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
   });
   await expect.poll(contrast).toBeGreaterThanOrEqual(4.5);
+});
+
+test('프로필 사진: 설정에서 사진을 고르면 머리글에도 보이고 백업에 들어감, 기본 병아리로 되돌리기', async ({ page }) => {
+  await openApp(page);
+  await tab(page, '설정').click();
+  await page.getByRole('button', { name: '프로필 사진 바꾸기' }).click();
+  const sheet = page.getByRole('dialog', { name: '프로필 사진' });
+  await sheet.getByLabel('프로필 사진 고르기').setInputFiles('e2e/fixtures/photo2.png');
+  await expect(sheet).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('profile_photo')?.slice(0, 15))).toBe('data:image/jpeg');
+  await expect(page.getByTitle('김간호', { exact: true }).locator('img')).toHaveAttribute('src', /^data:image\/jpeg/);
+  const [file] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /백업 저장/ }).click()]);
+  const backup = JSON.parse(fs.readFileSync(await file.path(), 'utf8'));
+  expect(backup.data.profile_photo).toMatch(/^data:image\/jpeg/);
+
+  await page.getByRole('button', { name: '프로필 사진 바꾸기' }).click();
+  await sheet.getByRole('button', { name: '기본 병아리로 되돌리기' }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('profile_photo'))).toBeNull();
+  await expect(page.getByTitle('김간호', { exact: true }).locator('img')).toHaveAttribute('src', /chick/);
 });

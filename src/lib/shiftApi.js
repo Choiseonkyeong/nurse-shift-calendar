@@ -116,6 +116,8 @@ const toClientType = (r) => ({
   start: r.start_time ? r.start_time.slice(0, 5) : '',
   end: r.end_time ? r.end_time.slice(0, 5) : '',
   nightHours: Number(r.night_hours) || 0,
+  // 서버에 기호 열이 있을 때만 symbol 키를 둠 (없으면 앱이 기기에 저장된 기호를 유지)
+  ...('symbol' in r ? { symbol: r.symbol || '' } : {}),
   ...(r.kind === 'leave' ? { leaveDays: r.leave_days == null ? 1 : Number(r.leave_days) } : {})
 });
 
@@ -125,9 +127,12 @@ export async function fetchMyShiftTypes() {
   return (unwrap(await supabase.rpc('get_my_shift_types')) || []).map(toClientType);
 }
 
+// 서버에 '표시 기호' 마이그레이션(20261027000000)이 아직 없으면 p_symbol 을 빼고 다시 저장 (기호는 기기에만)
+const isMissingSymbolParam = (e) => e?.code === 'PGRST202' || /p_symbol/.test(e?.message || '');
+
 export async function upsertShiftType(t) {
   const supabase = await getSupabase();
-  unwrap(await supabase.rpc('upsert_my_shift_type', {
+  const args = {
     p_code: t.code,
     p_label: t.label,
     p_kind: t.kind,
@@ -137,7 +142,11 @@ export async function upsertShiftType(t) {
     p_end: t.end || null,
     p_night_hours: Number(t.nightHours) || 0,
     p_leave_days: t.kind === 'leave' ? (t.leaveDays ?? 1) : null
-  }));
+  };
+  const { error } = await supabase.rpc('upsert_my_shift_type', { ...args, p_symbol: t.symbol || '' });
+  if (!error) return;
+  if (!isMissingSymbolParam(error)) throw error;
+  unwrap(await supabase.rpc('upsert_my_shift_type', args));
 }
 
 export async function deleteShiftType(code) {
