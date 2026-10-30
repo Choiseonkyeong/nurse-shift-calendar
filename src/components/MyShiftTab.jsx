@@ -863,7 +863,7 @@ export default function MyShiftTab({
           <span className="text-slate-400">토</span>
         </div>
 
-        {/* 날짜: 숫자 바로 아래 둥근 근무 배지만 (일정은 아래 목록에). 고른 날은 칸 크기만큼만 옅은 상자 */}
+        {/* 날짜: 숫자 바로 아래 둥근 근무 배지 + 일정 글자. 고른 날은 칸 크기만큼만 옅은 상자 */}
         <div className="flex-1 grid grid-cols-7 auto-rows-fr gap-x-1 gap-y-1 items-start" {...monthSwipe}>
           {calendarDays.map((item, idx) => {
             if (item.prevDay) {
@@ -877,7 +877,6 @@ export default function MyShiftTab({
             const shift = myShifts[item.dateKey] || '';
             const isSelected = selectedDate === item.dateKey;
             const isToday = item.dateKey === todayKey;
-            // 일정은 달력 칸에 그리지 않고 읽기용 이름에만 (화면에는 아래 목록)
             const items = noteItems(dayNotes[item.dateKey]);
 
             return (
@@ -909,6 +908,21 @@ export default function MyShiftTab({
                   </span>
                 ) : (
                   <span className="h-[22px]" aria-hidden="true" />
+                )}
+                {/* 일정: 배지 아래 작은 글자 (칸 높이를 지키려고 최대 2줄, 넘치면 '+n') */}
+                {items.length > 0 && (
+                  <span className={`w-full flex flex-col gap-[2px] ${privacyBlur ? 'blur-[3px] select-none' : ''}`} aria-hidden="true">
+                    {(items.length > 2 ? items.slice(0, 1) : items).map((line, i) => {
+                      const { text, hex } = parseItem(line);
+                      return (
+                        <span key={i} className="flex items-center gap-[2px] w-full min-w-0 text-[10px] leading-[13px] tracking-[-0.04em] text-slate-600">
+                          {hex && <span className="shrink-0 w-[5px] h-[5px] rounded-full" style={{ backgroundColor: hex }} />}
+                          <span className="truncate">{text}</span>
+                        </span>
+                      );
+                    })}
+                    {items.length > 2 && <span className="text-[10px] leading-[13px] text-slate-400">+{items.length - 1}</span>}
+                  </span>
                 )}
               </button>
             );
