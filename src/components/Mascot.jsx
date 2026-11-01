@@ -5,7 +5,7 @@ import chick from '../assets/chick.webp';
 export default function Mascot({ size = 64, className = '', title }) {
   return (
     <img src={chick} width={size} height={size}
-      className={`shrink-0 object-contain ${className}`} alt={title || ''}
+      className={`chick-mascot shrink-0 object-contain ${className}`} alt={title || ''}
       aria-hidden={title ? undefined : true} draggable={false} decoding="async" />
   );
 }

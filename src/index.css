@@ -212,3 +212,70 @@ input[type='number'] {
 .dark .app-bezel {
   background-color: rgb(30 41 59 / 0.6);
 }
+
+/* 그림의 노란 색감과 손그림 선은 살리고, 장면을 열 때 짧게 인사해요. */
+.chick-scene {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  isolation: isolate;
+  max-width: 100%;
+}
+.chick-scene::before {
+  content: '';
+  position: absolute;
+  inset: 8% 0 0;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #ffe7a94d, transparent 70%);
+  pointer-events: none;
+}
+.chick-scene__picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: saturate(1.08);
+  transform-origin: 50% 90%;
+}
+.chick-sparkle {
+  position: absolute;
+  color: #c28a35;
+  font-size: 15px;
+  line-height: 1;
+  pointer-events: none;
+}
+.chick-sparkle--first { top: 26%; left: 3%; }
+.chick-sparkle--second { top: 13%; right: 3%; color: #d58c85; }
+.chick-scene--friends .chick-sparkle--first { top: 8%; left: 28%; }
+.chick-scene--friends .chick-sparkle--second { top: 0; right: 27%; }
+
+/* 5초 안에 멈춰서 근무표를 읽는 동안에는 차분하게 유지해요. */
+@media (prefers-reduced-motion: no-preference) {
+  .chick-mascot {
+    transform-origin: 50% 90%;
+    animation: chick-hello 1.8s ease-in-out 2;
+  }
+  .chick-scene--coins .chick-scene__picture {
+    animation: chick-hop 2.2s ease-in-out 2;
+  }
+  .chick-scene--friends .chick-scene__picture {
+    animation: chick-hello 2.2s ease-in-out 2;
+  }
+  .chick-sparkle { animation: chick-twinkle 2.2s ease-in-out 2; }
+  .chick-sparkle--second { animation-delay: 0.2s; }
+}
+@keyframes chick-hop {
+  0%, 55%, 100% { transform: translateY(0) rotate(0); }
+  15% { transform: translateY(-4px) rotate(-3deg); }
+  30% { transform: translateY(0) rotate(2deg); }
+  42% { transform: translateY(-2px) rotate(-1deg); }
+}
+@keyframes chick-hello {
+  0%, 65%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-3deg); }
+  43% { transform: rotate(3deg); }
+}
+@keyframes chick-twinkle {
+  0%, 60%, 100% { opacity: 0.65; transform: scale(0.9); }
+  28% { opacity: 1; transform: scale(1.15); }
+}
