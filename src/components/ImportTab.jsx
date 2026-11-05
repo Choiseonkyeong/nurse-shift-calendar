@@ -12,7 +12,7 @@ import { signOutThisDevice } from '../lib/account';
 import { unregisterDevice } from '../lib/pushNotifications';
 import { getWidgetNotesPref, setWidgetNotesPref } from '../lib/widgetSync';
 import { confirmDialog } from '../lib/confirm';
-import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon, Type, Pencil, LogOut } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, X, Camera, Smartphone, CheckCircle2, AlertTriangle, Loader2, Image as ImageIcon, Download, Archive, ChevronRight, CalendarDays, Shield, Sun, Moon, SunMoon, Type, Pencil, LogOut, Tags } from 'lucide-react';
 import { useShiftTypes } from '../lib/shiftTypes';
 import Avatar from './Avatar';
 import { useProfilePhoto, setProfilePhoto, squarePhoto } from '../lib/profilePhoto';
@@ -46,6 +46,9 @@ const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')
 // 처음 보는 표기 → '새 근무로 추가'를 고른 경우 (근무 종류 화면에서 이름·색·시간을 바꿀 수 있음)
 const NEW_TYPE = '__new__';
 const NEW_TYPE_COLOR = { bg: '#F1F5F9', fg: '#64748B' };
+// 표기 → 근무 고르기 버튼
+const optionCls = (on) =>
+  `px-3 h-9 rounded-xl text-[13px] font-semibold cursor-pointer transition ${on ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 active:bg-slate-200'}`;
 
 export default function ImportTab({
   selectedDate,
@@ -107,6 +110,15 @@ export default function ImportTab({
   // 근무표에 앱이 모르는 표기(D1·H2·T5 …)가 있을 때 무슨 근무인지 묻는 창
   // { imp, name, tokens: [{ token, days }], choice: { 토큰: 근무 코드 | '' (근무 아님) | NEW_TYPE } }
   const [codeAsk, setCodeAsk] = useState(null);
+  // 설정 › 근무표 표기: 기억한 표기 보기·바꾸기·지우기 (근무지를 옮기거나 잘못 고른 경우). 열려 있을 때만 { 표기: 근무 }
+  const [aliasEdit, setAliasEdit] = useState(null);
+  const updateAlias = (token, code) => {
+    const next = { ...loadAliases() };
+    if (code === undefined) delete next[token];
+    else next[token] = code;
+    saveAliases(next);
+    setAliasEdit(next);
+  };
   // 가져온 뒤 '내 이름이 아니에요' → 같은 근무표의 이름 선택 창을 다시 띄움 (파일을 다시 고를 필요 없이)
   useEffect(() => {
     if (!repickImport) return;
@@ -664,6 +676,10 @@ export default function ImportTab({
           <span className={tileLabel}>캘린더 파일</span>
           <input type="file" accept=".ics,text/calendar" onChange={handleIcsUpload} disabled={isProcessing} className="hidden" />
         </label>
+        <button type="button" onClick={() => setAliasEdit(loadAliases())} aria-label="근무표 표기 (D1 → D 처럼 정한 표기 바꾸기)" className={tileCls}>
+          <Tags size={24} className="text-blue-600" />
+          <span className={tileLabel}>근무표 표기</span>
+        </button>
         <button
           type="button"
           onClick={onCycleTheme}
@@ -931,6 +947,52 @@ export default function ImportTab({
         </Modal>
       )}
 
+      {aliasEdit && (
+        <Modal onClose={() => setAliasEdit(null)} label="근무표 표기">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-xl border border-slate-100">
+            <div className="flex justify-between items-center">
+              <h3 className="font-extrabold text-sm text-slate-900">근무표 표기</h3>
+              <button onClick={() => setAliasEdit(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              근무표를 가져올 때 정한 표기예요. 근무지를 옮겼거나 잘못 골랐으면 바꾸세요. 지운 표기는 다음에 다시 물어봐요.
+            </p>
+            {Object.keys(aliasEdit).length === 0 ? (
+              <p className="text-[13px] text-slate-500 bg-slate-50 rounded-2xl px-3 py-4 text-center">
+                아직 정한 표기가 없어요. 근무표에 처음 보는 표기가 나오면 그때 물어봐요.
+              </p>
+            ) : (
+              <div className="space-y-4 max-h-[55vh] overflow-y-auto">
+                {Object.entries(aliasEdit)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([token, code]) => (
+                    <div key={token} role="group" aria-label={`표기 ${token}`} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[17px] font-bold text-slate-900">{token}</span>
+                        <button type="button" onClick={() => updateAlias(token, undefined)} className="text-[12px] text-rose-500 font-semibold cursor-pointer">
+                          지우기
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {shiftTypes.map((t) => (
+                          <button key={t.code} type="button" aria-pressed={code === t.code} onClick={() => updateAlias(token, t.code)} className={optionCls(code === t.code)}>
+                            {t.code}
+                          </button>
+                        ))}
+                        <button type="button" aria-pressed={code === ''} onClick={() => updateAlias(token, '')} className={optionCls(code === '')}>
+                          근무 아님
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
       {codeAsk && (
         <Modal onClose={() => setCodeAsk(null)} label="처음 보는 근무 표기">
           <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-xl border border-slate-100">
@@ -947,8 +1009,6 @@ export default function ImportTab({
               {codeAsk.tokens.map(({ token, days }) => {
                 const picked = codeAsk.choice[token];
                 const pick = (v) => setCodeAsk((prev) => ({ ...prev, choice: { ...prev.choice, [token]: v } }));
-                const optCls = (on) =>
-                  `px-3 h-9 rounded-xl text-[13px] font-semibold cursor-pointer transition ${on ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 active:bg-slate-200'}`;
                 return (
                   <div key={token} role="group" aria-label={`표기 ${token}`} className="space-y-2">
                     <div className="flex items-baseline gap-2">
@@ -960,14 +1020,14 @@ export default function ImportTab({
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {shiftTypes.map((t) => (
-                        <button key={t.code} type="button" aria-pressed={picked === t.code} onClick={() => pick(t.code)} className={optCls(picked === t.code)}>
+                        <button key={t.code} type="button" aria-pressed={picked === t.code} onClick={() => pick(t.code)} className={optionCls(picked === t.code)}>
                           {t.code}
                         </button>
                       ))}
-                      <button type="button" aria-pressed={picked === NEW_TYPE} onClick={() => pick(NEW_TYPE)} className={optCls(picked === NEW_TYPE)}>
+                      <button type="button" aria-pressed={picked === NEW_TYPE} onClick={() => pick(NEW_TYPE)} className={optionCls(picked === NEW_TYPE)}>
                         새 근무 '{token.slice(0, 4)}'
                       </button>
-                      <button type="button" aria-pressed={picked === ''} onClick={() => pick('')} className={optCls(picked === '')}>
+                      <button type="button" aria-pressed={picked === ''} onClick={() => pick('')} className={optionCls(picked === '')}>
                         근무 아님
                       </button>
                     </div>

@@ -46,3 +46,15 @@ test('처음 보는 표기(MD·T5)는 무슨 근무인지 묻고 기억 → 다�
   const again = await readLocal(page, 'my_shift_data');
   expect(Object.entries(again).filter(([k, v]) => expected[k] !== v)).toEqual([]);
 });
+
+test('설정 › 근무표 표기: 정한 표기를 바꾸거나 지움 (지운 표기는 다음 가져오기 때 다시 물음)', async ({ page }) => {
+  await openApp(page, { local: { shift_code_aliases: { D1: 'D', T5: '' } } });
+  await tab(page, '설정').click();
+  await page.getByRole('button', { name: /근무표 표기/ }).click();
+  const d1 = page.getByRole('group', { name: '표기 D1' });
+  await expect(d1.getByRole('button', { name: 'D', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await d1.getByRole('button', { name: 'E', exact: true }).click();
+  await page.getByRole('group', { name: '표기 T5' }).getByRole('button', { name: '지우기' }).click();
+  await expect(page.getByRole('group', { name: '표기 T5' })).toHaveCount(0);
+  expect(await readLocal(page, 'shift_code_aliases')).toEqual({ D1: 'E' });
+});
