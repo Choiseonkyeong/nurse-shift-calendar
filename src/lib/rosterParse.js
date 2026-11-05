@@ -138,7 +138,8 @@ function bodyXs(words, header, colW) {
   return words
     // 한글은 근무로 아는 글자('오'·'연차' 등)만: 세 글자 이름('박지우')이 이름 칸을 날짜 칸으로 늘리지 않게
     .filter((w) => center(w).y > header.y + header.h * 1.5 && w.x1 - w.x0 < colW * 0.95
-      && (/^[A-Za-z0-9/]{1,3}$/.test(w.text) || (/^[가-힣]{1,2}$/.test(w.text) && cellToCode(w.text) && !besideKorean(w))))
+      // 숫자만 있는 글자는 제외: 엑셀 화면 캡처의 행 번호(1 2 3 …) 열을 날짜 칸으로 늘리지 않게
+      && ((/^[A-Za-z0-9/]{1,3}$/.test(w.text) && !/^\d+$/.test(w.text)) || (/^[가-힣]{1,2}$/.test(w.text) && cellToCode(w.text) && !besideKorean(w))))
     .map((w) => center(w).x);
 }
 
@@ -254,6 +255,7 @@ function fitColumns(header, year, month, headerWords = [], allWords = []) {
     const hit = near0(x);
     return usual >= 3 && hit.length >= usual * 0.5 ? median(hit) : undefined;
   };
+  const headerHasDigits = (x) => headerWords.some((w) => /\d/.test(w.text) && x >= w.x0 - step0 * 0.3 && x <= w.x1 + step0 * 0.3);
   const grow = (dir) => {
     let edge = dir > 0 ? maxIdx : minIdx;
     const limit = dir > 0 ? monthMax : monthMin;
@@ -264,7 +266,8 @@ function fitColumns(header, year, month, headerWords = [], allWords = []) {
       const step = back !== undefined ? prev - back : model.b * dir;
       const pred = prev + step;
       if (headerHasLabel(pred)) break;
-      const snap = bodyAt(pred);
+      // 날짜 줄 그 자리에 숫자가 섞인 글자('|1|2|3|')가 있을 때만: 표 옆 다른 목록·이름 칸으로 넓히지 않게
+      const snap = headerHasDigits(pred) ? bodyAt(pred) : undefined;
       // 근무 글자로 확인되지 않으면 예전처럼 못 읽은 끝 날짜 3일까지만
       if (!snap && Math.abs(edge + dir - sampleEdge) > 3) break;
       if (snap) known.set(edge + dir, snap);
