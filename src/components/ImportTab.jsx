@@ -24,6 +24,7 @@ import { shareFile } from '../lib/shareCalendar';
 import { pickRosterName } from '../lib/rosterName';
 import { detectYearMonth, fixSurname, checkDayRowMonth, datesForDayRow, weekdayOf, holidayOf } from '../lib/rosterParse';
 import { isChunkLoadError, reloadForUpdate, UPDATE_NOTICE } from '../lib/appUpdate';
+import { loadAliases, saveAliases, withAliases, looksLikeCode, normalizeToken, pendingTokens, applyAliases } from '../lib/codeAliases';
 
 /** 배포 전 화면에서 새 파일을 못 불러온 경우 → 새 버전으로 새로고침하고 다시 시도 안내 */
 const recoverIfStale = (err) => isChunkLoadError(err) && reloadForUpdate(UPDATE_NOTICE);
@@ -41,6 +42,10 @@ const tileLabel = 'text-[12px] font-medium text-slate-700 leading-tight';
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
 const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
+
+// 처음 보는 표기 → '새 근무로 추가'를 고른 경우 (근무 종류 화면에서 이름·색·시간을 바꿀 수 있음)
+const NEW_TYPE = '__new__';
+const NEW_TYPE_COLOR = { bg: '#F1F5F9', fg: '#64748B' };
 
 export default function ImportTab({
   selectedDate,
@@ -63,7 +68,8 @@ export default function ImportTab({
   onCycleTheme,
   privacyBlur = false,
   onTogglePrivacy,
-  onRename
+  onRename,
+  onSaveShiftType
 }) {
   // 이름 바꾸기 (예전엔 내 근무 화면 제목을 눌러 바꿨음)
   const [editingName, setEditingName] = useState(null);
@@ -98,6 +104,9 @@ export default function ImportTab({
   // 인식 결과(사진/엑셀): 본인 이름을 자동으로 못 찾았을 때만 이름 선택 창 표시
   // { source: '사진' | '엑셀', yearMonth: 'YYYY-MM', byName: { 이름: { shifts, uncertain } } }
   const [pendingImport, setPendingImport] = useState(null);
+  // 근무표에 앱이 모르는 표기(D1·H2·T5 …)가 있을 때 무슨 근무인지 묻는 창
+  // { imp, name, tokens: [{ token, days }], choice: { 토큰: 근무 코드 | '' (근무 아님) | NEW_TYPE } }
+  const [codeAsk, setCodeAsk] = useState(null);
   // 가져온 뒤 '내 이름이 아니에요' → 같은 근무표의 이름 선택 창을 다시 띄움 (파일을 다시 고를 필요 없이)
   useEffect(() => {
     if (!repickImport) return;
@@ -112,7 +121,52 @@ export default function ImportTab({
     if (!data) return;
     if (remember && name !== rosterName) setRosterName?.(name);
     setPendingImport(null);
-    onImported?.({ imp, name, source: imp.source, yearMonth: imp.yearMonth, shifts: data.shifts, uncertain: data.uncertain });
+    // 내 줄에 아직 정하지 않은 표기가 있으면 먼저 물음 (표 전체에서 두 번 이상 나온 표기만)
+    const counts = {};
+    Object.values(imp.byName).forEach((d) => Object.values(d.unknown || {}).forEach((t) => (counts[t] = (counts[t] || 0) + 1)));
+    const tokens = pendingTokens(data.unknown, counts, loadAliases());
+    if (tokens.length) setCodeAsk({ imp, name, tokens, choice: {} });
+    else finishImport(imp, name, loadAliases());
+  };
+
+  /** 정한 표기대로 빈 칸을 채워 등록. newCodes: 방금 만든 근무 종류 (화면의 근무 종류 목록에는 아직 없음) */
+  const finishImport = (imp, name, aliases, newCodes = []) => {
+    const data = imp.byName[name];
+    const valid = Object.fromEntries(
+      Object.entries(aliases).filter(([, c]) => c && (newCodes.includes(c) || shiftTypes.some((t) => t.code === c)))
+    );
+    const shifts = applyAliases(data.shifts, data.unknown, valid);
+    // 표기를 정해서 채운 칸은 '확인 필요'에서 뺌
+    const uncertain = (data.uncertain || []).filter((k) => !(k in shifts) || k in data.shifts);
+    onImported?.({ imp, name, source: imp.source, yearMonth: imp.yearMonth, shifts, uncertain });
+  };
+
+  const confirmCodes = async () => {
+    const { imp, name, tokens, choice } = codeAsk;
+    const aliases = loadAliases();
+    const created = [];
+    for (const { token } of tokens) {
+      const picked = choice[token];
+      if (picked === undefined) continue; // 고르지 않은 표기는 이번엔 비워 두고 다음에 다시 물음
+      if (picked !== NEW_TYPE) {
+        aliases[token] = picked;
+        continue;
+      }
+      const code = token.slice(0, 4);
+      if (!shiftTypes.some((t) => t.code === code)) {
+        try {
+          await onSaveShiftType?.({ code, label: code, kind: 'work', ...NEW_TYPE_COLOR, start: '', end: '' });
+          created.push(code);
+        } catch (err) {
+          toast(errorText(err, `'${code}' 근무를 만들지 못했어요.`), 'error');
+          continue;
+        }
+      }
+      aliases[token] = code;
+    }
+    saveAliases(aliases);
+    setCodeAsk(null);
+    finishImport(imp, name, aliases, created);
   };
 
   /** 내 줄 자동 선택: 근무표 속 내 이름(설정) → 앱 이름, 사진 오타(한 글자 차이)까지. 못 찾으면 이름 선택 창 */
@@ -127,6 +181,8 @@ export default function ImportTab({
   // 엑셀 한 장(탭) → 근무 등록
   const importMatrix = (matrix, dateCells) => {
     try {
+      // 전에 정한 표기(D1 → D 등)도 근무로 읽음
+      const codeTypes = withAliases(shiftTypes, loadAliases());
       // 엑셀 상단 제목에서 연/월 (2026년 10월 · 10월 · 2026.10). 없으면 보고 있던 달 → 아래에서 요일·공휴일로 확인
       const now = new Date();
       const [sYear, sMonth] = (selectedDate || '').split('-').map(Number);
@@ -203,6 +259,7 @@ export default function ImportTab({
       }
 
       const nameMap = {};
+      const unknownMap = {}; // 이름: { 날짜: 앱이 모르는 표기 }
       
       // 시스템 및 직급 제외 키워드
       const excludeKeywords = [
@@ -244,21 +301,26 @@ export default function ImportTab({
 
         if (foundName) {
           const personShifts = {};
+          const personUnknown = {};
 
           Object.entries(colToDateMap).forEach(([colStr, dateKey]) => {
             const c = parseInt(colStr, 10);
             const rawShift = String(row[c] || '').trim();
 
             // 표기 통일: 사용자 근무 종류 + 데이/나이트/오프/주/야/휴//, O 등 (사진 인식과 같은 규칙)
-            const finalShift = cellToCode(rawShift.split('\n')[0], shiftTypes) || '';
+            const first = rawShift.split('\n')[0];
+            const finalShift = cellToCode(first, codeTypes) || '';
 
             if (finalShift) {
               personShifts[dateKey] = finalShift;
+            } else if (looksLikeCode(first) && !/^\d+$/.test(first.trim())) {
+              personUnknown[dateKey] = normalizeToken(first);
             }
           });
 
-          if (Object.keys(personShifts).length > 0) {
+          if (Object.keys(personShifts).length > 0 || Object.keys(personUnknown).length > 0) {
             nameMap[foundName] = personShifts;
+            unknownMap[foundName] = personUnknown;
           }
         }
       }
@@ -276,7 +338,7 @@ export default function ImportTab({
       autoRegister({
         source: '엑셀',
         yearMonth: targetYM,
-        byName: Object.fromEntries(foundNames.map((n) => [n, { shifts: nameMap[n], uncertain: [] }]))
+        byName: Object.fromEntries(foundNames.map((n) => [n, { shifts: nameMap[n], uncertain: [], unknown: unknownMap[n] || {} }]))
       });
 
     } catch (err) {
@@ -339,7 +401,7 @@ export default function ImportTab({
         recognizeRosterLazy(file, {
           year: y || now.getFullYear(),
           month: m || now.getMonth() + 1,
-          shiftTypes,
+          shiftTypes: withAliases(shiftTypes, loadAliases()),
           signal: ctrl.signal,
           onProgress: (p, msg) => setOcrProgress({ p, msg })
         }),
@@ -357,7 +419,8 @@ export default function ImportTab({
             uncertain: [
               ...Object.entries(cells).filter(([, v]) => v.confidence < 60).map(([k]) => k),
               ...(result.unread?.[n] || [])
-            ]
+            ],
+            unknown: result.unknown?.[n] || {}
           };
         });
         autoRegister({ source: '사진', yearMonth: `${result.year}-${String(result.month).padStart(2, '0')}`, byName });
@@ -864,6 +927,61 @@ export default function ImportTab({
                 </button>
               ))}
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {codeAsk && (
+        <Modal onClose={() => setCodeAsk(null)} label="처음 보는 근무 표기">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-xl border border-slate-100">
+            <div className="flex justify-between items-center">
+              <h3 className="font-extrabold text-sm text-slate-900">처음 보는 근무 표기</h3>
+              <button onClick={() => setCodeAsk(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="닫기">
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              근무표에 앱이 모르는 표기가 있어요. 무슨 근무인지 골라 주세요. 한 번 고르면 기억해서 다음부터는 묻지 않아요.
+            </p>
+            <div className="space-y-4 max-h-[55vh] overflow-y-auto">
+              {codeAsk.tokens.map(({ token, days }) => {
+                const picked = codeAsk.choice[token];
+                const pick = (v) => setCodeAsk((prev) => ({ ...prev, choice: { ...prev.choice, [token]: v } }));
+                const optCls = (on) =>
+                  `px-3 h-9 rounded-xl text-[13px] font-semibold cursor-pointer transition ${on ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 active:bg-slate-200'}`;
+                return (
+                  <div key={token} role="group" aria-label={`표기 ${token}`} className="space-y-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[17px] font-bold text-slate-900">{token}</span>
+                      <span className="text-[12px] text-slate-500">
+                        {days.length}일 ({days.slice(0, 4).map((d) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`).join(', ')}
+                        {days.length > 4 ? ' …' : ''})
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {shiftTypes.map((t) => (
+                        <button key={t.code} type="button" aria-pressed={picked === t.code} onClick={() => pick(t.code)} className={optCls(picked === t.code)}>
+                          {t.code}
+                        </button>
+                      ))}
+                      <button type="button" aria-pressed={picked === NEW_TYPE} onClick={() => pick(NEW_TYPE)} className={optCls(picked === NEW_TYPE)}>
+                        새 근무 '{token.slice(0, 4)}'
+                      </button>
+                      <button type="button" aria-pressed={picked === ''} onClick={() => pick('')} className={optCls(picked === '')}>
+                        근무 아님
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={confirmCodes}
+              className="w-full h-11 rounded-2xl bg-blue-600 text-white text-sm font-bold cursor-pointer active:bg-blue-700"
+            >
+              등록하기
+            </button>
           </div>
         </Modal>
       )}

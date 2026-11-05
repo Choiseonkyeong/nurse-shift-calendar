@@ -3,6 +3,7 @@
 // 인식률을 위해: 해상도 정규화 → 흑백 → 조명 보정(적응형 이진화) → 표 선 제거 후 OCR
 import { parseRosterWords, cellToCode, extractName, nameQuality } from './rosterParse';
 import { resilientWorker } from './resilientWorker';
+import { looksLikeCode, normalizeToken } from './codeAliases';
 
 const TARGET_WIDTH = 2400;
 const BIG_WIDTH = 3600; // 표를 못 찾았을 때 크게 다시 볼 폭
@@ -159,8 +160,11 @@ export function deskew(img) {
   return out;
 }
 
-/** 적응형 이진화 + 긴 가로/세로 선 제거 → canvas */
-export function preprocess(img, targetWidth = TARGET_WIDTH) {
+/**
+ * 적응형 이진화 + 긴 가로/세로 선 제거 → canvas
+ * @param strongLines  끊기고 1px씩 비켜 간 선까지 지움 (휜 종이·회색 칸 경계). 글자 획을 지울 수 있어 다시 읽을 때만
+ */
+export function preprocess(img, targetWidth = TARGET_WIDTH, { strongLines = false } = {}) {
   const scale = Math.min(3, targetWidth / widthOf(img));
   const w = Math.round(widthOf(img) * scale);
   const h = Math.round(heightOf(img) * scale);
@@ -207,29 +211,45 @@ export function preprocess(img, targetWidth = TARGET_WIDTH) {
   }
 
   // 표 선 제거: 칸 너비보다 훨씬 긴 가로/세로 연속 픽셀
+  // strongLines: 종이가 휘거나 회색 칸 경계에서 선이 끊기고 1px씩 비켜 가므로, 옆 1px 까지 보고 짧은 틈(GAP px)은 이어서 셈
+  // (끊긴 세로선이 날짜 숫자에 붙어 '1|2|3' 으로 읽히면 날짜 칸을 못 찾음)
   const minH = Math.round(w / 12);
   const minV = Math.round(h / 12);
+  const GAP = strongLines ? 3 : 0;
+  const SIDE = strongLines ? 1 : 0;
   const erase = new Uint8Array(w * h);
-  for (let y = 0; y < h; y++) {
-    let run = 0;
-    for (let x = 0; x <= w; x++) {
-      if (x < w && bin[y * w + x]) run++;
-      else {
-        if (run >= minH) for (let k = x - run; k < x; k++) erase[y * w + k] = 1;
-        run = 0;
+  const eraseRuns = (len, cross, at, min) => {
+    for (let c = 0; c < cross; c++) {
+      const dark = (k) => {
+        for (let d = -SIDE; d <= SIDE; d++) {
+          const cc = c + d;
+          if (cc >= 0 && cc < cross && bin[at(k, cc)]) return true;
+        }
+        return false;
+      };
+      let start = -1;
+      let lastDark = -1;
+      let filled = 0;
+      // 선은 거의 빈틈없이 이어짐. 글자 줄(제목 등)은 틈을 이어 붙여도 채워진 비율이 낮아 지우지 않음
+      const flush = () => {
+        const n = lastDark - start + 1;
+        if (start >= 0 && n >= min && (!strongLines || filled >= n * 0.85)) for (let q = start; q <= lastDark; q++) erase[at(q, c)] = 1;
+      };
+      for (let k = 0; k <= len; k++) {
+        if (k < len && dark(k)) {
+          if (start < 0 || k - lastDark > GAP + 1) {
+            flush();
+            start = k;
+            filled = 0;
+          }
+          lastDark = k;
+          filled++;
+        } else if (k === len) flush();
       }
     }
-  }
-  for (let x = 0; x < w; x++) {
-    let run = 0;
-    for (let y = 0; y <= h; y++) {
-      if (y < h && bin[y * w + x]) run++;
-      else {
-        if (run >= minV) for (let k = y - run; k < y; k++) erase[k * w + x] = 1;
-        run = 0;
-      }
-    }
-  }
+  };
+  eraseRuns(w, h, (x, y) => y * w + x, minH);
+  eraseRuns(h, w, (y, x) => y * w + x, minV);
 
   for (let i = 0; i < w * h; i++) {
     const v = bin[i] && !erase[i] ? 0 : 255;
@@ -769,6 +789,7 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
 
   const people = {};
   const unread = {};
+  const unknown = {};
   grid.rows.forEach((r) => {
     people[renamed.get(r)] = {};
   });
@@ -801,15 +822,31 @@ async function refineCells(result, canvas, worker, shiftTypes, onProgress, rawCa
       best = { ...best, confidence: Math.min(best.confidence, 59) };
     }
     if (best) people[c.name][c.key] = { code: best.code, raw: best.raw, confidence: best.confidence };
-    // 글자는 있는데 근무로 못 읽은 칸 → 확인 화면에서 '?' 로 표시
-    else unread[c.name] = [...(unread[c.name] || []), c.key];
+    else {
+      // 글자는 있는데 근무로 못 읽은 칸 → 확인 화면에서 '?' 로 표시
+      unread[c.name] = [...(unread[c.name] || []), c.key];
+      // 앱이 모르는 표기(D1·H2·T5 …)로 보이면 그 글자를 남겨 둠 → 가져올 때 무슨 근무인지 물음
+      const token = unknownToken([c.word, c.line, c.raw, c.r13]);
+      if (token) unknown[c.name] = { ...(unknown[c.name] || {}), [c.key]: token };
+    }
   });
 
   Object.keys(people).forEach((n) => {
     if (!Object.keys(people[n]).length) delete people[n];
   });
   const names = grid.rows.map((r) => renamed.get(r)).filter((n) => people[n]);
-  return { ...result, people, names, unread };
+  return { ...result, people, names, unread, unknown };
+}
+
+/** 여러 번 읽은 결과 중 근무 표기처럼 보이는 글자 (같은 글자로 읽힌 확신도 합이 가장 큰 것, 확신도 70 이상: 흐린 칸의 잡티 'LJ'·'ORR' 제외) */
+function unknownToken(reads) {
+  const votes = new Map();
+  reads.forEach((o) => {
+    if (!o || o.code || !looksLikeCode(o.raw) || o.confidence < 70) return;
+    const t = normalizeToken(o.raw);
+    votes.set(t, (votes.get(t) || 0) + o.confidence);
+  });
+  return [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
 }
 
 /** 날짜 줄 위(제목이 있는 곳)만 잘라 읽기 */
@@ -906,6 +943,20 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
       }
     }
     if (result.error) return result;
+    // 날짜 숫자를 여러 개 못 읽었으면(끊긴 표 선이 숫자에 붙어 '|1|2|3|' 으로 읽힘) 끊긴 선까지 지운 이미지로 다시 읽어
+    // 날짜 숫자를 더 많이 읽고 사람 줄이 줄지 않으면 그쪽으로 (짐작한 칸보다 읽은 칸이 정확)
+    let strongLines = false;
+    if (source === canvas && result.colsDetected < result.grid.cols.length - 3) {
+      stage = (p) => onProgress(0.1 + p * 0.3, `표 선 지우고 다시 보는 중... ${Math.round(p * 100)}%`);
+      const strong = preprocess(img, TARGET_WIDTH, { strongLines: true });
+      const r = parseRosterWords(await ocrWords(worker, strong), { year, month, shiftTypes });
+      if (!r.error && r.colsDetected > result.colsDetected && r.grid.cols.length >= result.grid.cols.length && r.grid.rows.length >= result.grid.rows.length) {
+        canvas = strong;
+        source = strong;
+        result = r;
+        strongLines = true;
+      }
+    }
     // 이진화가 연한 글자·색 바탕 위 근무를 지울 수 있음. 원본 명암으로도 읽어 빠진 행을 복구.
     rawStructure ||= scaledCanvas(img);
     rawResult ||= parseRosterWords(await ocrWords(worker, rawStructure), { year, month, shiftTypes });
@@ -929,7 +980,7 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
       // 글자 크기 기준으로 확대: 날짜 숫자 높이가 약 30px 이 되게 (고정 폭으로 키우면 글자가 너무 커져 오히려 못 읽음)
       const digitH = (result.grid.textH || 12) / srcScale;
       cropWidth = Math.round(Math.min(3000, Math.max(1200, (widthOf(cropped) * 30) / digitH)));
-      const c2 = preprocess(cropped, cropWidth);
+      const c2 = preprocess(cropped, cropWidth, { strongLines });
       const r2 = parseRosterWords(await ocrWords(worker, c2), { year, month, shiftTypes });
       // 확대해서 제목(2026년 11월)을 읽었거나, 날짜 아래 요일 줄과 더 잘 맞으면(칸 날짜가 맞음) 그 결과를 믿음
       const sameMonth = (r2.year === result.year && r2.month === result.month) || (r2.found && !result.found);
