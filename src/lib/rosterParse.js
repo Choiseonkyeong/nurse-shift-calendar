@@ -396,7 +396,10 @@ function verifyYearMonth(ym, header, clean, headerWords, today) {
   const dist = (c) => Math.abs((c.year - today.getFullYear()) * 12 + c.month - 1 - today.getMonth());
   const scored = cands.map((c) => ({ ...c, s: score(c.year, c.month) }));
   const current = scored.find((c) => c.year === ym.year && c.month === ym.month);
-  const best = scored.sort((a, b) => b.s - a.s || dist(a) - dist(b))[0];
+  // 요일·공휴일 점수(정수)가 같으면: 바로 옆 달끼리는 칸이 더 많이 들어가는 달(소수점), 먼 달끼리는 오늘에 가까운 달
+  // (2026년 11월과 2027년 8월은 1일이 같은 요일 → 31일까지 있는 달이 칸 하나 차이로 이기지 않게)
+  const gap = (a, b) => Math.abs((a.year - b.year) * 12 + a.month - b.month);
+  const best = scored.sort((a, b) => Math.floor(b.s) - Math.floor(a.s) || (gap(a, b) <= 1 ? b.s - a.s : 0) || dist(a) - dist(b) || b.s - a.s)[0];
   // 요일은 여러 개가 맞아야(오인식 대비) 바꿈. 제목에서 읽은 달이 같은 점수면 그대로
   // 흐린 사진은 요일이 몇 개만 읽히므로 3개 이상 & 읽힌 요일의 60% 이상이 맞으면 인정
   const enough = holidays.length ? best.s >= 3 : Math.floor(best.s) >= Math.max(3, weekdays.length * 0.6);

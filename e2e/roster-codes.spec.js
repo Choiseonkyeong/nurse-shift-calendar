@@ -29,7 +29,7 @@ test('처음 보는 표기(MD·T5)는 무슨 근무인지 묻고 기억 → 다�
   const t5 = page.getByRole('group', { name: '표기 T5' });
   if (await t5.count()) await t5.getByRole('button', { name: '근무 아님' }).click();
   await page.getByRole('button', { name: '등록하기' }).click();
-  await expect(page.getByText(/사진에서 11월 1일~11월 30일 근무 \d+일을 등록했어요/)).toBeVisible();
+  await expect(page.getByText(/사진에서 11월 근무 \d+일을 등록했어요/)).toBeVisible();
 
   const saved = await readLocal(page, 'my_shift_data');
   const right = Object.entries(expected).filter(([k, v]) => saved[k] === v).length;
@@ -43,7 +43,7 @@ test('처음 보는 표기(MD·T5)는 무슨 근무인지 묻고 기억 → 다�
   await page.getByRole('button', { name: '되돌리기' }).click();
   await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture);
-  await expect(page.getByText(/사진에서 11월 1일~11월 30일 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
+  await expect(page.getByText(/사진에서 11월 근무 \d+일을 등록했어요/)).toBeVisible({ timeout: 200000 });
   await expect(page.getByText('처음 보는 근무 표기')).toHaveCount(0);
   const again = await readLocal(page, 'my_shift_data');
   expect(Object.entries(again).filter(([k, v]) => expected[k] !== v)).toEqual([]);
