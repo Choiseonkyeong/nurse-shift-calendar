@@ -128,11 +128,17 @@ function findHeader(words) {
 }
 
 /**
- * 표 몸통의 근무 글자 x 위치들 (날짜 줄 아래 짧은 글자 'D', 'OF', 'D1')
+ * 표 몸통의 근무 글자 x 위치들 (날짜 줄 아래 짧은 글자 'D', 'OF', 'D1', '오')
  */
 function bodyXs(words, header, colW) {
+  // 이름이 글자마다 따로 읽히면('조' '선' '주') '주'가 근무(D)로 보임 → 바로 옆에 다른 한글이 붙어 있으면 이름 조각
+  const besideKorean = (w) =>
+    words.some((o) => o !== w && /[가-힣]/.test(o.text) && Math.abs(center(o).y - center(w).y) < (w.y1 - w.y0)
+      && Math.max(o.x0 - w.x1, w.x0 - o.x1) < colW * 0.3);
   return words
-    .filter((w) => center(w).y > header.y + header.h * 1.5 && /^[A-Za-z0-9가-힣/]{1,3}$/.test(w.text) && w.x1 - w.x0 < colW * 0.95)
+    // 한글은 근무로 아는 글자('오'·'연차' 등)만: 세 글자 이름('박지우')이 이름 칸을 날짜 칸으로 늘리지 않게
+    .filter((w) => center(w).y > header.y + header.h * 1.5 && w.x1 - w.x0 < colW * 0.95
+      && (/^[A-Za-z0-9/]{1,3}$/.test(w.text) || (/^[가-힣]{1,2}$/.test(w.text) && cellToCode(w.text) && !besideKorean(w))))
     .map((w) => center(w).x);
 }
 
@@ -230,6 +236,14 @@ function fitColumns(header, year, month, headerWords = [], allWords = []) {
   const sampleMin = Math.min(...samples.map((p) => p.idx));
   const sampleMax = Math.max(...samples.map((p) => p.idx));
   const known = new Map(samples.map((p) => [p.idx, p.x]));
+  // 날짜 숫자 위치가 양옆 칸 가운데에서 많이 비켜 있으면(숫자에 붙은 선 조각까지 한 글자로 읽힘) 양옆 가운데로
+  [...known.keys()].forEach((i) => {
+    const l = known.get(i - 1);
+    const r = known.get(i + 1);
+    if (l === undefined || r === undefined) return;
+    const mid = (l + r) / 2;
+    if (Math.abs(known.get(i) - mid) > Math.abs(r - l) * 0.06) known.set(i, mid);
+  });
   // 끝쪽 날짜 숫자가 표 선과 붙어 못 읽혀도('|1|2|3|'), 그 아래로 근무 글자가 세로로 늘어서 있으면 날짜 칸.
   // 근무 글자 열 위치로 한 칸씩 이어 가며 넓힘 (사진 원근으로 칸 간격이 조금씩 달라도 어긋나지 않게)
   // 칸 위치 x 근처에 근무 글자가 다른 날짜 칸만큼(절반 이상) 세로로 늘어서 있으면 그 글자들의 가운데
