@@ -1,7 +1,7 @@
 // src/lib/rosterOcr.js
 // 근무표 사진 → 단어 좌표 (Tesseract.js, 기기 안에서 처리 / 무료 / 서버 전송 없음)
 // 인식률을 위해: 해상도 정규화 → 흑백 → 조명 보정(적응형 이진화) → 표 선 제거 후 OCR
-import { parseRosterWords, cellToCode, extractName, nameQuality, weekdayOf, checkDayRowMonth, datesForDayRow } from './rosterParse';
+import { parseRosterWords, cellToCode, extractName, nameQuality, checkDayRowMonth, datesForDayRow } from './rosterParse';
 import { resilientWorker } from './resilientWorker';
 import { looksLikeCode, normalizeToken } from './codeAliases';
 
@@ -1052,38 +1052,76 @@ export async function rowPickImage(file) {
 
 /**
  * 누른 높이 y 를 감싸는 표 줄의 위·아래 (가로선 사이). 선을 못 찾으면 사진 높이의 1.2% 높이로
+ * 사진이 비스듬하면 가로선이 폭 전체로는 번져 보여서, 폭의 일부 구간(from~to, 0~1)에서만 찾음
  * @returns [top, bottom]
  */
-export function rowBandAt(canvas, y) {
+export function rowBandAt(canvas, y, from = 0.35, to = 0.65) {
   const W = canvas.width;
   const H = canvas.height;
   const reach = Math.max(30, Math.round(H * 0.025));
   const top = Math.max(0, Math.round(y - reach));
   const bottom = Math.min(H, Math.round(y + reach));
-  const x0 = Math.round(W * 0.05);
-  const x1 = Math.round(W * 0.95);
+  const x0 = Math.round(W * from);
+  const x1 = Math.round(W * to);
   const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(x0, top, x1 - x0, Math.max(1, bottom - top)).data;
   const w = x1 - x0;
-  // 줄마다 어두운 픽셀 비율 (가로선은 폭 대부분이 어두움)
-  const frac = [];
-  for (let r = 0; r < bottom - top; r++) {
-    let dark = 0;
-    for (let x = 0; x < w; x += 2) {
+  // 가로선: 구간 폭의 상당 부분을 끊김 없이 이어지는 어두운 줄 (글자 가로 획은 칸마다 끊김)
+  // 사진이 살짝 비스듬해도 이어지게 위아래 1px 까지 보고, 3px 이하 틈은 이음
+  const rows = bottom - top;
+  const dark = new Uint8Array(rows * w);
+  for (let r = 0; r < rows; r++) {
+    for (let x = 0; x < w; x++) {
       const i = (r * w + x) * 4;
-      if (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] < 150) dark++;
+      dark[r * w + x] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] < 150 ? 1 : 0;
     }
-    frac.push(dark / (w / 2));
   }
-  const isLine = (r) => frac[r] >= Math.max(0.3, Math.max(...frac) * 0.5);
+  const run = [];
+  for (let r = 0; r < rows; r++) {
+    let best = 0;
+    let start = -1;
+    let last = -10;
+    for (let x = 0; x < w; x++) {
+      const on = dark[r * w + x] || (r > 0 && dark[(r - 1) * w + x]) || (r < rows - 1 && dark[(r + 1) * w + x]);
+      if (!on) continue;
+      if (x - last > 4) start = x;
+      last = x;
+      best = Math.max(best, x - start + 1);
+    }
+    run.push(best / w);
+  }
+  const at = (r) => run[Math.min(rows - 1, Math.max(0, r))];
+  const isLine = (r) => run[r] >= 0.25 && run[r] >= Math.max(at(r - 1), at(r + 1));
   const rel = Math.round(y - top);
   let up = rel;
   while (up > 0 && !isLine(up)) up--;
   let down = rel;
-  while (down < frac.length - 1 && !isLine(down)) down++;
+  while (down < rows - 1 && !isLine(down)) down++;
   const fallback = Math.round(H * 0.006);
   const t = up > 0 ? top + up + 2 : y - fallback;
-  const b = down < frac.length - 1 ? top + down - 2 : y + fallback;
+  const b = down < rows - 1 ? top + down - 2 : y + fallback;
   return b - t > 8 ? [Math.round(t), Math.round(b)] : [Math.round(y - fallback), Math.round(y + fallback)];
+}
+
+/**
+ * 누른 줄의 위·아래를 왼쪽·오른쪽 구간에서 따로 찾아 x 에 따라 이어 줌 (비스듬한 사진)
+ * @returns { top(x), bottom(x), at: [가운데 위, 가운데 아래] }
+ */
+export function slantedBand(canvas, y, typicalH = 0) {
+  let mid = rowBandAt(canvas, y);
+  // 흐린 가로선을 못 찾아 두세 줄이 한 줄로 잡히면: 누른 곳을 가운데로 보통 줄 높이만큼 (보통 줄 높이 = 날짜 줄 높이)
+  if (typicalH && mid[1] - mid[0] > typicalH * 1.5) mid = [Math.round(y - typicalH / 2), Math.round(y + typicalH / 2)];
+  const c = (mid[0] + mid[1]) / 2;
+  const h = mid[1] - mid[0];
+  const side = (from, to) => {
+    const b = rowBandAt(canvas, c, from, to);
+    return Math.abs(b[1] - b[0] - h) < h * 0.35 ? b : mid; // 줄 높이가 많이 다르면 그 구간은 못 찾은 것
+  };
+  const L = side(0.15, 0.35);
+  const R = side(0.65, 0.85);
+  const xl = canvas.width * 0.25;
+  const xr = canvas.width * 0.75;
+  const lerp = (a, b) => (x) => a + ((b - a) * (x - xl)) / (xr - xl);
+  return { top: lerp(L[0], R[0]), bottom: lerp(L[1], R[1]), at: mid };
 }
 
 /** 띠 [y0, y1] 안의 세로선 x 위치들 (띠 높이 대부분이 어두운 세로 줄) */
@@ -1196,6 +1234,7 @@ function inkPinkness(canvas, x0, y0, x1, y1) {
 }
 
 const LATIN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const WD_CHARS = '일월화수목금토';
 /** 손글씨 한 글자가 두 번 읽힌 경우 ('VV' → 'V') */
 const collapseRepeat = (t) => (/^(.)\1$/.test(t) ? t[0] : t);
 
@@ -1252,7 +1291,8 @@ export async function readMyRow(canvas, { dateY, rowY, year, month, shiftTypes =
   };
   try {
     // 1) 날짜 칸
-    const [h0, h1] = rowBandAt(canvas, dateY);
+    const hb = slantedBand(canvas, dateY);
+    const [h0, h1] = hb.at;
     const head = dateCells(verticalLines(canvas, h0, h1));
     if (head.length < 7) return { error: '날짜 줄(1 2 3 …)의 칸을 찾지 못했어요. 날짜 숫자가 있는 줄을 다시 눌러 주세요.' };
     await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: '0123456789' });
@@ -1261,7 +1301,7 @@ export async function readMyRow(canvas, { dateY, rowY, year, month, shiftTypes =
       check();
       onProgress(0.1 + (i / head.length) * 0.25, `날짜 읽는 중... ${i + 1}/${head.length}`);
       const m = (c.x1 - c.x0) * 0.12; // 칸 양옆 선 조각 제외
-      const img = cellImage(canvas, c.x0 + m, h0, c.x1 - m, h1);
+      const img = cellImage(canvas, c.x0 + m, hb.top(c.x), c.x1 - m, hb.bottom(c.x));
       for (const psm of ['7', '8']) {
         await worker.setParameters({ tessedit_pageseg_mode: psm });
         const { data } = await worker.recognize(img);
@@ -1290,43 +1330,70 @@ export async function readMyRow(canvas, { dateY, rowY, year, month, shiftTypes =
     };
     const dayRow = head.map((_, col) => ({ col, day: dayOf(col) })).filter((q) => q.day >= 1 && q.day <= 31);
 
-    // 2) 요일 줄로 연/월 확인
-    await worker.setParameters({ tessedit_char_whitelist: '일월화수목금토' });
-    const [, w1] = rowBandAt(canvas, h1 + (h1 - h0) * 0.7);
+    // 2) 요일 줄로 연/월 확인 (요일 글자만 흑백으로 키워 한 글자씩)
+    await worker.setParameters({ tessedit_pageseg_mode: '10', tessedit_char_whitelist: '' });
+    const wb = slantedBand(canvas, h1 + (h1 - h0) * 0.7);
     const weekdays = {};
     for (const [i, c] of head.entries()) {
       check();
       onProgress(0.35 + (i / head.length) * 0.15, '요일 확인 중...');
-      const { data } = await worker.recognize(cellImage(canvas, c.x0 + 2, h1 + 2, c.x1 - 2, w1));
-      const wd = weekdayOf(data.text.replace(/\s/g, ''));
-      if (wd >= 0) weekdays[i] = wd;
+      const m = (c.x1 - c.x0) * 0.12;
+      const { data } = await worker.recognize(cellInkImage(canvas, c.x0 + m, hb.bottom(c.x) + 2, c.x1 - m, wb.bottom(c.x) - 1, 80));
+      const ch = [...data.text].find((t) => WD_CHARS.includes(t));
+      if (ch) weekdays[i] = WD_CHARS.indexOf(ch);
     }
-    await worker.setParameters({ tessedit_char_whitelist: '' });
     const ym = checkDayRowMonth({ days: dayRow, weekdays, ym: { year, month }, found: false, today });
     const keyOfCol = Object.fromEntries(datesForDayRow(dayRow, ym.year, ym.month).map(({ col, key }) => [col, key]));
 
     // 3) 내 줄: 같은 칸 위치(내 줄 세로선에 맞춰 보정)마다 빈칸 · ♡ · 글자
-    const [r0, r1] = rowBandAt(canvas, rowY);
+    const rb = slantedBand(canvas, rowY, h1 - h0);
+    const [r0, r1] = rb.at;
     const rowLines = verticalLines(canvas, r0, r1);
-    const snap = (x, w) => rowLines.reduce((b, l) => (Math.abs(l - x) < Math.abs(b - x) ? l : b), x - w);
     const people = {};
     const unknown = {};
     const unread = [];
-    const cells = head.map((c, i) => {
-      const w = c.x1 - c.x0;
-      const a = snap(c.x0, w);
-      const b = snap(c.x1, w);
-      const ok = Math.abs(a - c.x0) < w * 0.35 && Math.abs(b - c.x1) < w * 0.35 && b - a > w * 0.6;
-      return { i, x0: ok ? a : c.x0, x1: ok ? b : c.x1 };
-    });
+    // 날짜 줄 칸 경계를 표 세로선을 따라 내 줄까지 내려가며 맞춤
+    // (사진 원근으로 아래 줄일수록 칸이 조금씩 밀리고 좁아짐 → 줄마다 가까운 세로선에 직선으로 맞춤)
+    const cw = (head[head.length - 1].x1 - head[0].x0) / head.length;
+    const fitLine = (pairs) => {
+      const n = pairs.length;
+      const mh = pairs.reduce((a, p) => a + p[0], 0) / n;
+      const mr = pairs.reduce((a, p) => a + p[1], 0) / n;
+      const v = pairs.reduce((a, p) => a + (p[0] - mh) ** 2, 0) || 1;
+      const b = pairs.reduce((a, p) => a + (p[0] - mh) * (p[1] - mr), 0) / v;
+      return (x) => mr + b * (x - mh);
+    };
+    const follow = (xs, lines) => {
+      const pairs = xs
+        .map((x) => [x, lines.reduce((b, l) => (Math.abs(l - x) < Math.abs(b - x) ? l : b), Infinity)])
+        .filter(([x, l]) => Math.abs(l - x) < cw * 0.3);
+      if (pairs.length < Math.max(5, xs.length * 0.3)) return xs;
+      const f = fitLine(pairs);
+      const next = xs.map(f);
+      // 한 줄 내려가며 칸 폭이 3% 넘게 바뀌면 잘못 짝지은 것 (원근 변화는 줄마다 아주 작음)
+      const span = (a) => a[a.length - 1] - a[0];
+      return Math.abs(span(next) / span(xs) - 1) > 0.03 ? xs : next;
+    };
+    let bounds = [...head.map((c) => c.x0), head[head.length - 1].x1];
+    const stepH = Math.max(12, r1 - r0);
+    const down = r0 > h1;
+    for (let y = down ? h1 : h0 - stepH; down ? y < r0 : y > r1; y += down ? stepH : -stepH) {
+      bounds = follow(bounds, verticalLines(canvas, y, y + stepH));
+    }
+    bounds = follow(bounds, rowLines);
+    const cells = head.map((c, i) => ({ i, x0: bounds[i], x1: bounds[i + 1] }));
     // 칸마다: 빈칸 · ♡(분홍 펜) · 글자 모양. 손글씨는 글자 인식이 칸마다 흔들리므로('X' → 'XE', 'XI')
     // 모양이 같은 칸끼리 묶고, 묶음 안에서 가장 많이 읽힌 글자를 그 표기로
     const marks = [];
+    const cellImages = {}; // 확인 화면에 날짜마다 보여 줄 사진 속 칸
     for (const c of cells) {
       const key = keyOfCol[c.i];
       if (!key) continue;
+      const cx = (c.x0 + c.x1) / 2;
+      const [t, b] = [rb.top(cx), rb.bottom(cx)];
+      cellImages[key] = cellImage(canvas, c.x0, t, c.x1, b, 44).toDataURL('image/jpeg', 0.85);
       const w = c.x1 - c.x0;
-      const box = [c.x0 + w * 0.1, r0 + (r1 - r0) * 0.08, c.x1 - w * 0.1, r1 - (r1 - r0) * 0.08];
+      const box = [c.x0 + w * 0.1, t + (b - t) * 0.08, c.x1 - w * 0.1, b - (b - t) * 0.08];
       // 빈칸: 칸 테두리 선 조각(잉크 약 3%)보다 적은 잉크
       if (inkRatio(canvas, ...box) < 0.06) unknown[key] = BLANK_TOKEN;
       else marks.push({ key, box, pink: inkPinkness(canvas, ...box) >= 15, shape: inkShape(canvas, ...box) });
@@ -1339,14 +1406,17 @@ export async function readMyRow(canvas, { dateY, rowY, year, month, shiftTypes =
     });
     const samples = {};
     let done = 0;
+    // 묶음마다 글자 인식 투표
     for (const g of groups) {
       // 영문·숫자 표기 먼저(손글씨가 한글 글자로 읽히지 않게), 안 되면 한글 근무 표기('주'·'야' 등)까지
       const votes = new Map();
       for (const m of g.slice(0, 5)) {
         check();
         onProgress(0.5 + (done++ / marks.length) * 0.48, `내 줄 읽는 중... ${done}/${marks.length}`);
-        const img = cellInkImage(canvas, ...m.box);
-        for (const [psm, list] of [['10', LATIN], ['8', LATIN], ['8', '']]) {
+        // 흑백으로 또렷하게 → 안 되면 원래 명암 (가는 글씨는 흑백으로 바꾸면 획이 끊김)
+        const ink = cellInkImage(canvas, ...m.box);
+        const gray = cellImage(canvas, ...m.box, 96);
+        for (const [img, psm, list] of [[ink, '10', LATIN], [gray, '10', LATIN], [ink, '8', LATIN], [ink, '8', '']]) {
           await worker.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: list });
           const { data } = await worker.recognize(img);
           const t = collapseRepeat(normalizeToken(data.text));
@@ -1361,20 +1431,22 @@ export async function readMyRow(canvas, { dateY, rowY, year, month, shiftTypes =
       await worker.setParameters({ tessedit_char_whitelist: '' });
       const [text, weight = 0] = [...votes.entries()].sort((a, b) => b[1] - a[1])[0] || [];
       // 분홍 펜(♡ 등 그림)은 확실히 근무 글자로 읽힐 때만 그 글자 (빨간 'OF' 등)
-      const sure = text && (!g[0].pink || (cellToCode(text, shiftTypes) && weight >= 70 * Math.min(g.length, 5) * 0.6));
-      const code = sure && cellToCode(text, shiftTypes);
+      g.text = text && (!g[0].pink || (cellToCode(text, shiftTypes) && weight >= 70 * Math.min(g.length, 5) * 0.6)) ? text : '';
+    }
+    groups.forEach((g) => {
+      // 'O'·'0' 한 글자는 흐린 'D' 일 때가 많아 자동으로 넣지 않고 그림과 함께 물음
+      const code = g.text && !/^[O0]$/.test(g.text) && cellToCode(g.text, shiftTypes);
       // 글자로 못 읽은 표시는 '♡' 또는 '기호1'처럼 이름 붙이고 칸 그림을 보여 주고 물음
-      const named = g[0].pink ? HEART_TOKEN : `기호${Object.keys(samples).filter((k) => k.startsWith('기호')).length + 1}`;
-      const token = code ? null : sure ? text : named;
+      const token = code ? null : g.text || (g[0].pink ? HEART_TOKEN : `기호${Object.keys(samples).filter((k) => k.startsWith('기호')).length + 1}`);
       if (token && !samples[token]) samples[token] = cellImage(canvas, ...g[0].box, 48).toDataURL('image/png');
       g.forEach((m) => {
-        if (code) people[m.key] = { code, raw: text, confidence: 80 };
+        if (code) people[m.key] = { code, raw: g.text, confidence: 80 };
         else unknown[m.key] = token;
       });
-    }
+    });
     onProgress(1, '완료');
     const name = '내 줄';
-    return { year: ym.year, month: ym.month, found: true, names: [name], people: { [name]: people }, unknown: { [name]: unknown }, unread: { [name]: unread }, samples };
+    return { year: ym.year, month: ym.month, found: true, names: [name], people: { [name]: people }, unknown: { [name]: unknown }, unread: { [name]: unread }, samples, cellImages };
   } catch (e) {
     if (signal?.aborted) throw abortError();
     throw e;

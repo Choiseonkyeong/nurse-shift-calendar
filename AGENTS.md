@@ -48,5 +48,6 @@ npx playwright test    # 화면(e2e) 테스트 — 화면을 바꿨으면 꼭
 - 화면: `src/App.jsx`(머리글·탭·동기화), `src/components/*Tab.jsx`(내 근무·수당·그룹·설정)
 - 데이터: 이 기기 `localStorage` + 서버(Supabase, `src/lib/shiftApi.js`). 날짜 메모는 한 줄 = 일정 하나 (`src/lib/dayItems.js`)
 - 근무표 가져오기(사진 `src/lib/rosterOcr.js`·`rosterParse.js`, 엑셀 `ImportTab.jsx`): 근무지마다 다른 표기는 처음 볼 때 물어 `src/lib/codeAliases.js`(이 기기 `shift_code_aliases`)에 기억
+  - 표 전체 인식이 안 되면 '내 줄만 골라 읽기' (`src/components/RowPickSheet.jsx`, `rosterOcr.js` `readMyRow`): 날짜 줄·내 줄 세로선으로 칸을 나누고 칸마다 빈칸·분홍 펜(♡)·글자 모양 묶음 → 확인 화면
 - 앱: Capacitor (안드로이드 `android/`, 아이폰 `ios/`) — 네이티브 알람·위젯 코드 포함
 - 배포: master 에 머지되면 Vercel(웹) 자동 배포 + 안드로이드 APK 빌드. 사용자가 할 일 목록은 `docs/OWNER_TODO.md`

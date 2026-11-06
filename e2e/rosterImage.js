@@ -191,3 +191,46 @@ export function codesRosterHtml({ title, dates, people }) {
     <div class="foot">1. 보수교육 : ${dates[9].getMonth() + 1}/10(화) - ${people[1].name}<br>2. 신규교육 ${people[2].name} 오전 참석 · D번 참석</div>
   </body></html>`;
 }
+
+/**
+ * 사람이 많은 근무표 (내 줄만 골라 읽기용): 손으로 적은 듯한 X·V·D·E·N, 분홍 ♡, 빈칸, 주말 열 회색
+ * @returns { title, dates, people: [{ name, raw: { 'YYYY-MM-DD': 표기 ('' = 빈칸) } }] }
+ */
+export function makeMarkRoster({ year, month, seed = 1, count = 24 }) {
+  const rand = rng(seed * 11 + year + month);
+  const dates = rosterDates(year, month, false);
+  const SUR = '김이박최정강조윤장임한오';
+  const GIV = ['하늘', '서연', '지우', '민서', '채원', '소희', '유진', '다인', '예린', '나윤', '수아', '하린'];
+  const people = Array.from({ length: count }, (_, i) => {
+    const raw = {};
+    dates.forEach((d) => {
+      const r = rand();
+      const weekend = d.getDay() === 0 || d.getDay() === 6;
+      raw[keyOf(d)] = weekend && r < 0.7 ? 'X' : r < 0.35 ? '' : r < 0.5 ? 'X' : r < 0.6 ? 'V' : r < 0.7 ? '♡' : r < 0.8 ? 'D' : r < 0.9 ? 'E' : 'N';
+    });
+    return { name: SUR[i % SUR.length] + GIV[(i * 5) % GIV.length], raw };
+  });
+  return { title: `${year % 100}년 ${month}월 근무표`, dates, people };
+}
+
+export function markRosterHtml({ title, dates, people }) {
+  const weekend = (d) => d.getDay() === 0 || d.getDay() === 6;
+  const bg = (d) => (weekend(d) ? 'background:#c9c9c9' : '');
+  const cell = (v) => (v === '♡' ? '<span class="heart">♡</span>' : v);
+  const head1 = dates.map((d) => `<td style="${bg(d)}">${d.getDate()}</td>`).join('');
+  const head2 = dates.map((d) => `<td style="${bg(d)}">${WD[d.getDay()]}</td>`).join('');
+  const rows = people
+    .map((p, i) => `<tr data-row="${i}"><td class="no">${i + 1}</td><td class="name">${p.name}</td>${dates.map((d) => `<td style="${bg(d)}">${cell(p.raw[keyOf(d)])}</td>`).join('')}</tr>`)
+    .join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    body { margin: 16px; font-family: 'WenQuanYi Zen Hei', sans-serif; background: #fff; color: #222; }
+    .title { font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 8px; }
+    table { border-collapse: collapse; } td { border: 1px solid #444; width: 30px; height: 26px; text-align: center; padding: 0; font-size: 15px; }
+    td.no { width: 24px; font-size: 11px; } td.name { width: 70px; font-size: 13px; }
+    tr[data-row] td:not(.no):not(.name) { font-family: 'Comic Sans MS', 'Comic Neue', cursive; font-size: 17px; }
+    .heart { color: #e0789c; font-size: 16px; }
+  </style></head><body>
+    <div class="title">${title}</div>
+    <table><tr class="dates"><td class="no"></td><td class="name">이름</td>${head1}</tr><tr><td class="no"></td><td class="name"></td>${head2}</tr>${rows}</table>
+  </body></html>`;
+}
