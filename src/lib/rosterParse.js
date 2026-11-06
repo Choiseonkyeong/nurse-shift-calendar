@@ -128,6 +128,22 @@ function findHeader(words) {
 }
 
 /**
+ * 표 몸통의 근무 글자 x 위치들 (날짜 줄 아래 짧은 글자 'D', 'OF', 'D1', '오')
+ */
+function bodyXs(words, header, colW) {
+  // 이름이 글자마다 따로 읽히면('조' '선' '주') '주'가 근무(D)로 보임 → 바로 옆에 다른 한글이 붙어 있으면 이름 조각
+  const besideKorean = (w) =>
+    words.some((o) => o !== w && /[가-힣]/.test(o.text) && Math.abs(center(o).y - center(w).y) < (w.y1 - w.y0)
+      && Math.max(o.x0 - w.x1, w.x0 - o.x1) < colW * 0.3);
+  return words
+    // 한글은 근무로 아는 글자('오'·'연차' 등)만: 세 글자 이름('박지우')이 이름 칸을 날짜 칸으로 늘리지 않게
+    .filter((w) => center(w).y > header.y + header.h * 1.5 && w.x1 - w.x0 < colW * 0.95
+      // 숫자만 있는 글자는 제외: 엑셀 화면 캡처의 행 번호(1 2 3 …) 열을 날짜 칸으로 늘리지 않게
+      && ((/^[A-Za-z0-9/]{1,3}$/.test(w.text) && !/^\d+$/.test(w.text)) || (/^[가-힣]{1,2}$/.test(w.text) && cellToCode(w.text) && !besideKorean(w))))
+    .map((w) => center(w).x);
+}
+
+/**
  * 헤더 숫자 → 열 모델 { idxToX(i), xToIdx(x), minIdx, maxIdx, colW }
  * index 는 이번 달 날짜(1~말일). 앞쪽에 붙은 지난달 날짜(예: 29 30 31 1 2 ...)는 0 이하 index.
  */
@@ -205,9 +221,13 @@ function fitColumns(header, year, month, headerWords = [], allWords = []) {
   const step0 = Math.abs(model.b);
   const near = (w, x) => Math.abs((w.x0 + w.x1) / 2 - x) < step0 * 0.45;
   // 헤더에 글자가 있거나(합계 OFF·D 등, 성명) 그 열에 한글 이름이 있으면 날짜 칸이 아님
+  // 표 아래 안내 문장(교육 일정 등)은 칸 판단에서 뺌: 근무 글자가 있는 마지막 줄보다 아래 글자
+  // (안내 문장 속 'D', '오' 같은 글자 몇 개에 끌려가지 않게 아래쪽 2% 는 무시)
+  const codeYs = allWords.filter((w) => center(w).y > header.y && cellToCode(w.text)).map((w) => center(w).y).sort((a, b) => a - b);
+  const bodyBottom = codeYs.length ? codeYs[Math.floor((codeYs.length - 1) * 0.98)] : header.y;
   const headerHasLabel = (x) =>
     headerWords.some((w) => near(w, x) && /[A-Za-z가-힣]/.test(w.text) && !/^\d+$/.test(w.text)) ||
-    allWords.some((w) => w.x1 > x - step0 * 0.5 && w.x0 < x + step0 * 0.5 && /[가-힣]{2,}/.test(w.text) && !cellToCode(w.text));
+    allWords.some((w) => w.x1 > x - step0 * 0.5 && w.x0 < x + step0 * 0.5 && center(w).y <= bodyBottom + header.h && /[가-힣]{2,}/.test(w.text) && !cellToCode(w.text));
   let minIdx = Math.min(...samples.map((p) => p.idx));
   let maxIdx = Math.max(...samples.map((p) => p.idx));
   // 한 달에 걸친 근무표(26일~다음 달 25일 등)는 기간이 딱 한 달
@@ -216,11 +236,49 @@ function fitColumns(header, year, month, headerWords = [], allWords = []) {
   const monthMax = maxIdx > lastDay ? maxIdx : minIdx < 1 ? minIdx + prevDays - 1 : lastDay;
   const sampleMin = Math.min(...samples.map((p) => p.idx));
   const sampleMax = Math.max(...samples.map((p) => p.idx));
-  while (maxIdx < monthMax && maxIdx - sampleMax < 3 && !headerHasLabel(model.a + model.b * (maxIdx + 1))) maxIdx++;
-  while (minIdx > monthMin && sampleMin - minIdx < 3 && !headerHasLabel(model.a + model.b * (minIdx - 1))) minIdx--;
+  const known = new Map(samples.map((p) => [p.idx, p.x]));
+  // 날짜 숫자 위치가 양옆 칸 가운데에서 많이 비켜 있으면(숫자에 붙은 선 조각까지 한 글자로 읽힘) 양옆 가운데로
+  [...known.keys()].forEach((i) => {
+    const l = known.get(i - 1);
+    const r = known.get(i + 1);
+    if (l === undefined || r === undefined) return;
+    const mid = (l + r) / 2;
+    if (Math.abs(known.get(i) - mid) > Math.abs(r - l) * 0.06) known.set(i, mid);
+  });
+  // 끝쪽 날짜 숫자가 표 선과 붙어 못 읽혀도('|1|2|3|'), 그 아래로 근무 글자가 세로로 늘어서 있으면 날짜 칸.
+  // 근무 글자 열 위치로 한 칸씩 이어 가며 넓힘 (사진 원근으로 칸 간격이 조금씩 달라도 어긋나지 않게)
+  // 칸 위치 x 근처에 근무 글자가 다른 날짜 칸만큼(절반 이상) 세로로 늘어서 있으면 그 글자들의 가운데
+  const xs = bodyXs(allWords, header, step0);
+  const near0 = (x) => xs.filter((v) => Math.abs(v - x) < step0 * 0.3);
+  const usual = median(samples.map((p) => near0(p.x).length));
+  const bodyAt = (x) => {
+    const hit = near0(x);
+    return usual >= 3 && hit.length >= usual * 0.5 ? median(hit) : undefined;
+  };
+  const headerHasDigits = (x) => headerWords.some((w) => /\d/.test(w.text) && x >= w.x0 - step0 * 0.3 && x <= w.x1 + step0 * 0.3);
+  const grow = (dir) => {
+    let edge = dir > 0 ? maxIdx : minIdx;
+    const limit = dir > 0 ? monthMax : monthMin;
+    const sampleEdge = dir > 0 ? sampleMax : sampleMin;
+    while (dir > 0 ? edge < limit : edge > limit) {
+      const prev = known.get(edge) ?? model.a + model.b * edge;
+      const back = known.get(edge - dir);
+      const step = back !== undefined ? prev - back : model.b * dir;
+      const pred = prev + step;
+      if (headerHasLabel(pred)) break;
+      // 날짜 줄 그 자리에 숫자가 섞인 글자('|1|2|3|')가 있을 때만: 표 옆 다른 목록·이름 칸으로 넓히지 않게
+      const snap = headerHasDigits(pred) ? bodyAt(pred) : undefined;
+      // 근무 글자로 확인되지 않으면 예전처럼 못 읽은 끝 날짜 3일까지만
+      if (!snap && Math.abs(edge + dir - sampleEdge) > 3) break;
+      if (snap) known.set(edge + dir, snap);
+      edge += dir;
+    }
+    return edge;
+  };
+  maxIdx = grow(1);
+  minIdx = grow(-1);
 
   // 칸 너비가 제각각인 표도 맞추도록: 인식된 헤더 위치는 그대로, 빠진 날짜만 직선 보간
-  const known = new Map(samples.map((p) => [p.idx, p.x]));
   const centers = [];
   for (let i = minIdx; i <= maxIdx; i++) {
     if (known.has(i)) {
@@ -338,12 +396,20 @@ function verifyYearMonth(ym, header, clean, headerWords, today) {
   const dist = (c) => Math.abs((c.year - today.getFullYear()) * 12 + c.month - 1 - today.getMonth());
   const scored = cands.map((c) => ({ ...c, s: score(c.year, c.month) }));
   const current = scored.find((c) => c.year === ym.year && c.month === ym.month);
-  const best = scored.sort((a, b) => b.s - a.s || dist(a) - dist(b))[0];
+  // 요일·공휴일 점수(정수)가 같으면: 바로 옆 달끼리는 칸이 더 많이 들어가는 달(소수점), 먼 달끼리는 오늘에 가까운 달
+  // (2026년 11월과 2027년 8월은 1일이 같은 요일 → 31일까지 있는 달이 칸 하나 차이로 이기지 않게)
+  const gap = (a, b) => Math.abs((a.year - b.year) * 12 + a.month - b.month);
+  const best = scored.sort((a, b) => Math.floor(b.s) - Math.floor(a.s) || (gap(a, b) <= 1 ? b.s - a.s : 0) || dist(a) - dist(b) || b.s - a.s)[0];
   // 요일은 여러 개가 맞아야(오인식 대비) 바꿈. 제목에서 읽은 달이 같은 점수면 그대로
   // 흐린 사진은 요일이 몇 개만 읽히므로 3개 이상 & 읽힌 요일의 60% 이상이 맞으면 인정
   const enough = holidays.length ? best.s >= 3 : Math.floor(best.s) >= Math.max(3, weekdays.length * 0.6);
   // 제목에서 읽은 달은 날짜가 실제로 더 맞을 때만 바꿈 (같은 날짜를 9월/10월로 부르는 차이는 제목대로)
-  const better = ym.found ? Math.floor(best.s) > Math.floor(current.s) : best.s > current.s;
+  // 제목을 못 읽었을 때 요일이 똑같이 맞는 먼 달(2026년 11월 ↔ 2027년 8월, 1일이 같은 요일)은
+  // 칸 수 차이(소수점 점수)만으로 바꾸지 않음 → 한 달 차이(9/26~10/25 를 9월·10월 중 어느 쪽으로)만
+  const monthGap = Math.abs((best.year - current.year) * 12 + best.month - current.month);
+  const better = ym.found
+    ? Math.floor(best.s) > Math.floor(current.s)
+    : best.s > current.s && (Math.floor(best.s) > Math.floor(current.s) || monthGap <= 1);
   if (!enough || !better) return ym;
   return { year: best.year, month: best.month, found: true, corrected: true };
 }

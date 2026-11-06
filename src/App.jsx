@@ -1033,6 +1033,7 @@ export default function App() {
               onCycleTheme={cycleTheme}
               privacyBlur={privacyBlur}
               onTogglePrivacy={() => setPrivacyBlur(!privacyBlur)}
+              onSaveShiftType={handleSaveShiftType}
             />
           )}
           </Suspense>

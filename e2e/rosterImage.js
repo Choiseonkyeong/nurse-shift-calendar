@@ -151,3 +151,43 @@ export async function renderSpreadsheetScreenshot(browser, roster, file, { dpr =
   await p.close();
   return file;
 }
+
+/**
+ * 병원마다 다른 표기를 쓰는 인쇄 근무표 (1일~말일, 주말 열 회색, 'OF'·'D1'·'H1'·'T5' 등, 표 아래 안내 문장)
+ * @returns { title, dates, people: [{ name, raw: { 'YYYY-MM-DD': 표기 } }] }
+ */
+export function makeCodesRoster({ year, month, seed = 1, count = 8, names = FAKE_NAMES }) {
+  const rand = rng(seed * 7 + year + month);
+  const dates = rosterDates(year, month, false);
+  const people = names.slice(0, count).map((name, i) => {
+    const raw = {};
+    dates.forEach((d, k) => {
+      const r = rand();
+      const weekend = d.getDay() === 0 || d.getDay() === 6;
+      if (i === 0) raw[keyOf(d)] = weekend ? 'OF' : k % 9 === 4 ? 'H1' : 'D1';
+      else raw[keyOf(d)] = r < 0.3 ? 'OF' : r < 0.5 ? 'D' : r < 0.7 ? 'E' : r < 0.86 ? 'N' : r < 0.93 ? 'MD' : 'T5';
+    });
+    return { name, raw };
+  });
+  return { title: `${month}월 근무표(OFF 9개)`, dates, people };
+}
+
+export function codesRosterHtml({ title, dates, people }) {
+  const weekend = (d) => d.getDay() === 0 || d.getDay() === 6;
+  const bg = (d) => (weekend(d) ? 'background:#b9b9b9' : '');
+  const head1 = dates.map((d) => `<td style="${bg(d)}">${d.getDate()}</td>`).join('');
+  const head2 = dates.map((d) => `<td style="${bg(d)}">${WD[d.getDay()]}</td>`).join('');
+  const rows = people
+    .map((p) => `<tr><td class="name">${p.name}</td>${dates.map((d) => `<td style="${bg(d)}">${p.raw[keyOf(d)]}</td>`).join('')}</tr>`)
+    .join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    body { margin: 16px; font-family: 'WenQuanYi Zen Hei', sans-serif; font-size: 14px; background: #fff; color: #222; }
+    .title { font-weight: bold; font-size: 20px; text-align: center; margin-bottom: 8px; }
+    table { border-collapse: collapse; } td { border: 2px solid #333; width: 36px; height: 30px; text-align: center; padding: 0; }
+    .name { width: 80px; } .foot { margin-top: 14px; line-height: 1.7; }
+  </style></head><body>
+    <div class="title">${title}</div>
+    <table><tr><td class="name"></td>${head1}</tr><tr><td class="name"></td>${head2}</tr>${rows}</table>
+    <div class="foot">1. 보수교육 : ${dates[9].getMonth() + 1}/10(화) - ${people[1].name}<br>2. 신규교육 ${people[2].name} 오전 참석 · D번 참석</div>
+  </body></html>`;
+}

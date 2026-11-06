@@ -13,7 +13,8 @@ export const BACKUP_KEYS = [
   'shift_alarm_settings',
   'roster_name', // 근무표(사진·엑셀) 속 내 이름
   'my_group_colors', // 내 폰에서 정한 그룹 색상
-  'profile_photo' // 프로필 사진 (이 기기에만 저장)
+  'profile_photo', // 프로필 사진 (이 기기에만 저장)
+  'shift_code_aliases' // 근무표 표기 → 근무 (D1 → D 등, 이 기기에만 저장)
 ];
 const TEXT_KEYS = new Set(['shift_user_name', 'roster_name', 'profile_photo']); // JSON 이 아닌 문자열로 저장하는 값
 const APP_ID = 'nurse-shift-calendar';
