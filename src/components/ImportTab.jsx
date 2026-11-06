@@ -5,6 +5,7 @@ import { readSheet } from '../lib/readSheet';
 import { rosterSheets } from '../lib/sheetPick';
 import { toast } from '../lib/toast';
 import Modal from './Modal';
+import RowPickSheet from './RowPickSheet';
 import FontSheet from './FontSheet';
 import { FONTS, getFontPref } from '../lib/fontPref';
 import { Capacitor } from '@capacitor/core';
@@ -42,6 +43,22 @@ const tileLabel = 'text-[12px] font-medium text-slate-700 leading-tight';
 
 // OCR 코드는 사진 인식을 쓸 때만 불러옴
 const recognizeRosterLazy = async (...args) => (await import('../lib/rosterOcr')).recognizeRoster(...args);
+
+/** 세로가 가로의 1.8배를 넘는 사진 (수십 명이 한 장에 있는 근무표). 크기를 못 읽으면 false */
+async function isTallPhoto(file) {
+  try {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = url;
+    }).finally(() => URL.revokeObjectURL(url));
+    return img.naturalHeight > img.naturalWidth * 1.8;
+  } catch {
+    return false;
+  }
+}
 
 // 처음 보는 표기 → '새 근무로 추가'를 고른 경우 (근무 종류 화면에서 이름·색·시간을 바꿀 수 있음)
 const NEW_TYPE = '__new__';
@@ -110,6 +127,8 @@ export default function ImportTab({
   // 근무표에 앱이 모르는 표기(D1·H2·T5 …)가 있을 때 무슨 근무인지 묻는 창
   // { imp, name, tokens: [{ token, days }], choice: { 토큰: 근무 코드 | '' (근무 아님) | NEW_TYPE } }
   const [codeAsk, setCodeAsk] = useState(null);
+  // 내 줄만 골라 읽기 (표가 커서 전체 인식이 안 되는 근무표): { file, notice }
+  const [rowPick, setRowPick] = useState(null);
   // 설정 › 근무표 표기: 기억한 표기 보기·바꾸기·지우기 (근무지를 옮기거나 잘못 고른 경우). 열려 있을 때만 { 표기: 근무 }
   const [aliasEdit, setAliasEdit] = useState(null);
   const updateAlias = (token, code) => {
@@ -399,6 +418,20 @@ export default function ImportTab({
     if (!file) return;
     const [y, m] = (selectedDate || '').split('-').map(Number);
     const now = new Date();
+    // 세로로 아주 긴 근무표(수십 명)는 표 전체를 읽으면 글자가 너무 작고 오래 걸림 → 내 줄만 골라 읽기 권함
+    // (가로 표를 옆으로 돌려 찍은 사진도 세로로 길어서 한 번 물음)
+    if (
+      (await isTallPhoto(file)) &&
+      (await confirmDialog({
+        title: '사람이 많은 근무표인가요?',
+        message: '세로로 긴 사진이에요. 날짜 줄과 내 줄만 누르면 더 빠르고 정확하게 읽어요.',
+        confirmText: '내 줄만 골라 읽기',
+        cancelText: '표 전체 읽기'
+      }))
+    ) {
+      setRowPick({ file });
+      return;
+    }
     try {
       setIsProcessing(true);
       setStatusMessage('');
@@ -420,7 +453,9 @@ export default function ImportTab({
         cancelled
       ]);
       if (result.error) {
+        // 표 전체를 못 읽으면 내 줄만 골라 읽기로 이어서 (사진을 다시 고를 필요 없이)
         setStatusMessage(`❌ ${result.error}`);
+        setRowPick({ file, notice: '표 전체를 읽지 못했어요. 날짜 줄과 내 줄만 누르면 그 두 줄만 크게 읽어요.' });
       } else {
         // 인식 결과 → 이름별 { 근무, 확인 필요 날짜(신뢰도 낮음·못 읽음) }
         const byName = {};
@@ -659,6 +694,20 @@ export default function ImportTab({
             <label className="flex items-center justify-center gap-1.5 h-12 bg-white text-blue-700 font-semibold text-[15px] rounded-xl cursor-pointer">
               <ImageIcon size={17} /> 앨범에서 선택
               <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={isProcessing} className="hidden" />
+            </label>
+            <label className="col-span-2 text-center text-[12px] text-blue-700/80 underline underline-offset-2 cursor-pointer py-1">
+              표가 커서 잘 안 읽히면 · 내 줄만 골라 읽기
+              <input
+                type="file"
+                accept="image/*,image/heic"
+                onChange={(e) => {
+                  const f = e.target.files[0];
+                  e.target.value = '';
+                  if (f) setRowPick({ file: f });
+                }}
+                disabled={isProcessing}
+                className="hidden"
+              />
             </label>
           </div>
         )}
@@ -945,6 +994,20 @@ export default function ImportTab({
             </div>
           </div>
         </Modal>
+      )}
+
+      {rowPick && (
+        <RowPickSheet
+          file={rowPick.file}
+          notice={rowPick.notice}
+          year={Number((selectedDate || '').slice(0, 4)) || new Date().getFullYear()}
+          month={Number((selectedDate || '').slice(5, 7)) || new Date().getMonth() + 1}
+          onClose={() => setRowPick(null)}
+          onDone={({ yearMonth, shifts }) => {
+            setRowPick(null);
+            onImported?.({ imp: null, name: '', source: '사진', yearMonth, shifts, uncertain: [] });
+          }}
+        />
       )}
 
       {aliasEdit && (

@@ -129,6 +129,8 @@ test('옆으로 누운 사진(폰을 돌려 찍었는데 자동 회전 꺼짐)�
   await openApp(page, { name: '한소희' });
   await tab(page, '설정').click();
   await photoInput(page).setInputFiles(fixture('roster-oct-sideways.jpg'));
+  // 세로로 긴 사진이라 '내 줄만 골라 읽기'를 권하지만 옆으로 누운 가로 표 → 표 전체 읽기
+  await page.getByRole('button', { name: '표 전체 읽기' }).click();
   await expect(page.getByText(/사진 방향 확인 중/)).toBeVisible({ timeout: 120000 });
   await expect(page.getByText('사진에서 9월 26일~10월 25일 근무 30일을 등록했어요')).toBeVisible({ timeout: 200000 });
   expect(await readLocal(page, 'my_shift_data')).toEqual(me.codes);
@@ -342,6 +344,8 @@ for (const angle of [90, 180, 270]) {
     await openApp(page, { name: '내별명' });
     await tab(page, '설정').click();
     await photoInput(page).setInputFiles({ name: `roster-${angle}.png`, mimeType: 'image/png', buffer: Buffer.from(rotated, 'base64') });
+    // 옆으로 누운 사진은 세로로 길어 '내 줄만 골라 읽기'를 권함 → 표 전체 읽기
+    if (angle % 180) await page.getByRole('button', { name: '표 전체 읽기' }).click();
     const choose = page.getByRole('dialog', { name: '본인 이름 선택' });
     await expect(choose).toContainText('사진 근무표에서 7명을 찾았어요.', { timeout: 200000 });
     // 이름을 고르기 전에는 내 근무표를 바꾸지 않음.
