@@ -1,7 +1,7 @@
 // src/lib/rosterOcr.js
 // 근무표 사진 → 단어 좌표 (Tesseract.js, 기기 안에서 처리 / 무료 / 서버 전송 없음)
 // 인식률을 위해: 해상도 정규화 → 흑백 → 조명 보정(적응형 이진화) → 표 선 제거 후 OCR
-import { parseRosterWords, cellToCode, extractName, nameQuality } from './rosterParse';
+import { parseRosterWords, cellToCode, extractName, nameQuality, weekdayOf, checkDayRowMonth, datesForDayRow } from './rosterParse';
 import { resilientWorker } from './resilientWorker';
 import { looksLikeCode, normalizeToken } from './codeAliases';
 
@@ -164,7 +164,7 @@ export function deskew(img) {
  * 적응형 이진화 + 긴 가로/세로 선 제거 → canvas
  * @param strongLines  끊기고 1px씩 비켜 간 선까지 지움 (휜 종이·회색 칸 경계). 글자 획을 지울 수 있어 다시 읽을 때만
  */
-export function preprocess(img, targetWidth = TARGET_WIDTH, { strongLines = false } = {}) {
+export function preprocess(img, targetWidth = TARGET_WIDTH, { strongLines = false, lineFrac = 0 } = {}) {
   const scale = Math.min(3, targetWidth / widthOf(img));
   const w = Math.round(widthOf(img) * scale);
   const h = Math.round(heightOf(img) * scale);
@@ -214,7 +214,8 @@ export function preprocess(img, targetWidth = TARGET_WIDTH, { strongLines = fals
   // strongLines: 종이가 휘거나 회색 칸 경계에서 선이 끊기고 1px씩 비켜 가므로, 옆 1px 까지 보고 짧은 틈(GAP px)은 이어서 셈
   // (끊긴 세로선이 날짜 숫자에 붙어 '1|2|3' 으로 읽히면 날짜 칸을 못 찾음)
   const minH = Math.round(w / 12);
-  const minV = Math.round(h / 12);
+  // lineFrac: 줄 몇 개만 잘라 낸 이미지(내 줄 고르기)는 세로선이 그 높이만큼만 이어짐 → 높이의 비율로
+  const minV = lineFrac ? Math.round(h * lineFrac) : Math.round(h / 12);
   const GAP = strongLines ? 3 : 0;
   const SIDE = strongLines ? 1 : 0;
   const erase = new Uint8Array(w * h);
@@ -1024,6 +1025,358 @@ export async function recognizeRoster(file, { year, month, shiftTypes = [], onPr
     return result;
   } catch (e) {
     if (aborted()) throw abortError();
+    throw e;
+  } finally {
+    signal?.removeEventListener('abort', stop);
+    await worker.terminate().catch(() => {});
+  }
+}
+
+// ── 내 줄만 골라 읽기 ─────────────────────────────────────────────
+// 사람이 많아 글씨가 작거나, 표가 둘로 나뉘거나, 손글씨·그림(♡) 표기라 표 전체 인식이 안 되는 근무표:
+// 사진에서 날짜 줄과 내 줄을 누르면 그 두 줄만 크게 잘라 읽음
+
+export const BLANK_TOKEN = '빈칸';
+export const HEART_TOKEN = '♡';
+
+/** 내 줄 고르기 화면에 보여 줄 사진 (기울기 바로 세움). 누른 위치는 이 canvas 좌표 */
+export async function rowPickImage(file) {
+  const img = deskew(fitSize(await loadImage(file)));
+  if (img instanceof HTMLCanvasElement) return img;
+  const c = document.createElement('canvas');
+  c.width = widthOf(img);
+  c.height = heightOf(img);
+  c.getContext('2d').drawImage(img, 0, 0);
+  return c;
+}
+
+/**
+ * 누른 높이 y 를 감싸는 표 줄의 위·아래 (가로선 사이). 선을 못 찾으면 사진 높이의 1.2% 높이로
+ * @returns [top, bottom]
+ */
+export function rowBandAt(canvas, y) {
+  const W = canvas.width;
+  const H = canvas.height;
+  const reach = Math.max(30, Math.round(H * 0.025));
+  const top = Math.max(0, Math.round(y - reach));
+  const bottom = Math.min(H, Math.round(y + reach));
+  const x0 = Math.round(W * 0.05);
+  const x1 = Math.round(W * 0.95);
+  const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(x0, top, x1 - x0, Math.max(1, bottom - top)).data;
+  const w = x1 - x0;
+  // 줄마다 어두운 픽셀 비율 (가로선은 폭 대부분이 어두움)
+  const frac = [];
+  for (let r = 0; r < bottom - top; r++) {
+    let dark = 0;
+    for (let x = 0; x < w; x += 2) {
+      const i = (r * w + x) * 4;
+      if (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] < 150) dark++;
+    }
+    frac.push(dark / (w / 2));
+  }
+  const isLine = (r) => frac[r] >= Math.max(0.3, Math.max(...frac) * 0.5);
+  const rel = Math.round(y - top);
+  let up = rel;
+  while (up > 0 && !isLine(up)) up--;
+  let down = rel;
+  while (down < frac.length - 1 && !isLine(down)) down++;
+  const fallback = Math.round(H * 0.006);
+  const t = up > 0 ? top + up + 2 : y - fallback;
+  const b = down < frac.length - 1 ? top + down - 2 : y + fallback;
+  return b - t > 8 ? [Math.round(t), Math.round(b)] : [Math.round(y - fallback), Math.round(y + fallback)];
+}
+
+/** 띠 [y0, y1] 안의 세로선 x 위치들 (띠 높이 대부분이 어두운 세로 줄) */
+function verticalLines(canvas, y0, y1) {
+  const W = canvas.width;
+  const h = Math.max(1, Math.round(y1 - y0));
+  const d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, Math.round(y0), W, h).data;
+  const lum = (x, y) => {
+    const i = (y * W + x) * 4;
+    return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+  };
+  // 칸 배경(회색 주말 칸 등)보다 확실히 어두운 픽셀: 그 줄 양옆 6px 평균보다 어두움
+  const xs = [];
+  for (let x = 3; x < W - 3; x++) {
+    let dark = 0;
+    for (let y = 0; y < h; y++) {
+      const v = lum(x, y);
+      if (v < 170 && v < (lum(x - 3, y) + lum(x + 3, y)) / 2 - 12) dark++;
+    }
+    if (dark >= h * 0.6) xs.push(x);
+  }
+  const lines = [];
+  xs.forEach((x) => {
+    const last = lines[lines.length - 1];
+    if (last && x - last[last.length - 1] <= 2) last.push(x);
+    else lines.push([x]);
+  });
+  return lines.map((g) => (g[0] + g[g.length - 1]) / 2);
+}
+
+/**
+ * 세로선 사이 칸들 중 날짜 칸 너비(가장 흔한 너비)와 비슷한 칸 → [{ x0, x1, x }]
+ * 흐려서 세로선 몇 개를 못 찾은 자리(칸 2~4개 너비)는 같은 너비로 나눔. 이름·사번처럼 넓은 칸은 앞쪽에서만 나타나 제외
+ */
+function dateCells(lines) {
+  const gaps = lines.slice(1).map((x, i) => ({ x0: lines[i], x1: x, w: x - lines[i] }));
+  const ws = gaps.map((g) => g.w).filter((w) => w > 8).sort((a, b) => a - b);
+  const typical = ws[Math.floor(ws.length / 2)] || 0;
+  const cells = [];
+  gaps.forEach((g) => {
+    const n = Math.round(g.w / typical);
+    if (g.w < typical * 0.6) return;
+    if (n <= 1 && g.w <= typical * 1.5) cells.push({ x0: g.x0, x1: g.x1 });
+    else if (n >= 2 && n <= 4 && cells.length && Math.abs(g.w / n - typical) < typical * 0.25) {
+      for (let k = 0; k < n; k++) cells.push({ x0: g.x0 + (g.w * k) / n, x1: g.x0 + (g.w * (k + 1)) / n });
+    }
+  });
+  return cells.map((c) => ({ ...c, x: (c.x0 + c.x1) / 2 }));
+}
+
+/** 칸 안쪽을 키워 흰 여백을 둔 새 canvas (Tesseract 용) */
+function cellImage(canvas, x0, y0, x1, y1, targetH = 64) {
+  const w = Math.max(1, x1 - x0);
+  const h = Math.max(1, y1 - y0);
+  const k = targetH / h;
+  const pad = Math.round(targetH * 0.3);
+  const c = document.createElement('canvas');
+  c.width = Math.round(w * k) + pad * 2;
+  c.height = Math.round(h * k) + pad * 2;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(canvas, x0, y0, w, h, pad, pad, w * k, h * k);
+  return c;
+}
+
+/** 칸 안 글자만 검정, 나머지(회색·색 바탕, 연한 선)는 흰색으로 키운 canvas (손글씨 인식용) */
+function cellInkImage(canvas, x0, y0, x1, y1, targetH = 96) {
+  const c = cellImage(canvas, x0, y0, x1, y1, targetH);
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  const lum = [];
+  for (let i = 0; i < d.length; i += 4) lum.push(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+  const inside = lum.filter((v, i) => v < 250 || i % 7 === 0);
+  const bg = [...inside].sort((a, b) => a - b)[Math.floor(inside.length * 0.7)];
+  for (let i = 0; i < lum.length; i++) {
+    const v = lum[i] < bg * 0.72 ? 0 : 255;
+    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+/** 칸 안 글자 잉크 비율 (칸 배경보다 확실히 어두운 픽셀) */
+function inkRatio(canvas, x0, y0, x1, y1) {
+  const w = Math.max(1, Math.round(x1 - x0));
+  const h = Math.max(1, Math.round(y1 - y0));
+  const d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(Math.round(x0), Math.round(y0), w, h).data;
+  const lum = [];
+  for (let i = 0; i < d.length; i += 4) lum.push(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+  const bg = [...lum].sort((a, b) => a - b)[Math.floor(lum.length * 0.7)]; // 바탕 밝기
+  return lum.filter((v) => v < bg * 0.7).length / lum.length;
+}
+
+/** 칸 안 글자(잉크)가 분홍 펜인지: 잉크 픽셀의 평균 (빨강 - 초록), 파랑이 초록 이상 (검정 글씨 ≈ 0, 연한 분홍 ♡ ≈ 25~40) */
+function inkPinkness(canvas, x0, y0, x1, y1) {
+  const w = Math.max(1, Math.round(x1 - x0));
+  const h = Math.max(1, Math.round(y1 - y0));
+  const d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(Math.round(x0), Math.round(y0), w, h).data;
+  const px = [];
+  for (let i = 0; i < d.length; i += 4) px.push([d[i], d[i + 1], d[i + 2], 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]]);
+  const bg = [...px].sort((a, b) => a[3] - b[3])[Math.floor(px.length * 0.7)][3];
+  const ink = px.filter((p) => p[3] < bg * 0.7);
+  if (!ink.length) return 0;
+  const rg = ink.reduce((a, p) => a + p[0] - p[1], 0) / ink.length;
+  const bgDiff = ink.reduce((a, p) => a + p[2] - p[1], 0) / ink.length;
+  return bgDiff >= 0 ? rg : 0;
+}
+
+const LATIN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+/** 손글씨 한 글자가 두 번 읽힌 경우 ('VV' → 'V') */
+const collapseRepeat = (t) => (/^(.)\1$/.test(t) ? t[0] : t);
+
+/** 칸 안 글자 모양: 잉크가 있는 범위만 16×16 회색 격자로 (모양 비교용) */
+function inkShape(canvas, x0, y0, x1, y1) {
+  const w = Math.max(1, Math.round(x1 - x0));
+  const h = Math.max(1, Math.round(y1 - y0));
+  const d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(Math.round(x0), Math.round(y0), w, h).data;
+  const lum = [];
+  for (let i = 0; i < d.length; i += 4) lum.push(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+  const bg = [...lum].sort((a, b) => a - b)[Math.floor(lum.length * 0.7)];
+  const ink = (x, y) => lum[y * w + x] < bg * 0.7;
+  let [l, t, r, b] = [w, h, -1, -1];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (ink(x, y)) [l, t, r, b] = [Math.min(l, x), Math.min(t, y), Math.max(r, x), Math.max(b, y)];
+  const N = 16;
+  const grid = new Float32Array(N * N);
+  if (r < l) return grid;
+  for (let gy = 0; gy < N; gy++) {
+    for (let gx = 0; gx < N; gx++) {
+      const sx0 = l + Math.floor(((r - l + 1) * gx) / N);
+      const sx1 = Math.max(sx0 + 1, l + Math.floor(((r - l + 1) * (gx + 1)) / N));
+      const sy0 = t + Math.floor(((b - t + 1) * gy) / N);
+      const sy1 = Math.max(sy0 + 1, t + Math.floor(((b - t + 1) * (gy + 1)) / N));
+      let n = 0;
+      let k = 0;
+      for (let y = sy0; y < sy1; y++) for (let x = sx0; x < sx1; x++, k++) if (ink(x, y)) n++;
+      grid[gy * N + gx] = n / Math.max(1, k);
+    }
+  }
+  return grid;
+}
+
+/** 두 글자 모양의 차이 0~1 */
+const shapeDistance = (a, b) => a.reduce((s, v, i) => s + Math.abs(v - b[i]), 0) / a.length;
+
+/**
+ * 날짜 줄·내 줄만 읽기
+ *  - 날짜 칸: 날짜 줄의 세로선으로 칸을 나누고 칸마다 숫자 하나씩 (표 선이 숫자에 붙어도 됨)
+ *  - 연/월: 바로 아래 요일 줄로 확인 (보고 있던 달 기준)
+ *  - 내 줄: 같은 칸 위치(내 줄 세로선에 맞춰 보정)마다 빈칸 · ♡(분홍 펜) · 글자
+ * @param canvas  rowPickImage 로 만든 사진
+ * @param dateY   날짜 줄(1 2 3 …)을 누른 높이 · rowY 내 줄을 누른 높이 (canvas 좌표)
+ * @returns recognizeRoster 와 같은 모양 { year, month, names: ['내 줄'], people, unread, unknown } 또는 { error }
+ */
+export async function readMyRow(canvas, { dateY, rowY, year, month, shiftTypes = [], today = new Date(), onProgress = () => {}, signal } = {}) {
+  const abortError = () => new DOMException('사진 인식을 취소했어요.', 'AbortError');
+  if (signal?.aborted) throw abortError();
+  onProgress(0.05, '인식 엔진 준비 중... (처음 한 번은 조금 걸려요)');
+  const worker = await resilientWorker(() => createOcrWorker(() => {}), { isAborted: () => !!signal?.aborted });
+  const stop = () => worker.terminate().catch(() => {});
+  signal?.addEventListener('abort', stop, { once: true });
+  const check = () => {
+    if (signal?.aborted) throw abortError();
+  };
+  try {
+    // 1) 날짜 칸
+    const [h0, h1] = rowBandAt(canvas, dateY);
+    const head = dateCells(verticalLines(canvas, h0, h1));
+    if (head.length < 7) return { error: '날짜 줄(1 2 3 …)의 칸을 찾지 못했어요. 날짜 숫자가 있는 줄을 다시 눌러 주세요.' };
+    await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: '0123456789' });
+    const days = [];
+    for (const [i, c] of head.entries()) {
+      check();
+      onProgress(0.1 + (i / head.length) * 0.25, `날짜 읽는 중... ${i + 1}/${head.length}`);
+      const m = (c.x1 - c.x0) * 0.12; // 칸 양옆 선 조각 제외
+      const img = cellImage(canvas, c.x0 + m, h0, c.x1 - m, h1);
+      for (const psm of ['7', '8']) {
+        await worker.setParameters({ tessedit_pageseg_mode: psm });
+        const { data } = await worker.recognize(img);
+        const n = parseInt(data.text.replace(/\D/g, ''), 10);
+        if (n >= 1 && n <= 31 && data.confidence >= 30) {
+          days.push({ col: i, day: n });
+          break;
+        }
+      }
+    }
+    // 읽은 숫자들과 가장 많이 맞는 '연속한 날짜' (못 읽거나 잘못 읽은 칸은 앞뒤 날짜로)
+    // 26 27 … 31 1 2 … 처럼 달이 넘어가는 표는 넘어간 뒤 숫자가 (지난달 날 수)만큼 작음
+    const fits = (start, q) => [0, 28, 29, 30, 31].includes(start + q.col - q.day);
+    let best = null;
+    days.forEach(({ col, day }) => {
+      const start = day - col; // 첫 칸 날짜
+      const hits = days.filter((q) => fits(start, q)).length;
+      if (!best || hits > best.hits) best = { start, hits };
+    });
+    if (!best || best.hits < Math.max(4, head.length * 0.25)) return { error: '날짜 숫자를 읽지 못했어요. 날짜 숫자가 있는 줄을 다시 눌러 주세요.' };
+    const wraps = days.map((q) => best.start + q.col - q.day).filter((v) => v >= 28);
+    const len = wraps.length >= 2 ? wraps.sort((a, b) => a - b)[Math.floor(wraps.length / 2)] : 0; // 지난달 날 수 (넘어가지 않으면 0)
+    const dayOf = (col) => {
+      const v = best.start + col;
+      return len && v > len ? v - len : v;
+    };
+    const dayRow = head.map((_, col) => ({ col, day: dayOf(col) })).filter((q) => q.day >= 1 && q.day <= 31);
+
+    // 2) 요일 줄로 연/월 확인
+    await worker.setParameters({ tessedit_char_whitelist: '일월화수목금토' });
+    const [, w1] = rowBandAt(canvas, h1 + (h1 - h0) * 0.7);
+    const weekdays = {};
+    for (const [i, c] of head.entries()) {
+      check();
+      onProgress(0.35 + (i / head.length) * 0.15, '요일 확인 중...');
+      const { data } = await worker.recognize(cellImage(canvas, c.x0 + 2, h1 + 2, c.x1 - 2, w1));
+      const wd = weekdayOf(data.text.replace(/\s/g, ''));
+      if (wd >= 0) weekdays[i] = wd;
+    }
+    await worker.setParameters({ tessedit_char_whitelist: '' });
+    const ym = checkDayRowMonth({ days: dayRow, weekdays, ym: { year, month }, found: false, today });
+    const keyOfCol = Object.fromEntries(datesForDayRow(dayRow, ym.year, ym.month).map(({ col, key }) => [col, key]));
+
+    // 3) 내 줄: 같은 칸 위치(내 줄 세로선에 맞춰 보정)마다 빈칸 · ♡ · 글자
+    const [r0, r1] = rowBandAt(canvas, rowY);
+    const rowLines = verticalLines(canvas, r0, r1);
+    const snap = (x, w) => rowLines.reduce((b, l) => (Math.abs(l - x) < Math.abs(b - x) ? l : b), x - w);
+    const people = {};
+    const unknown = {};
+    const unread = [];
+    const cells = head.map((c, i) => {
+      const w = c.x1 - c.x0;
+      const a = snap(c.x0, w);
+      const b = snap(c.x1, w);
+      const ok = Math.abs(a - c.x0) < w * 0.35 && Math.abs(b - c.x1) < w * 0.35 && b - a > w * 0.6;
+      return { i, x0: ok ? a : c.x0, x1: ok ? b : c.x1 };
+    });
+    // 칸마다: 빈칸 · ♡(분홍 펜) · 글자 모양. 손글씨는 글자 인식이 칸마다 흔들리므로('X' → 'XE', 'XI')
+    // 모양이 같은 칸끼리 묶고, 묶음 안에서 가장 많이 읽힌 글자를 그 표기로
+    const marks = [];
+    for (const c of cells) {
+      const key = keyOfCol[c.i];
+      if (!key) continue;
+      const w = c.x1 - c.x0;
+      const box = [c.x0 + w * 0.1, r0 + (r1 - r0) * 0.08, c.x1 - w * 0.1, r1 - (r1 - r0) * 0.08];
+      // 빈칸: 칸 테두리 선 조각(잉크 약 3%)보다 적은 잉크
+      if (inkRatio(canvas, ...box) < 0.06) unknown[key] = BLANK_TOKEN;
+      else marks.push({ key, box, pink: inkPinkness(canvas, ...box) >= 15, shape: inkShape(canvas, ...box) });
+    }
+    const groups = [];
+    marks.forEach((m) => {
+      const g = groups.find((q) => q[0].pink === m.pink && shapeDistance(q[0].shape, m.shape) < 0.17);
+      if (g) g.push(m);
+      else groups.push([m]);
+    });
+    const samples = {};
+    let done = 0;
+    for (const g of groups) {
+      // 영문·숫자 표기 먼저(손글씨가 한글 글자로 읽히지 않게), 안 되면 한글 근무 표기('주'·'야' 등)까지
+      const votes = new Map();
+      for (const m of g.slice(0, 5)) {
+        check();
+        onProgress(0.5 + (done++ / marks.length) * 0.48, `내 줄 읽는 중... ${done}/${marks.length}`);
+        const img = cellInkImage(canvas, ...m.box);
+        for (const [psm, list] of [['10', LATIN], ['8', LATIN], ['8', '']]) {
+          await worker.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: list });
+          const { data } = await worker.recognize(img);
+          const t = collapseRepeat(normalizeToken(data.text));
+          // 한글은 근무로 아는 글자('주'·'야' 등)만 (손글씨가 '미'·'기' 같은 엉뚱한 한글로 읽힘)
+          const ok = cellToCode(t, shiftTypes) || (list && looksLikeCode(t));
+          if (data.confidence >= 40 && ok) {
+            votes.set(t, (votes.get(t) || 0) + data.confidence);
+            break;
+          }
+        }
+      }
+      await worker.setParameters({ tessedit_char_whitelist: '' });
+      const [text, weight = 0] = [...votes.entries()].sort((a, b) => b[1] - a[1])[0] || [];
+      // 분홍 펜(♡ 등 그림)은 확실히 근무 글자로 읽힐 때만 그 글자 (빨간 'OF' 등)
+      const sure = text && (!g[0].pink || (cellToCode(text, shiftTypes) && weight >= 70 * Math.min(g.length, 5) * 0.6));
+      const code = sure && cellToCode(text, shiftTypes);
+      // 글자로 못 읽은 표시는 '♡' 또는 '기호1'처럼 이름 붙이고 칸 그림을 보여 주고 물음
+      const named = g[0].pink ? HEART_TOKEN : `기호${Object.keys(samples).filter((k) => k.startsWith('기호')).length + 1}`;
+      const token = code ? null : sure ? text : named;
+      if (token && !samples[token]) samples[token] = cellImage(canvas, ...g[0].box, 48).toDataURL('image/png');
+      g.forEach((m) => {
+        if (code) people[m.key] = { code, raw: text, confidence: 80 };
+        else unknown[m.key] = token;
+      });
+    }
+    onProgress(1, '완료');
+    const name = '내 줄';
+    return { year: ym.year, month: ym.month, found: true, names: [name], people: { [name]: people }, unknown: { [name]: unknown }, unread: { [name]: unread }, samples };
+  } catch (e) {
+    if (signal?.aborted) throw abortError();
     throw e;
   } finally {
     signal?.removeEventListener('abort', stop);

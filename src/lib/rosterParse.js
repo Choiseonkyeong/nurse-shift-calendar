@@ -419,7 +419,7 @@ function verifyYearMonth(ym, header, clean, headerWords, today) {
  * @param opts   { year, month (fallback), shiftTypes, today, titleText(제목 줄만 따로 다시 읽은 글자) }
  * @returns { year, month, people: { 이름: { 'YYYY-MM-DD': { code, raw, confidence } } }, names, error? }
  */
-export function parseRosterWords(words, { year, month, shiftTypes = [], today = new Date(), titleText = '' } = {}) {
+export function parseRosterWords(words, { year, month, shiftTypes = [], today = new Date(), titleText = '', headerOnly = false } = {}) {
   const clean = words
     .map((w) => ({ ...w, text: String(w.text || '').trim() }))
     .filter((w) => w.text && w.x1 > w.x0 && w.y1 > w.y0);
@@ -470,6 +470,14 @@ export function parseRosterWords(words, { year, month, shiftTypes = [], today = 
     if (best && now < wdBelow.length * 0.5 && hits(best) >= Math.max(4, wdBelow.length * 0.7)) {
       cols.shiftDays(best);
     }
+  }
+  // 날짜 줄만 읽은 경우(내 줄 고르기): 연/월과 날짜 칸 위치만
+  if (headerOnly) {
+    const keyOf = (idx) => {
+      const d = new Date(ym.year, ym.month - 1, idx);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+    return { ...ym, grid: { slope, textH: header.h, cols: cols.centers.map((c) => ({ idx: c.idx, x: c.x, w: cols.widthAt(c.idx), key: keyOf(c.idx) })) } };
   }
   const firstColLeft = cols.idxToX(cols.minIdx) - cols.widthAt(cols.minIdx) * 0.6;
   const belowHeader = (w) => center(w).y > headerYAt(center(w).x) + header.h * 0.8;
