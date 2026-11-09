@@ -1109,12 +1109,15 @@ export function rowBandAt(canvas, y, from = 0.35, to = 0.65) {
 export function slantedBand(canvas, y, typicalH = 0) {
   let mid = rowBandAt(canvas, y);
   // 흐린 가로선을 못 찾아 두세 줄이 한 줄로 잡히면: 누른 곳을 가운데로 보통 줄 높이만큼 (보통 줄 높이 = 날짜 줄 높이)
-  if (typicalH && mid[1] - mid[0] > typicalH * 1.5) mid = [Math.round(y - typicalH / 2), Math.round(y + typicalH / 2)];
+  // 가로선을 아예 못 찾은 경우(기본 높이)도 보통 줄 높이로
+  const guessed = mid[1] - mid[0] === 2 * Math.round(canvas.height * 0.006);
+  if (typicalH && (mid[1] - mid[0] > typicalH * 1.5 || guessed)) mid = [Math.round(y - typicalH / 2), Math.round(y + typicalH / 2)];
   const c = (mid[0] + mid[1]) / 2;
   const h = mid[1] - mid[0];
   const side = (from, to) => {
     const b = rowBandAt(canvas, c, from, to);
-    return Math.abs(b[1] - b[0] - h) < h * 0.35 ? b : mid; // 줄 높이가 많이 다르면 그 구간은 못 찾은 것
+    // 줄 높이가 많이 다르거나 이웃 줄을 잡았으면(가운데가 반 줄 넘게 어긋남) 그 구간은 못 찾은 것
+    return Math.abs(b[1] - b[0] - h) < h * 0.35 && Math.abs((b[0] + b[1]) / 2 - c) < h * 0.4 ? b : mid;
   };
   const L = side(0.15, 0.35);
   const R = side(0.65, 0.85);
@@ -1343,6 +1346,20 @@ export async function readMyRow(canvas, { dateY, rowY, year, month, shiftTypes =
       if (ch) weekdays[i] = WD_CHARS.indexOf(ch);
     }
     const ym = checkDayRowMonth({ days: dayRow, weekdays, ym: { year, month }, found: false, today });
+    // 1일부터 시작하는 표인데 오른쪽 끝 칸(30·31일)의 세로선을 못 찾아 빠졌으면, 그 자리에 세로선이 있을 때 이어 붙임
+    const monthLen = new Date(ym.year, ym.month, 0).getDate();
+    if (!len && dayRow[0]?.day === 1) {
+      // 날짜 줄 안쪽 높이에서만 찾음 (줄을 조금 넓게 잡아 표 바깥 모서리가 섞이면 끝 선이 약하게 보임)
+      const lines = verticalLines(canvas, h0 + (h1 - h0) * 0.3, h1 - (h1 - h0) * 0.1);
+      while (dayRow[dayRow.length - 1].day < monthLen) {
+        const last = head[head.length - 1];
+        const w = last.x1 - last.x0;
+        const next = lines.find((l) => Math.abs(l - (last.x1 + w)) < w * 0.3);
+        if (next === undefined) break;
+        head.push({ x0: last.x1, x1: next, x: (last.x1 + next) / 2 });
+        dayRow.push({ col: head.length - 1, day: dayRow[dayRow.length - 1].day + 1 });
+      }
+    }
     const keyOfCol = Object.fromEntries(datesForDayRow(dayRow, ym.year, ym.month).map(({ col, key }) => [col, key]));
 
     // 3) 내 줄: 같은 칸 위치(내 줄 세로선에 맞춰 보정)마다 빈칸 · ♡ · 글자
